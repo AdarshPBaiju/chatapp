@@ -13,6 +13,14 @@ class PhoneNumberRequiredError(ValueError, UserError):
         super().__init__(self.message)
 
 
+class InvalidPhoneNumberError(ValueError, UserError):
+    """Raised when the provided phone number is invalid."""
+
+    def __init__(self, message=_("Enter a valid international phone number.")):
+        self.message = message
+        super().__init__(self.message)
+
+
 class InactiveSuspensionError(ValueError, UserError):
     """Raised when an operation is performed on an inactive suspension."""
 

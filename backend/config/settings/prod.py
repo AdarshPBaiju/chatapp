@@ -9,15 +9,16 @@ ALLOWED_HOSTS = config(
 
 SECRET_KEY = config("SECRET_KEY")
 
-DATABASES["default"].update(
-    {
-        "NAME": config("POSTGRES_DB"),
-        "USER": config("POSTGRES_USER"),
-        "PASSWORD": config("POSTGRES_PASSWORD"),
-        "HOST": "db",
-        "PORT": "5432",
+DATABASES = {
+    "default": {
+        "ENGINE": "django.db.backends.postgresql",
+        "NAME": config("DB_NAME"),
+        "USER": config("DB_USER"),
+        "PASSWORD": config("DB_PASSWORD"),
+        "HOST": config("DB_HOST", default="db"),
+        "PORT": config("DB_PORT", default="5432"),
     }
-)
+}
 
 CACHES["default"]["LOCATION"] = "redis://redis:6379/1"
 

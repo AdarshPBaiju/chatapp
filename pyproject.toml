@@ -76,6 +76,8 @@ ignore = [
     "T201", # print found
     "S603", # subprocess call with untrusted input - handled by bandit
     "S607", # starting a process with a partial executable path
+    "RUF012", # mutable class attributes should be annotated with ClassVar
+    "I001",   # import block is un-sorted or un-formatted
 ]
 
 [tool.ruff.lint.per-file-ignores]

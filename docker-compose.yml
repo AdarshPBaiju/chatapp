@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   db:
     image: postgres:15
@@ -93,7 +91,7 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       ADMIN_URL: ${ADMIN_URL}
       RUN_MIGRATIONS: "true"
-    command: uvicorn chatapp.asgi:application --host 0.0.0.0 --port 8000 --workers 4
+    command: uvicorn config.asgi:application --host 0.0.0.0 --port 8000 --workers 4
     depends_on:
       db:
         condition: service_healthy
@@ -126,7 +124,7 @@ services:
       SECRET_KEY: ${SECRET_KEY}
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       ADMIN_URL: ${ADMIN_URL}
-    command: celery -A chatapp worker --loglevel=info
+    command: celery -A config worker --loglevel=info
     depends_on:
       db:
         condition: service_healthy
@@ -157,7 +155,7 @@ services:
       SECRET_KEY: ${SECRET_KEY}
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       ADMIN_URL: ${ADMIN_URL}
-    command: celery -A chatapp beat --loglevel=info --scheduler django_celery_beat.schedulers:DatabaseScheduler
+    command: celery -A config beat --loglevel=info --scheduler django_celery_beat.schedulers:DatabaseScheduler
     depends_on:
       db:
         condition: service_healthy
@@ -188,7 +186,7 @@ services:
       SECRET_KEY: ${SECRET_KEY}
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       ADMIN_URL: ${ADMIN_URL}
-    command: celery -A chatapp flower --port=5555 --basic_auth=${FLOWER_USER:-admin}:${FLOWER_PASSWORD:-admin}
+    command: celery -A config flower --port=5555 --basic_auth=${FLOWER_USER:-admin}:${FLOWER_PASSWORD:-admin}
     depends_on:
       db:
         condition: service_healthy

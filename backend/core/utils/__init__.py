@@ -1,3 +1,3 @@
-from .files import SmartUploadPath
+from .files import SmartUploadPath, UploadPathConfig
 
-__all__ = ["SmartUploadPath"]
+__all__ = ["SmartUploadPath", "UploadPathConfig"]
