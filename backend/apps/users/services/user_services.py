@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import hashlib
+import hmac
+import json
 import logging
 import secrets
-from typing import Any
 from datetime import datetime
+from typing import Any
 
 from django.conf import settings
 from django.core.cache import cache
@@ -14,6 +17,7 @@ from django.utils.html import strip_tags
 from rest_framework.serializers import ValidationError
 
 from users.models import Client, CustomUser
+from core.auth.request_context import get_request_ip
 from core.validators import (
     EmailFormatRule,
     MinMaxLengthRule,
@@ -79,7 +83,7 @@ class UserService:
         Generates and transmits a secure OTP with built-in flood protection.
         Enforces a configurable cooldown period (OTP_RESEND_INTERVAL_SECONDS) between requests.
         """
-        cache_key = f"otp:{user.id}"
+        cache_key = f"otp:{user.id}:registration"
         cooldown_key = f"otp_cooldown:{user.id}"
 
         if not ignore_cooldown and cache.get(cooldown_key):
@@ -94,9 +98,16 @@ class UserService:
             ) from None
 
         otp = f"{secrets.randbelow(900000) + 100000}"
+        salt = secrets.token_hex(16)
+        digest = UserService._hash_otp(user, otp, salt)
 
-        cache.set(cache_key, otp, timeout=settings.OTP_EXPIRATION_SECONDS)
+        cache.set(
+            cache_key,
+            json.dumps({"salt": salt, "digest": digest}),
+            timeout=settings.OTP_EXPIRATION_SECONDS,
+        )
         cache.set(cooldown_key, "active", timeout=settings.OTP_RESEND_INTERVAL_SECONDS)
+        cache.delete(f"otp_attempt_user:{user.id}")
 
         context = {
             "brand_name": settings.BRAND_NAME,
@@ -134,20 +145,72 @@ class UserService:
         return otp
 
     @staticmethod
-    def validate_otp(user: CustomUser, otp_code: str) -> bool:
+    def validate_otp(user: CustomUser, otp_code: str, request: Any | None = None) -> bool:
         """
-        Verifies the provided OTP against the value stored in the cache.
+        Verifies signup OTP against a hashed cache entry and enforces brute-force limits.
         """
-        client = getattr(user, "client", None)
-        if not client or not client.is_two_factor_enabled:
-            return True
+        cache_key = f"otp:{user.id}:registration"
+        ip_address = get_request_ip(request) if request else "0.0.0.0"
+        ip_key = f"otp_attempt_ip:{ip_address}"
+        ip_block_key = f"otp_block_ip:{ip_address}"
+        user_key = f"otp_attempt_user:{user.id}"
+        settings_map = settings.AUTH_ENGINE_SETTINGS
 
-        cache_key = f"otp:{user.id}"
-        stored_otp = cache.get(cache_key)
+        if cache.get(ip_block_key):
+            raise ValidationError(
+                {
+                    "otp_code": "Too many failed attempts from this IP. Try again later."
+                }
+            )
 
-        if stored_otp and stored_otp == otp_code:
+        max_user = settings_map["OTP_MAX_ATTEMPTS_PER_USER"]
+        max_ip = settings_map["OTP_MAX_ATTEMPTS_PER_IP"]
+        attempt_window = settings_map["OTP_ATTEMPT_WINDOW_SECONDS"]
+        block_window = settings_map["OTP_IP_BLOCK_SECONDS"]
+
+        user_attempts = int(cache.get(user_key, 0))
+        ip_attempts = int(cache.get(ip_key, 0))
+        if user_attempts >= max_user or ip_attempts >= max_ip:
+            cache.set(ip_block_key, "1", timeout=block_window)
+            logger.warning(
+                "otp_rate_limit_triggered",
+                extra={"user_id": str(user.id), "ip_address": ip_address},
+            )
+            raise ValidationError(
+                {"otp_code": "Too many attempts. Please request a new code."}
+            )
+
+        stored_payload = cache.get(cache_key)
+        if not stored_payload:
+            return False
+
+        try:
+            parsed = json.loads(stored_payload)
+            expected_digest = parsed["digest"]
+            salt = parsed["salt"]
+        except Exception:
+            return False
+
+        provided_digest = UserService._hash_otp(user, otp_code, salt)
+        if hmac.compare_digest(expected_digest, provided_digest):
             cache.delete(cache_key)
             cache.delete(f"otp_cooldown:{user.id}")
+            cache.delete(ip_key)
+            cache.delete(user_key)
             return True
 
+        cache.incr(ip_key)
+        cache.expire(ip_key, attempt_window)
+        cache.incr(user_key)
+        cache.expire(user_key, attempt_window)
+        logger.info(
+            "otp_validation_failed",
+            extra={"user_id": str(user.id), "ip_address": ip_address},
+        )
         return False
+
+    @staticmethod
+    def _hash_otp(user: CustomUser, otp_code: str, salt: str) -> str:
+        secret = settings.AUTH_ENGINE_SETTINGS["OTP_HASH_SECRET"]
+        payload = f"{user.id}:{otp_code}:{salt}:{secret}"
+        return hashlib.sha3_256(payload.encode("utf-8")).hexdigest()

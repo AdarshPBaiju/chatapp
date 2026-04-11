@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import hashlib
 import json
 from datetime import datetime, timedelta, UTC
@@ -8,65 +9,89 @@ from typing import Any
 from django.conf import settings
 from jwcrypto import jwe, jwk, jws
 from jwcrypto.common import json_decode
-from user_agents import parse
+
+from core.auth.request_context import (
+    build_fingerprint,
+    get_device_entropy,
+    parse_device_info,
+)
 
 
 class AuthCryptoEngine:
     """
-    Advanced cryptographic engine providing asymmetric signing (EdDSA) and
-    full payload encryption (JWE) for authentication tokens.
+    Nested JOSE engine:
+    - Inner JWS signed with EdDSA
+    - Outer JWE encrypted with direct symmetric key (A256GCM)
     """
 
     @staticmethod
-    def _get_keys() -> tuple[jwk.JWK, jwk.JWK]:
-        """
-        Retrieves or generates the EdDSA keypair from settings.
-        """
-        seed = settings.SECRET_KEY.encode()
-        key = jwk.JWK.generate(
-            kty="OKP", crv="Ed25519", seed=hashlib.sha256(seed).digest()
-        )
-        return key, key
+    def _active_kid() -> str:
+        return settings.AUTH_ENGINE_SETTINGS["ACTIVE_KID"]
+
+    @classmethod
+    def _keyring(cls) -> dict[str, dict[str, str]]:
+        keyring = settings.AUTH_ENGINE_SETTINGS.get("TOKEN_KEYRING", {})
+        if not keyring:
+            raise ValueError("Token keyring is not configured.")
+        return keyring
+
+    @classmethod
+    def _material_for_kid(cls, kid: str) -> dict[str, str]:
+        material = cls._keyring().get(kid)
+        if not material:
+            raise ValueError("Unknown token key id.")
+        return material
+
+    @classmethod
+    def _signing_key(cls, kid: str) -> jwk.JWK:
+        signing_seed = cls._material_for_kid(kid)["signing_seed"].encode("utf-8")
+        derived_seed = hashlib.sha256(signing_seed).digest()
+        return jwk.JWK.generate(kty="OKP", crv="Ed25519", seed=derived_seed)
+
+    @classmethod
+    def _encryption_key(cls, kid: str) -> jwk.JWK:
+        enc_seed = cls._material_for_kid(kid)["encryption_key"].encode("utf-8")
+        derived = hashlib.sha256(enc_seed).digest()
+        encoded = base64.urlsafe_b64encode(derived).decode("utf-8").rstrip("=")
+        return jwk.JWK(kty="oct", k=encoded)
 
     @classmethod
     def encrypt_and_sign(cls, payload: dict[str, Any], ttl_seconds: int) -> str:
-        """
-        Performs a two-stage cryptographic protection: EdDSA + JWE.
-        """
         now = datetime.now(UTC)
         payload["exp"] = int((now + timedelta(seconds=ttl_seconds)).timestamp())
         payload["iat"] = int(now.timestamp())
+        kid = cls._active_kid()
 
-        key, _ = cls._get_keys()
-        header = {"alg": "A128KW", "enc": "A128GCM"}
-        jwetoken = jwe.JWE(
-            json.dumps(payload).encode("utf-8"), json.dumps(header).encode("utf-8")
+        sign_key = cls._signing_key(kid)
+        signed = jws.JWS(json.dumps(payload).encode("utf-8"))
+        signed.add_signature(
+            sign_key,
+            None,
+            json.dumps({"alg": "EdDSA", "kid": kid, "typ": "JWT"}),
         )
-        jwetoken.add_recipient(key)
-        encrypted_payload = jwetoken.serialize()
 
-        jwstoken = jws.JWS(encrypted_payload.encode("utf-8"))
-        jwstoken.add_signature(key, None, json.dumps({"alg": "EdDSA"}))
-        return jwstoken.serialize(compact=True)
+        enc_key = cls._encryption_key(kid)
+        encrypted = jwe.JWE(
+            signed.serialize(compact=True).encode("utf-8"),
+            json.dumps({"alg": "dir", "enc": "A256GCM", "kid": kid, "cty": "JWT"}),
+        )
+        encrypted.add_recipient(enc_key)
+        return encrypted.serialize(compact=True)
 
     @classmethod
     def decrypt_and_verify(cls, token: str) -> dict[str, Any]:
-        """
-        Reverses the protection: Verifies signature, decrypts JWE, and validates expiry.
-        """
-        key, _ = cls._get_keys()
-
         try:
-            jwstoken = jws.JWS()
-            jwstoken.deserialize(token)
-            jwstoken.verify(key)
-            encrypted_payload = jwstoken.payload
-
             jwetoken = jwe.JWE()
-            jwetoken.deserialize(encrypted_payload)
-            jwetoken.decrypt(key)
+            jwetoken.deserialize(token)
+            kid = jwetoken.jose_header.get("kid") or cls._active_kid()
+            jwetoken.decrypt(cls._encryption_key(kid))
+            signed_payload = jwetoken.payload.decode("utf-8")
 
-            payload = json_decode(jwetoken.payload)
+            jwstoken = jws.JWS()
+            jwstoken.deserialize(signed_payload)
+            sign_kid = jwstoken.jose_header.get("kid") or kid
+            jwstoken.verify(cls._signing_key(sign_kid))
+            payload = json_decode(jwstoken.payload)
         except Exception as e:
             error_msg = "Invalid or tampered token protocol"
             raise ValueError(error_msg) from e
@@ -79,30 +104,8 @@ class AuthCryptoEngine:
 
     @staticmethod
     def parse_device_info(request: Any) -> str:
-        """
-        Parses the User-Agent into a human-readable label (e.g., "Safari on iPhone").
-        """
-        ua_string = request.META.get("HTTP_USER_AGENT", "")
-        user_agent = parse(ua_string)
-
-        browser = user_agent.browser.family
-        os = user_agent.os.family
-        device = user_agent.device.family
-
-        if user_agent.is_mobile:
-            return f"{browser} on {device} ({os})"
-        if user_agent.is_pc:
-            return f"{browser} on {os}"
-        return f"{browser} on {os} ({device})"
+        return parse_device_info(request)
 
     @staticmethod
     def generate_fingerprint(request: Any) -> str:
-        """
-        Generates a unique hardware/context fingerprint based on IP and User-Agent.
-        """
-        ip = request.META.get(
-            "HTTP_X_FORWARDED_FOR", request.META.get("REMOTE_ADDR", "0.0.0.0")
-        )
-        ua = request.META.get("HTTP_USER_AGENT", "unknown")
-        payload = f"{ip}:{ua}".encode()
-        return hashlib.sha256(payload).hexdigest()
+        return build_fingerprint(request, device_entropy=get_device_entropy(request))

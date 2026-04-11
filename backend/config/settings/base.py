@@ -1,5 +1,6 @@
-from pathlib import Path
 import sys
+import json
+from pathlib import Path
 
 from decouple import config
 
@@ -134,6 +135,40 @@ AUTH_ENGINE_SETTINGS = {
     "MAX_DEVICES_PER_USER": config("MAX_DEVICES_PER_USER", default=5, cast=int),
     "ACCESS_TOKEN_LIFETIME": config("ACCESS_TOKEN_LIFETIME", default=3600, cast=int),
     "REFRESH_TOKEN_LIFETIME": config("REFRESH_TOKEN_LIFETIME", default=86400, cast=int),
+    "ACTIVE_KID": config("AUTH_TOKEN_ACTIVE_KID", default="v1"),
+    "TOKEN_KEYRING": config(
+        "AUTH_TOKEN_KEYRING",
+        default=json.dumps(
+            {
+                "v1": {
+                    "signing_seed": "development-signing-seed",
+                    "encryption_key": "development-encryption-key",
+                }
+            }
+        ),
+        cast=json.loads,
+    ),
+    "OTP_HASH_SECRET": config("OTP_HASH_SECRET", default="development-otp-secret"),
+    "OTP_MAX_ATTEMPTS_PER_USER": config(
+        "OTP_MAX_ATTEMPTS_PER_USER", default=5, cast=int
+    ),
+    "OTP_MAX_ATTEMPTS_PER_IP": config("OTP_MAX_ATTEMPTS_PER_IP", default=10, cast=int),
+    "OTP_ATTEMPT_WINDOW_SECONDS": config(
+        "OTP_ATTEMPT_WINDOW_SECONDS", default=300, cast=int
+    ),
+    "OTP_IP_BLOCK_SECONDS": config("OTP_IP_BLOCK_SECONDS", default=3600, cast=int),
+    "DEVICE_ENTROPY_COOKIE_NAME": config(
+        "DEVICE_ENTROPY_COOKIE_NAME", default="device_entropy"
+    ),
+    "DEVICE_ENTROPY_COOKIE_MAX_AGE": config(
+        "DEVICE_ENTROPY_COOKIE_MAX_AGE", default=31536000, cast=int
+    ),
+    "DEVICE_ENTROPY_COOKIE_SECURE": config(
+        "DEVICE_ENTROPY_COOKIE_SECURE", default=not DEBUG, cast=bool
+    ),
+    "DEVICE_ENTROPY_COOKIE_SAMESITE": config(
+        "DEVICE_ENTROPY_COOKIE_SAMESITE", default="Lax"
+    ),
 }
 
 SPECTACULAR_SETTINGS = {

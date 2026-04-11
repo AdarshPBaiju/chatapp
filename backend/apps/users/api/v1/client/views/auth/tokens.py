@@ -1,19 +1,23 @@
 from __future__ import annotations
 
-
-from django.core.cache import cache
 from rest_framework import status
 from rest_framework.permissions import AllowAny
 from rest_framework.views import APIView
 from drf_spectacular.utils import extend_schema
 
 from core.api.responses import ResponseFactory
+from core.auth.request_context import (
+    attach_device_entropy_cookie,
+    generate_device_entropy,
+    get_device_entropy,
+)
+from core.auth.token_validator import TokenValidationError, validate_token_for_request
 from users.api.v1.client.serializers.auth import (
     ClientTokenVerifySerializer,
     ClientTokenRefreshSerializer,
 )
+from users.models import CustomUser
 from users.services.auth_engine import AuthEngine
-from core.auth.crypto import AuthCryptoEngine
 
 
 class ClientTokenVerifyAPIView(APIView):
@@ -34,26 +38,14 @@ class ClientTokenVerifyAPIView(APIView):
         token = serializer.validated_data["token"]
 
         try:
-            payload = AuthCryptoEngine.decrypt_and_verify(token)
-
-            # Blacklist check
-            jti = payload.get("jti")
-            if cache.get(f"auth:blacklist:{jti}"):
-                return ResponseFactory.error(
-                    message="Token has been blacklisted or revoked."
-                )
-
-            # Hardware Fingerprint check
-            current_fpt = AuthCryptoEngine.generate_fingerprint(request)
-            if payload.get("fpt") != current_fpt:
-                return ResponseFactory.error(message="Security context mismatch.")
+            payload = validate_token_for_request(request, token)
 
             return ResponseFactory.success(
                 message="Token is valid and cryptographically secure.",
                 data={"scope": payload.get("scope", "unknown")},
             )
 
-        except ValueError as e:
+        except TokenValidationError as e:
             return ResponseFactory.error(
                 message=str(e), code=status.HTTP_401_UNAUTHORIZED
             )
@@ -76,42 +68,35 @@ class ClientTokenRefreshAPIView(APIView):
         serializer.is_valid(raise_exception=True)
 
         refresh_token = serializer.validated_data["refresh"]
+        existing_entropy = get_device_entropy(request)
 
         try:
-            payload = AuthCryptoEngine.decrypt_and_verify(refresh_token)
-
-            # 1. Integrity Checks
-            if payload.get("type") != "refresh":
-                return ResponseFactory.error(
-                    message="Invalid token category (expected Refresh)."
-                )
-
-            jti = payload.get("jti")
-            if cache.get(f"auth:blacklist:{jti}"):
-                return ResponseFactory.error(
-                    message="Refresh token has been revoked or reused."
-                )
-
-            current_fpt = AuthCryptoEngine.generate_fingerprint(request)
-            if payload.get("fpt") != current_fpt:
-                return ResponseFactory.error(message="Security context mismatch.")
-
-            # 2. Identify target user
-            from users.models import CustomUser
+            payload = validate_token_for_request(
+                request,
+                refresh_token,
+                expected_type="refresh",
+                check_session=True,
+            )
 
             user = CustomUser.objects.get(id=payload["user_id"], is_active=True)
 
-            # 3. Perform Atomic Rotation
+            if not existing_entropy:
+                request.META["HTTP_X_DEVICE_ENTROPY"] = generate_device_entropy()
             new_tokens = AuthEngine.refresh_tokens(user, payload, request)
 
-            return ResponseFactory.success(
+            response = ResponseFactory.success(
                 message="Token rotation successful.",
                 data={"access": new_tokens["access"], "refresh": new_tokens["refresh"]},
             )
+            if not existing_entropy:
+                attach_device_entropy_cookie(
+                    response, request.META["HTTP_X_DEVICE_ENTROPY"]
+                )
+            return response
 
         except CustomUser.DoesNotExist:
             return ResponseFactory.error(message="Subject user no longer exists.")
-        except ValueError as e:
+        except TokenValidationError as e:
             return ResponseFactory.error(
                 message=str(e), code=status.HTTP_401_UNAUTHORIZED
             )

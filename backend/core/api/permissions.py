@@ -5,7 +5,7 @@ from typing import Any
 from rest_framework import permissions
 
 
-class FullAccessRequired(permissions.BaseAuthentication):
+class FullAccessRequired(permissions.BasePermission):
     """
     Standard permission class for business logic views.
     Only allows access if the token scope is 'full'.
@@ -20,7 +20,7 @@ class FullAccessRequired(permissions.BaseAuthentication):
         return auth_data.get("scope") == "full"
 
 
-class AllowRevokeOnly(permissions.BaseAuthentication):
+class AllowRevokeOnly(permissions.BasePermission):
     """
     Specialized permission for session management views.
     Allows access for both 'full' and 'revoke_only' tokens.

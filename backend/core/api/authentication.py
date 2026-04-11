@@ -2,10 +2,10 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from django.core.cache import cache
 from rest_framework import authentication, exceptions
 
-from core.auth.crypto import AuthCryptoEngine
+from core.auth.token_validator import TokenValidationError, validate_token_for_request
+from users.services.auth_engine import AuthEngine
 
 if TYPE_CHECKING:
     from users.models import CustomUser
@@ -26,24 +26,16 @@ class AdvancedJWTAuthentication(authentication.BaseAuthentication):
         token = auth_header.split(" ")[1]
 
         try:
-            payload = AuthCryptoEngine.decrypt_and_verify(token)
-        except ValueError as e:
+            payload = validate_token_for_request(
+                request,
+                token,
+                check_session=True,
+            )
+        except TokenValidationError as e:
             raise exceptions.AuthenticationFailed(str(e)) from e
         except Exception as e:
             msg = "Authentication protocol error"
             raise exceptions.AuthenticationFailed(msg) from e
-
-        # Ensure we are checking the blacklist
-        jti = payload.get("jti")
-        if cache.get(f"auth:blacklist:{jti}"):
-            msg = "This session has been revoked by the system"
-            raise exceptions.AuthenticationFailed(msg)
-
-        # Hardware Fingerprint Binding Check
-        current_fpt = AuthCryptoEngine.generate_fingerprint(request)
-        if payload.get("fpt") != current_fpt:
-            msg = "Security breach: Token context mismatch detected"
-            raise exceptions.AuthenticationFailed(msg)
 
         user_id = payload.get("user_id")
         from users.models import CustomUser
@@ -54,7 +46,9 @@ class AdvancedJWTAuthentication(authentication.BaseAuthentication):
             msg = "Subject user no longer exists or is inactive"
             raise exceptions.AuthenticationFailed(msg) from None
 
-        # Return (user, payload) so request.auth holds the token data
+        session_id = payload.get("sid")
+        if session_id:
+            AuthEngine.touch_session(str(user.id), str(session_id))
         return (user, payload)
 
     def authenticate_header(self, request: Any) -> str:
