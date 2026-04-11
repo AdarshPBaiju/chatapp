@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from rest_framework import serializers
 from core.validators import v, auto_configure_fields
 from users.models import CustomUser
@@ -35,23 +37,3 @@ class ClientResendOTPSerializer(serializers.Serializer):
     """
 
     user_id = v.uuid.label("User ID")
-
-
-@auto_configure_fields
-class ClientSessionRevokeSerializer(serializers.Serializer):
-    """
-    Serializer to revoke a specific remote session.
-    Requires the access JTI of the session to target.
-    """
-
-    access_jti = v.string.label("Access JTI")
-
-
-@auto_configure_fields
-class ClientTokenVerifySerializer(serializers.Serializer):
-    """
-    Serializer to verify the integrity and validity of an Elite token.
-    Checks signature, decryption, and hardware binding.
-    """
-
-    token = v.string.label("Token")
