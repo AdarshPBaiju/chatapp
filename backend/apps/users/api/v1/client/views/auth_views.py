@@ -17,9 +17,11 @@ from users.api.v1.client.serializers.auth_serializers import (
     ClientOTPValidationSerializer,
     ClientResendOTPSerializer,
     ClientSessionRevokeSerializer,
+    ClientTokenVerifySerializer,
 )
 from users.services.user_services import UserService
 from users.services.auth_engine import AuthEngine
+from core.auth.crypto import AuthCryptoEngine
 
 
 class ClientSignUpAPIView(APIView):
@@ -136,6 +138,49 @@ class ClientResendOTPAPIView(APIView):
         return ResponseFactory.success(
             message="A fresh verification code has been dispatched to your email address."
         )
+
+
+class ClientTokenVerifyAPIView(APIView):
+    permission_classes = [AllowAny]
+
+    @extend_schema(
+        request=ClientTokenVerifySerializer,
+        tags=["Client Auth"],
+    )
+    def post(self, request):
+        """
+        Public endpoint to verify if a token is valid, decrypted,
+        and matches the current hardware context.
+        """
+        serializer = ClientTokenVerifySerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        token = serializer.validated_data["token"]
+
+        try:
+            payload = AuthCryptoEngine.decrypt_and_verify(token)
+
+            # Blacklist check
+            jti = payload.get("jti")
+            if cache.get(f"auth:blacklist:{jti}"):
+                return ResponseFactory.error(
+                    message="Token has been blacklisted or revoked."
+                )
+
+            # Hardware Fingerprint check
+            current_fpt = AuthCryptoEngine.generate_fingerprint(request)
+            if payload.get("fpt") != current_fpt:
+                return ResponseFactory.error(message="Security context mismatch.")
+
+            return ResponseFactory.success(
+                message="Token is valid and cryptographically secure.",
+                data={"scope": payload.get("scope", "unknown")},
+            )
+
+        except ValueError as e:
+            return ResponseFactory.error(
+                message=str(e), code=status.HTTP_401_UNAUTHORIZED
+            )
 
 
 class ClientSessionListAPIView(APIView):
