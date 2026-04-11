@@ -1,0 +1,164 @@
+name: deploy
+
+on:
+  workflow_run:
+    workflows: ["docker"]
+    types:
+      - completed
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Image tag to deploy (e.g. sha-abc1234)"
+        required: true
+        type: string
+      environment:
+        description: "Target environment"
+        required: true
+        type: choice
+        options:
+          - staging
+          - production
+
+concurrency:
+  group: deploy-${{ github.event.inputs.environment || 'staging' }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  packages: read
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository_owner }}/chatapp-backend
+
+jobs:
+  resolve-tag:
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.tag.outputs.value }}
+
+    steps:
+      - id: tag
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "value=${{ github.event.inputs.tag }}" >> $GITHUB_OUTPUT
+          else
+            echo "value=sha-$(echo ${{ github.event.workflow_run.head_sha }} | cut -c1-7)" >> $GITHUB_OUTPUT
+          fi
+
+  staging:
+    needs: resolve-tag
+    if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.environment == 'staging' }}
+    runs-on: ubuntu-latest
+    environment:
+      name: staging
+      url: https://staging.chatapp.example.com
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: imranismail/setup-kustomize@v2
+
+      - name: patch-image
+        run: |
+          cd k8s
+          kustomize edit set image \
+            your-registry/chatapp-backend=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.resolve-tag.outputs.tag }}
+
+      - uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "deploy(staging): ${{ needs.resolve-tag.outputs.tag }}"
+          file_pattern: "k8s/kustomization.yaml"
+
+      - name: summary
+        run: |
+          echo "### Staging Deploy" >> $GITHUB_STEP_SUMMARY
+          echo "**Tag:** \`${{ needs.resolve-tag.outputs.tag }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Image:** \`${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.resolve-tag.outputs.tag }}\`" >> $GITHUB_STEP_SUMMARY
+
+  smoke:
+    needs: [resolve-tag, staging]
+    runs-on: ubuntu-latest
+    environment:
+      name: staging
+      url: https://staging.chatapp.example.com
+
+    steps:
+      - name: wait-for-rollout
+        env:
+          BASE: ${{ secrets.STAGING_URL }}
+        run: |
+          echo "Waiting for rollout..."
+          for i in $(seq 1 30); do
+            status=$(curl -s -o /dev/null -w "%{http_code}" "$BASE/health/" || true)
+            if [ "$status" = "200" ]; then
+              echo "Health check passed (attempt $i)"
+              exit 0
+            fi
+            echo "Attempt $i — got $status, retrying in 10s"
+            sleep 10
+          done
+          echo "Health check timed out after 5 minutes" && exit 1
+
+      - name: smoke
+        env:
+          BASE: ${{ secrets.STAGING_URL }}
+        run: |
+          check() {
+            local url="$1"
+            local expected="$2"
+            local status
+            status=$(curl -s -o /dev/null -w "%{http_code}" "$BASE$url")
+            if [ "$status" != "$expected" ]; then
+              echo "FAIL $url — expected $expected got $status" && exit 1
+            fi
+            echo "OK   $url ($status)"
+          }
+
+          check "/health/" 200
+          check "/api/" 401
+
+      - name: summary
+        if: always()
+        run: |
+          echo "### Smoke Tests" >> $GITHUB_STEP_SUMMARY
+          echo "**Tag:** \`${{ needs.resolve-tag.outputs.tag }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Target:** \`${{ secrets.STAGING_URL }}\`" >> $GITHUB_STEP_SUMMARY
+
+  production:
+    needs: [resolve-tag, staging]
+    if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'production' }}
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: https://chatapp.example.com
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: imranismail/setup-kustomize@v2
+
+      - name: patch-image
+        run: |
+          cd k8s
+          kustomize edit set image \
+            your-registry/chatapp-backend=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.resolve-tag.outputs.tag }}
+
+      - uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "deploy(production): ${{ needs.resolve-tag.outputs.tag }}"
+          file_pattern: "k8s/kustomization.yaml"
+
+      - name: summary
+        run: |
+          echo "### Production Deploy" >> $GITHUB_STEP_SUMMARY
+          echo "**Tag:** \`${{ needs.resolve-tag.outputs.tag }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Image:** \`${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.resolve-tag.outputs.tag }}\`" >> $GITHUB_STEP_SUMMARY

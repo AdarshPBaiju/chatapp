@@ -1,0 +1,52 @@
+version: 2
+
+updates:
+  - package-ecosystem: pip
+    directory: /backend
+    schedule:
+      interval: weekly
+      day: monday
+      time: "04:00"
+      timezone: UTC
+    open-pull-requests-limit: 10
+    groups:
+      django:
+        patterns:
+          - "Django*"
+          - "django-*"
+      celery:
+        patterns:
+          - "celery"
+          - "django-celery-*"
+          - "flower"
+      channels:
+        patterns:
+          - "channels*"
+      drf:
+        patterns:
+          - "djangorestframework*"
+      storage:
+        patterns:
+          - "boto3"
+          - "django-storages"
+      kafka:
+        patterns:
+          - "confluent-kafka"
+      dev:
+        patterns:
+          - "ruff"
+          - "coverage"
+          - "pre-commit"
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "04:00"
+      timezone: UTC
+    open-pull-requests-limit: 5
+    groups:
+      actions:
+        patterns:
+          - "*"
