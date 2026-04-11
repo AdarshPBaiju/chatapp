@@ -21,28 +21,27 @@ def api_exception_handler(exc, context):
             errors = {"detail": str(exc)}
 
         return ResponseFactory.error(
-            message="Validation Error",
-            errors=errors,
-            code=status.HTTP_400_BAD_REQUEST
+            message="Validation Error", errors=errors, code=status.HTTP_400_BAD_REQUEST
         )
 
     response = exception_handler(exc, context)
 
     if response is not None:
         message = response.data.get("detail", "An error occurred.")
-        errors = response.data if isinstance(response.data, dict) and "detail" not in response.data else response.data
+        errors = (
+            response.data
+            if isinstance(response.data, dict) and "detail" not in response.data
+            else response.data
+        )
 
         standard_response = ResponseFactory.error(
-            message=message,
-            errors=errors,
-            code=response.status_code
+            message=message, errors=errors, code=response.status_code
         )
         response.data = standard_response.data
     else:
         logger.exception("In-flight API Error Traceback: %s", exc)
         return ResponseFactory.error(
-            message="Internal Server Error",
-            code=status.HTTP_500_INTERNAL_SERVER_ERROR
+            message="Internal Server Error", code=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 
     return response

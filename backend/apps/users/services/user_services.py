@@ -84,9 +84,13 @@ class UserService:
 
         if not ignore_cooldown and cache.get(cooldown_key):
             remaining = cache.ttl(cooldown_key)
-            wait_time = max(remaining if isinstance(remaining, int) and remaining > 0 else 0, 1)
+            wait_time = max(
+                remaining if isinstance(remaining, int) and remaining > 0 else 0, 1
+            )
             raise ValidationError(
-                {"email": f"Please wait {wait_time} seconds before requesting a new code."}
+                {
+                    "email": f"Please wait {wait_time} seconds before requesting a new code."
+                }
             ) from None
 
         otp = f"{secrets.randbelow(900000) + 100000}"
@@ -122,7 +126,9 @@ class UserService:
         except Exception as e:
             logger.exception("Failed to send OTP email to %s", user.email)
             raise ValidationError(
-                {"email": "The verification system is temporarily unavailable. Please try again later."}
+                {
+                    "email": "The verification system is temporarily unavailable. Please try again later."
+                }
             ) from e
 
         return otp
