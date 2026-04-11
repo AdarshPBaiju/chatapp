@@ -6,11 +6,12 @@ from django.conf import settings
 from django.shortcuts import get_object_or_404
 from django.core.cache import cache
 from rest_framework import status
-from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.permissions import AllowAny
 from rest_framework.views import APIView
 from drf_spectacular.utils import extend_schema
 
 from core.api.responses import ResponseFactory
+from core.api.permissions import AllowRevokeOnly
 from users.api.v1.client.serializers.auth_serializers import (
     ClientSignUpSerializer,
     ClientOTPValidationSerializer,
@@ -19,7 +20,6 @@ from users.api.v1.client.serializers.auth_serializers import (
 )
 from users.services.user_services import UserService
 from users.services.auth_engine import AuthEngine
-from core.auth.crypto import AuthCryptoEngine
 
 
 class ClientSignUpAPIView(APIView):
@@ -52,16 +52,6 @@ class ClientOTPValidationAPIView(APIView):
 
     @extend_schema(
         request=ClientOTPValidationSerializer,
-        responses={
-            200: {
-                "type": "object",
-                "properties": {
-                    "access": {"type": "string"},
-                    "refresh": {"type": "string"},
-                    "user": {"type": "object"},
-                },
-            }
-        },
         tags=["Client Auth"],
     )
     def post(self, request):
@@ -81,13 +71,25 @@ class ClientOTPValidationAPIView(APIView):
                 user.is_active = True
                 user.save(update_fields=["is_active"])
 
-            tokens = AuthEngine.issue_tokens(user, request)
+            result = AuthEngine.issue_tokens(user, request)
+
+            if result["status"] == "restricted":
+                return ResponseFactory.success(
+                    message=result["message"],
+                    data={
+                        "is_restricted": True,
+                        "access": result["access"],
+                        "active_sessions": result["active_sessions"],
+                    },
+                    code=status.HTTP_200_OK,
+                )
 
             return ResponseFactory.success(
                 message="Identification verified successfully. Welcome!",
                 data={
-                    "access": tokens["access"],
-                    "refresh": tokens["refresh"],
+                    "is_restricted": False,
+                    "access": result["access"],
+                    "refresh": result["refresh"],
                     "user": {
                         "id": str(user.id),
                         "email": user.email,
@@ -137,12 +139,13 @@ class ClientResendOTPAPIView(APIView):
 
 
 class ClientSessionListAPIView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [AllowRevokeOnly]
 
     @extend_schema(tags=["Client Security"])
     def get(self, request):
         """
         Retrieves all active sessions for the authenticated user from Redis.
+        Allowed for both full and restricted tokens.
         """
         user_id = str(request.user.id)
         active_key = f"auth:active_sessions:{user_id}"
@@ -157,33 +160,33 @@ class ClientSessionListAPIView(APIView):
 
 
 class ClientLogoutAPIView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [AllowRevokeOnly]
 
     @extend_schema(tags=["Client Security"])
     def post(self, request):
         """
         Invalidates the current session immediately.
+        Allowed for both full and restricted tokens.
         """
-        auth_header = request.META.get("HTTP_AUTHORIZATION", "")
-        token = auth_header.split(" ")[1]
-        payload = AuthCryptoEngine.decrypt_and_verify(token)
+        payload = request.auth
 
         AuthEngine.logout(
             user_id=str(request.user.id),
             access_jti=payload["jti"],
-            refresh_jti=payload["refresh_jti"],
+            refresh_jti=payload["partner_jti"],
         )
 
         return ResponseFactory.success(message="Logged out successfully.")
 
 
 class ClientSessionRevokeAPIView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [AllowRevokeOnly]
 
     @extend_schema(request=ClientSessionRevokeSerializer, tags=["Client Security"])
     def post(self, request):
         """
         Remote logout functionality: Revokes a specific session by its access JTI.
+        If the user is currently using a restricted token, this triggers auto-promotion.
         """
         serializer = ClientSessionRevokeSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -202,6 +205,24 @@ class ClientSessionRevokeAPIView(APIView):
                     access_jti=meta["access_jti"],
                     refresh_jti=meta["refresh_jti"],
                 )
+
+                # Auto-Promotion Logic
+                if request.auth.get("scope") == "revoke_only":
+                    res = AuthEngine.promote_restricted_session(
+                        user_id=user_id,
+                        access_jti=request.auth["jti"],
+                        refresh_jti=request.auth["partner_jti"],
+                        request=request,
+                    )
+                    return ResponseFactory.success(
+                        message="Session revoked. You have been granted full access.",
+                        data={
+                            "is_promoted": True,
+                            "access": res["access"],
+                            "refresh": res["refresh"],
+                        },
+                    )
+
                 return ResponseFactory.success(
                     message="Remote session revoked successfully."
                 )

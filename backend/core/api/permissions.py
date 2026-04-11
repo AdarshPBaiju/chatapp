@@ -1,26 +1,34 @@
+from __future__ import annotations
+
+from typing import Any
+
 from rest_framework import permissions
 
 
-class IsAdminOrReadOnly(permissions.BasePermission):
+class FullAccessRequired(permissions.BaseAuthentication):
     """
-    The request is authenticated as a staff user, or is a read-only request.
-    """
-
-    def has_permission(self, request, _view):
-        return bool(
-            request.method in permissions.SAFE_METHODS
-            or request.user
-            and request.user.is_staff
-        )
-
-
-class IsOwnerOrReadOnly(permissions.BasePermission):
-    """
-    Object-level permission to only allow owners of an object to edit it.
-    Assumes the model instance has an `owner` attribute.
+    Standard permission class for business logic views.
+    Only allows access if the token scope is 'full'.
+    Denies access for 'revoke_only' (Temporary) tokens.
     """
 
-    def has_object_permission(self, request, _view, obj):
-        if request.method in permissions.SAFE_METHODS:
-            return True
-        return obj.owner == request.user
+    def has_permission(self, request: Any, _view: Any) -> bool:
+        auth_data = getattr(request, "auth", {})
+        if not auth_data:
+            return False
+
+        return auth_data.get("scope") == "full"
+
+
+class AllowRevokeOnly(permissions.BaseAuthentication):
+    """
+    Specialized permission for session management views.
+    Allows access for both 'full' and 'revoke_only' tokens.
+    """
+
+    def has_permission(self, request: Any, _view: Any) -> bool:
+        auth_data = getattr(request, "auth", {})
+        if not auth_data:
+            return False
+
+        return auth_data.get("scope") in ["full", "revoke_only"]
