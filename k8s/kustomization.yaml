@@ -4,30 +4,31 @@ kind: Kustomization
 namespace: chatapp
 
 resources:
-  - namespace.yaml
-  - configmap.yaml
-  - secret.yaml
-  - postgres.yaml
-  - redis.yaml
-  - minio.yaml
-  - kafka.yaml
-  - backend.yaml
-  - celery.yaml
+- namespace.yaml
+- configmap.yaml
+- secret.yaml
+- postgres.yaml
+- redis.yaml
+- minio.yaml
+- kafka.yaml
+- backend.yaml
+- celery.yaml
 
 images:
-  - name: your-registry/chatapp-backend
-    newTag: latest
+- name: your-registry/chatapp-backend
+  newName: ghcr.io/AdarshPBaiju/chatapp-backend
+  newTag: sha-17def30
 
 commonLabels:
   app: chatapp
 
 configMapGenerator:
-  - name: chatapp-config
-    literals:
-      - DJANGO_ENV=production
-      - DB_HOST=postgres-service
-      - DB_PORT=5432
-      - REDIS_HOST=redis-service
-      - REDIS_PORT=6379
-      - MINIO_HOST=minio-service
-      - MINIO_PORT=9000
+- literals:
+  - DJANGO_ENV=production
+  - DB_HOST=postgres-service
+  - DB_PORT=5432
+  - REDIS_HOST=redis-service
+  - REDIS_PORT=6379
+  - MINIO_HOST=minio-service
+  - MINIO_PORT=9000
+  name: chatapp-config
