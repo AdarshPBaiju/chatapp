@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import uuid
-from datetime import datetime, UTC
+from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 
 from django.conf import settings
@@ -17,8 +17,8 @@ if TYPE_CHECKING:
 class AuthEngine:
     """
     Advanced Redis-centric authentication service.
-    Utilizes atomic Lua scripts for sub-millisecond session management and
-    enforces JioHotstar-style device limits.
+    Utilizes atomic Lua scripts for sub-millisecond session management,
+    enforces JioHotstar-style device limits, and supports secure token rotation.
     """
 
     # Atomic Lua script to check limits and register session
@@ -43,6 +43,24 @@ class AuthEngine:
     end
     """
 
+    # Atomic Lua script to rotate a session (Refresh Flow)
+    ROTATE_SESSION_LUA = """
+    local key = KEYS[1]
+    local old_meta = ARGV[1]
+    local new_meta = ARGV[2]
+    local expiry = tonumber(ARGV[3])
+
+    -- 1. Remove old session metadata
+    local removed = redis.call('ZREM', key, old_meta)
+    
+    -- 2. Add new session metadata
+    if removed > 0 then
+        redis.call('ZADD', key, expiry, new_meta)
+        return 'SUCCESS'
+    end
+    return 'FAILURE'
+    """
+
     @classmethod
     def issue_tokens(cls, user: CustomUser, request: Any) -> dict[str, Any]:
         """
@@ -51,7 +69,7 @@ class AuthEngine:
         """
         user_id = str(user.id)
         active_key = f"auth:active_sessions:{user_id}"
-        now_ts = int(datetime.now(UTC).timestamp())
+        now_ts = int(datetime.now(timezone.utc).timestamp())
         max_devices = settings.AUTH_ENGINE_SETTINGS["MAX_DEVICES_PER_USER"]
         refresh_expiry = (
             now_ts + settings.AUTH_ENGINE_SETTINGS["REFRESH_TOKEN_LIFETIME"]
@@ -106,6 +124,73 @@ class AuthEngine:
         }
 
     @classmethod
+    def refresh_tokens(
+        cls, user: CustomUser, old_payload: dict[str, Any], request: Any
+    ) -> dict[str, str]:
+        """
+        Performs atomic token rotation.
+        Blacklists the old refresh JTI and updates the session registry via Lua.
+        """
+        user_id = str(user.id)
+        active_key = f"auth:active_sessions:{user_id}"
+        now_ts = int(datetime.now(timezone.utc).timestamp())
+        refresh_expiry = (
+            now_ts + settings.AUTH_ENGINE_SETTINGS["REFRESH_TOKEN_LIFETIME"]
+        )
+
+        # 1. Blacklist old refresh JTI immediately
+        old_refresh_jti = old_payload["jti"]
+        cls.blacklist_tokens([old_refresh_jti])
+
+        # 2. Create new JTIs and metadata
+        access_jti = str(uuid.uuid4())
+        refresh_jti = str(uuid.uuid4())
+        device_label = AuthCryptoEngine.parse_device_info(request)
+        fingerprint = AuthCryptoEngine.generate_fingerprint(request)
+
+        new_meta = {
+            "access_jti": access_jti,
+            "refresh_jti": refresh_jti,
+            "device": device_label,
+            "ip": request.META.get("REMOTE_ADDR"),
+            "started_at": now_ts,
+        }
+
+        # 3. Locate and rotate the session in Redis atomicity
+        conn = cache.client.get_client()
+        sessions = conn.zrange(active_key, 0, -1)
+        old_meta_str = None
+        for s in sessions:
+            meta = json.loads(s.decode())
+            if meta["refresh_jti"] == old_refresh_jti:
+                old_meta_str = s.decode()
+                break
+
+        if not old_meta_str:
+            raise ValueError("Session context not found or already revoked.")
+
+        result = conn.eval(
+            cls.ROTATE_SESSION_LUA,
+            1,
+            active_key,
+            old_meta_str,
+            json.dumps(new_meta),
+            refresh_expiry,
+        )
+
+        if result != b"SUCCESS":
+            raise ValueError("Atomic rotation failed. The session may have changed.")
+
+        return {
+            "access": cls._create_token(
+                user_id, access_jti, refresh_jti, fingerprint, "access"
+            ),
+            "refresh": cls._create_token(
+                user_id, refresh_jti, access_jti, fingerprint, "refresh"
+            ),
+        }
+
+    @classmethod
     def promote_restricted_session(
         cls, user_id: str, access_jti: str, refresh_jti: str, request: Any
     ) -> dict[str, str]:
@@ -113,7 +198,7 @@ class AuthEngine:
         Atomically upgrades a restricted session to full access.
         """
         active_key = f"auth:active_sessions:{user_id}"
-        now_ts = int(datetime.now(UTC).timestamp())
+        now_ts = int(datetime.now(timezone.utc).timestamp())
         refresh_expiry = (
             now_ts + settings.AUTH_ENGINE_SETTINGS["REFRESH_TOKEN_LIFETIME"]
         )
@@ -129,6 +214,7 @@ class AuthEngine:
             "started_at": now_ts,
         }
 
+        # Register the promoted session
         conn = cache.client.get_client()
         conn.zadd(active_key, {json.dumps(session_meta): refresh_expiry})
 

@@ -1,5 +1,5 @@
 from django.urls import path
-from users.api.v1.client.views.auth_views import (
+from users.api.v1.client.views.auth import (
     ClientSignUpAPIView,
     ClientOTPValidationAPIView,
     ClientResendOTPAPIView,
@@ -7,6 +7,7 @@ from users.api.v1.client.views.auth_views import (
     ClientLogoutAPIView,
     ClientSessionRevokeAPIView,
     ClientTokenVerifyAPIView,
+    ClientTokenRefreshAPIView,
 )
 
 urlpatterns = [
@@ -17,7 +18,15 @@ urlpatterns = [
         name="client-otp-validate",
     ),
     path("otp-resend/", ClientResendOTPAPIView.as_view(), name="client-otp-resend"),
-    path("token/verify/", ClientTokenVerifyAPIView.as_view(), name="client-token-verify"),
+    # Token Protocols
+    path(
+        "token/verify/", ClientTokenVerifyAPIView.as_view(), name="client-token-verify"
+    ),
+    path(
+        "token/refresh/",
+        ClientTokenRefreshAPIView.as_view(),
+        name="client-token-refresh",
+    ),
     # Security & Session Management
     path("sessions/", ClientSessionListAPIView.as_view(), name="client-sessions"),
     path("logout/", ClientLogoutAPIView.as_view(), name="client-logout"),
