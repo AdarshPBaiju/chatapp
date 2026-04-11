@@ -3,16 +3,17 @@ from .base import *
 DEBUG = True
 ALLOWED_HOSTS = ["localhost", "127.0.0.1", "0.0.0.0"]
 
-INSTALLED_APPS += [
-]
+INSTALLED_APPS += []
 
-DATABASES["default"].update({
-    "NAME": "chatapp",
-    "USER": "postgres",
-    "PASSWORD": "password",
-    "HOST": "db",
-    "PORT": "5432",
-})
+DATABASES["default"].update(
+    {
+        "NAME": "chatapp",
+        "USER": "postgres",
+        "PASSWORD": "password",
+        "HOST": "db",
+        "PORT": "5432",
+    }
+)
 
 CACHES["default"]["LOCATION"] = "redis://redis:6379/1"
 
