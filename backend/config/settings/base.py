@@ -67,7 +67,7 @@ TEMPLATES = [
 ASGI_APPLICATION = "config.asgi.application"
 WSGI_APPLICATION = "config.wsgi.application"
 
-AUTH_USER_MODEL = "users.User"
+AUTH_USER_MODEL = "users.CustomUser"
 
 PASSWORD_HASHERS = [
     "django.contrib.auth.hashers.Argon2PasswordHasher",

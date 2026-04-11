@@ -1,6 +1,7 @@
 [tool.ruff]
 line-length = 88
 target-version = "py311"
+src = ["backend", "backend/apps"]
 
 [tool.ruff.lint]
 select = [
@@ -84,7 +85,7 @@ ignore = [
 "**/settings/**" = ["F405", "F403"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["chatapp"]
+known-first-party = ["chatapp", "apps", "core"]
 force-sort-within-sections = true
 
 [tool.ruff.lint.mccabe]
