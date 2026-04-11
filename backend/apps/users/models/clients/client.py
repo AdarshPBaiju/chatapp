@@ -38,6 +38,7 @@ class Client(UUIDModel):
         blank=True,
     )
     phone_number = models.CharField(max_length=16, unique=True, blank=True, null=True)
+    is_two_factor_enabled = models.BooleanField(default=False)
 
     class Meta:
         indexes: ClassVar[list[models.Index]] = [
