@@ -8,7 +8,7 @@ from django.core.management import execute_from_command_line
 
 def main():
     """Run administrative tasks."""
-    os.environ.setdefault("DJANGO_SETTINGS_MODULE", "chatapp.settings")
+    os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings.dev")
     try:
         pass
     except ImportError as exc:

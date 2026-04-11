@@ -1,9 +1,11 @@
 from datetime import timedelta
 from pathlib import Path
+import sys
 
 from decouple import config
 
-BASE_DIR = Path(__file__).resolve().parent.parent
+BASE_DIR = Path(__file__).resolve().parent.parent.parent
+sys.path.insert(0, str(BASE_DIR / "apps"))
 
 
 SECRET_KEY = config("SECRET_KEY", default="django-insecure-change-me")
@@ -30,6 +32,8 @@ INSTALLED_APPS = [
     "django_celery_beat",
     "django_celery_results",
     "channels",
+    "drf_spectacular",
+    "users",
 ]
 
 MIDDLEWARE = [
@@ -43,7 +47,7 @@ MIDDLEWARE = [
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
 
-ROOT_URLCONF = "chatapp.urls"
+ROOT_URLCONF = "config.urls"
 
 TEMPLATES = [
     {
@@ -60,19 +64,17 @@ TEMPLATES = [
     },
 ]
 
-ASGI_APPLICATION = "chatapp.asgi.application"
+ASGI_APPLICATION = "config.asgi.application"
+WSGI_APPLICATION = "config.wsgi.application"
 
-DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.postgresql",
-        "NAME": config("DB_NAME", default="chatapp"),
-        "USER": config("DB_USER", default="postgres"),
-        "PASSWORD": config("DB_PASSWORD", default="password"),
-        "HOST": config("DB_HOST", default="localhost"),
-        "PORT": config("DB_PORT", default="5432"),
-    }
-}
+AUTH_USER_MODEL = "users.User"
 
+PASSWORD_HASHERS = [
+    "django.contrib.auth.hashers.Argon2PasswordHasher",
+    "django.contrib.auth.hashers.PBKDF2PasswordHasher",
+    "django.contrib.auth.hashers.PBKDF2SHA1PasswordHasher",
+    "django.contrib.auth.hashers.BCryptSHA256PasswordHasher",
+]
 
 AUTH_PASSWORD_VALIDATORS = [
     {
@@ -112,8 +114,17 @@ REST_FRAMEWORK = {
         "rest_framework_simplejwt.authentication.JWTAuthentication",
     ),
     "DEFAULT_PERMISSION_CLASSES": ("rest_framework.permissions.IsAuthenticated",),
-    "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
+    "DEFAULT_PAGINATION_CLASS": "core.api.pagination.StandardResultsSetPagination",
+    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+    "EXCEPTION_HANDLER": "core.api.exceptions.api_exception_handler",
     "PAGE_SIZE": 20,
+}
+
+SPECTACULAR_SETTINGS = {
+    "TITLE": "Production Chatapp API",
+    "DESCRIPTION": "Advanced Authentication and Messaging Service",
+    "VERSION": "1.0.0",
+    "SERVE_INCLUDE_SCHEMA": False,
 }
 
 SIMPLE_JWT = {
