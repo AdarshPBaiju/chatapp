@@ -16,7 +16,7 @@ ruff==0.4.4
 coverage==7.5.1
 pre-commit==3.7.1
 confluent-kafka==2.9.0
-channels==4.1.0
-channels-redis==4.2.0
+channels==4.3.2
+channels-redis==4.3.0
 django-redis==5.4.0
 flower==2.0.1
