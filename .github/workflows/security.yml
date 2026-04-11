@@ -102,6 +102,7 @@ jobs:
           args: >-
             -strict
             -summary
+            -ignore-filename-pattern kustomization.yaml
             -schema-location default
             -schema-location https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json
             k8s/
