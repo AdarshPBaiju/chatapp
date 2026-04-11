@@ -32,7 +32,7 @@ if [ "$RUN_MIGRATIONS" = "true" ]; then
 
     if [ "$DJANGO_ENV" = "development" ]; then
         echo "Creating development superuser..."
-        export DJANGO_SUPERUSER_PHONE_NUMBER=${DJANGO_SUPERUSER_PHONE_NUMBER:-"+12025550123"}
+        export DJANGO_SUPERUSER_EMAIL=${DJANGO_SUPERUSER_EMAIL:-"admin@chatapp.com"}
         export DJANGO_SUPERUSER_PASSWORD=${DJANGO_SUPERUSER_PASSWORD:-"admin123"}
         
         python manage.py createsuperuser \
