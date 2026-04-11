@@ -15,6 +15,7 @@ help:
 	@echo "---------------------------"
 	@echo "Development Commands:"
 	@echo "  make dev-build            - Build dev images"
+	@echo "  make dev-rebuild          - 🔨 Clean build (no cache)"
 	@echo "  make dev-up               - Start dev environment"
 	@echo "  make dev-down             - Stop dev containers"
 	@echo "  make dev-teardown         - Stop and remove dev volumes"
@@ -38,6 +39,10 @@ help:
 	@echo "Global Commands:"
 	@echo "  make teardown             - Full wipe of Dev & Prod (removes volumes)"
 	@echo "  make clean                - ⚠️ Nuclear wipe (volumes + images)"
+	@echo ""
+	@echo "Admin UI:"
+	@echo "  pgAdmin (DB UI) is available at http://localhost:5050"
+	@echo "  (Login: admin@chatapp.com / admin)"
 
 # --- Global ---
 teardown:
@@ -51,6 +56,9 @@ clean:
 # --- Development ---
 dev-build:
 	$(DEV_CMD) build
+
+dev-rebuild:
+	$(DEV_CMD) build --no-cache
 
 dev-up:
 	$(DEV_CMD) up -d
