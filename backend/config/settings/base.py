@@ -241,8 +241,43 @@ LOGGING = {
     "loggers": {
         "django": {
             "handlers": ["console"],
-            "level": "INFO",
+            "level": config("DJANGO_LOG_LEVEL", default="INFO"),
+            "propagate": False,
+        },
+        "users": {
+            "handlers": ["console"],
+            "level": config("USERS_LOG_LEVEL", default="INFO"),
+            "propagate": False,
+        },
+        "core": {
+            "handlers": ["console"],
+            "level": config("CORE_LOG_LEVEL", default="INFO"),
             "propagate": False,
         },
     },
 }
+
+
+OTP_EXPIRATION_SECONDS = config("OTP_EXPIRATION_SECONDS", default=300, cast=int)
+OTP_RESEND_INTERVAL_SECONDS = config("OTP_RESEND_INTERVAL_SECONDS", default=60, cast=int)
+
+EMAIL_BACKEND = config(
+    "EMAIL_BACKEND", default="django.core.mail.backends.console.EmailBackend"
+)
+EMAIL_HOST = config("EMAIL_HOST", default="localhost")
+EMAIL_PORT = config("EMAIL_PORT", default=1025, cast=int)
+EMAIL_USE_TLS = config("EMAIL_USE_TLS", default=False, cast=bool)
+EMAIL_USE_SSL = config("EMAIL_USE_SSL", default=False, cast=bool)
+EMAIL_HOST_USER = config("EMAIL_HOST_USER", default="")
+EMAIL_HOST_PASSWORD = config("EMAIL_HOST_PASSWORD", default="")
+DEFAULT_FROM_EMAIL = config("DEFAULT_FROM_EMAIL", default="noreply@verify.vibe.com")
+
+BRAND_NAME = config("BRAND_NAME", default="VIBE")
+BRAND_DOMAIN = config("BRAND_DOMAIN", default="vibe.com")
+BRAND_SLOGAN = config("BRAND_SLOGAN", default="A video creation & streaming platform")
+SUPPORT_EMAIL = config("SUPPORT_EMAIL", default="support@vibe.com")
+BRAND_ADDRESS = config(
+    "BRAND_ADDRESS", default="123 Creator Avenue, Suite 400, Los Angeles, CA 90036"
+)
+BRAND_COLOR_PRIMARY = config("BRAND_COLOR_PRIMARY", default="#2563eb")
+BRAND_COLOR_SECONDARY = config("BRAND_COLOR_SECONDARY", default="#0f172a")

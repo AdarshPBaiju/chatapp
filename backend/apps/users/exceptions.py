@@ -24,6 +24,9 @@ class InvalidPhoneNumberError(ValueError, UserError):
 class InactiveSuspensionError(ValueError, UserError):
     """Raised when an operation is performed on an inactive suspension."""
 
-    def __init__(self, message=_("Cannot perform this operation on a suspension that is not active.")):
+    def __init__(
+        self,
+        message=_("Cannot perform this operation on a suspension that is not active."),
+    ):
         self.message = message
         super().__init__(self.message)

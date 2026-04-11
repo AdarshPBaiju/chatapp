@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="x-ua-compatible" content="ie=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="color-scheme" content="light only">
+    <title>{{ brand_name }} • Welcome & Verify Your Email</title>
+    <style type="text/css">
+        /* Reset & modern base */
+        * {
+            margin: 0;
+            padding: 0;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+            box-sizing: border-box;
+        }
+        body {
+            background-color: #eef3fc;
+            margin: 0;
+            padding: 40px 0;
+            width: 100%;
+            -webkit-text-size-adjust: 100%;
+            -ms-text-size-adjust: 100%;
+        }
+        table, td, tr {
+            border-collapse: collapse;
+            mso-table-lspace: 0pt;
+            mso-table-rspace: 0pt;
+        }
+        @media only screen and (max-width: 600px) {
+            .inner-padding {
+                padding-left: 28px !important;
+                padding-right: 28px !important;
+            }
+            .otp-box {
+                width: 48px !important;
+                height: 56px !important;
+                font-size: 28px !important;
+                margin: 0 4px !important;
+            }
+        }
+        @media only screen and (max-width: 480px) {
+            .otp-box {
+                width: 40px !important;
+                height: 48px !important;
+                font-size: 24px !important;
+                margin: 0 3px !important;
+            }
+        }
+    </style>
+</head>
+<body style="background-color: #eef3fc; margin: 0; padding: 30px 0;">
+    <table width="100%" border="0" cellpadding="0" cellspacing="0" align="center" bgcolor="#eef3fc" style="background-color: #eef3fc;">
+        <tr>
+            <td align="center" style="padding: 0 20px;">
+                <!-- Main card container -->
+                <table width="100%" border="0" cellpadding="0" cellspacing="0" align="center" style="max-width: 600px; width: 100%; background-color: #ffffff; border-radius: 36px; box-shadow: 0 25px 45px -12px rgba(0, 0, 0, 0.12); overflow: hidden;">
+                    
+                    <!-- Header: brand color gradient + branding -->
+                    <tr>
+                        <td bgcolor="{{ brand_color_secondary }}" style="background: linear-gradient(125deg, {{ brand_color_secondary }} 0%, {{ brand_color_primary }} 100%); text-align: center; padding: 38px 28px 32px;">
+                            <div style="margin-bottom: 10px;">
+                                <span style="font-size: 38px; font-weight: 800; color: white; letter-spacing: -0.8px; background: rgba(255,255,255,0.12); padding: 4px 18px; border-radius: 60px; display: inline-block;">{{ brand_name }}</span>
+                            </div>
+                            <p style="font-size: 15px; font-weight: 500; color: rgba(255,255,255,0.85); margin: 12px 0 0;">{{ brand_slogan }}</p>
+                            <div style="height: 3px; width: 70px; background: #ffffff; opacity: 0.5; margin: 24px auto 0; border-radius: 10px;"></div>
+                        </td>
+                    </tr>
+
+                    <!-- Body: welcome + OTP verification with individual boxes -->
+                    <tr>
+                        <td style="padding: 42px 36px 36px;" class="inner-padding">
+                            <!-- Greeting -->
+                            <h2 style="font-size: 26px; font-weight: 700; color: {{ brand_color_secondary }}; margin: 0 0 12px;">Welcome {{ full_name }}!</h2>
+                            <p style="font-size: 16px; line-height: 1.5; color: #2c3e50; margin-bottom: 28px;">
+                                Thank you for joining {{ brand_name }}. To complete your registration and activate your account, please verify your email address using the secure 6‑digit code below.
+                            </p>
+
+                            <!-- 6-digit OTP: individual boxes -->
+                            <table width="100%" cellpadding="0" cellspacing="0" style="margin: 18px 0 22px;">
+                                <tr>
+                                    <td align="center" style="background: #f5faff; border-radius: 38px; border: 1px solid #d9e9ff; padding: 32px 20px;">
+                                        <!-- Boxes container (table for alignment) -->
+                                        <table align="center" border="0" cellpadding="0" cellspacing="0" style="margin: 0 auto;">
+                                            <tr>
+                                                {% for digit in otp %}
+                                                <td align="center" style="padding: 0 6px;">
+                                                    <div class="otp-box" style="width: 58px; height: 68px; background: #ffffff; border-radius: 16px; border: 1px solid #c7daf5; box-shadow: 0 2px 6px rgba(0,0,0,0.02); display: flex; align-items: center; justify-content: center; font-family: 'SF Mono', 'Courier New', monospace; font-size: 36px; font-weight: 800; color: {{ brand_color_primary }}; text-align: center; line-height: 1;">
+                                                        {{ digit }}
+                                                    </div>
+                                                </td>
+                                                {% endfor %}
+                                            </tr>
+                                        </table>
+                                    </td>
+                                </tr>
+                            </table>
+
+                            <!-- Expiry badge -->
+                            <table width="100%" style="margin: 8px 0 16px;">
+                                <tr>
+                                    <td align="center">
+                                        <table style="background: #fef9e3; border-radius: 100px; padding: 6px 18px;">
+                                            <tr>
+                                                <td style="font-size: 14px; color: #b45309; font-weight: 500;">⏱️ Valid for <strong>{{ expiry_minutes }} minutes</strong></td>
+                                            </tr>
+                                        </table>
+                                    </td>
+                                </tr>
+                            </table>
+
+                            <!-- Simple instruction line (no copy button) -->
+                            <p style="font-size: 14px; color: #334155; text-align: center; margin: 20px 0 10px;">
+                                Enter this code on the registration screen to verify your email address.
+                            </p>
+
+                            <div style="height: 1px; background: #e2e8f0; margin: 32px 0 0px;"></div>
+                        </td>
+                    </tr>
+
+                    <!-- Footer: email address branding + legal -->
+                    <tr>
+                        <td style="background: #ffffff; padding: 28px 36px 34px; border-top: 1px solid #eef2fa; text-align: center;">
+                            <!-- Email branding / from address -->
+                            <p style="font-size: 13px; color: {{ brand_color_primary }}; font-weight: 500; margin: 0 0 12px; letter-spacing: 0.2px;">
+                                ✉️ {{ brand_name }} • <span style="color:{{ brand_color_secondary }};">{{ from_email }}</span>
+                            </p>
+                            <p style="font-size: 12px; color: #5f7f9e; margin: 0 0 16px; line-height: 1.5;">
+                                {{ brand_address }}
+                            </p>
+                            <div style="margin: 20px 0 14px;">
+                                <a href="#" style="color: {{ brand_color_primary }}; font-size: 12px; text-decoration: none; margin: 0 12px;">Privacy policy</a> 
+                                <span style="color:#cbd5e1;">|</span>
+                                <a href="#" style="color: {{ brand_color_primary }}; font-size: 12px; text-decoration: none; margin: 0 12px;">Terms of service</a> 
+                                <span style="color:#cbd5e1;">|</span>
+                                <a href="#" style="color: {{ brand_color_primary }}; font-size: 12px; text-decoration: none; margin: 0 12px;">Help center</a> 
+                                <span style="color:#cbd5e1;">|</span>
+                                <a href="#" style="color: {{ brand_color_primary }}; font-size: 12px; text-decoration: none; margin: 0 12px;">Unsubscribe</a>
+                            </div>
+                            <p style="font-size: 11px; color: #7c94b0; margin: 16px 0 8px;">
+                                © {{ current_year }} {{ brand_name }}. All rights reserved.
+                            </p>
+                            <p style="font-size: 11px; color: #8aa2c2; margin-top: 12px;">
+                                You're receiving this email because you just registered on the {{ brand_name }} platform.
+                            </p>
+                            <div style="margin-top: 20px;">
+                                <span style="background: #eef3ff; padding: 3px 12px; border-radius: 30px; font-size: 10px; color: {{ brand_color_primary }};">🔷 New account verification</span>
+                            </div>
+                        </td>
+                    </tr>
+                </table>
+                <!-- micro note for compatibility -->
+                <table width="100%" style="max-width: 600px; margin-top: 22px;">
+                    <tr>
+                        <td align="center" style="font-size: 11px; color: #6f90b5;">✔️ Welcome to {{ brand_name }} — verify to start creating</td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>
