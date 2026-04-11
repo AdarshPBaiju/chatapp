@@ -9,6 +9,11 @@ from rest_framework.views import APIView
 from drf_spectacular.utils import extend_schema
 
 from core.api.responses import ResponseFactory
+from core.auth.request_context import (
+    attach_device_entropy_cookie,
+    generate_device_entropy,
+    get_device_entropy,
+)
 from users.api.v1.client.serializers.auth import (
     ClientSignUpSerializer,
     ClientOTPValidationSerializer,
@@ -61,7 +66,10 @@ class ClientOTPValidationAPIView(APIView):
         from users.models import CustomUser
 
         user = get_object_or_404(CustomUser, id=user_id)
-        is_valid = UserService.validate_otp(user, otp_code)
+        existing_entropy = get_device_entropy(request)
+        issued_entropy = existing_entropy or generate_device_entropy()
+        request.META["HTTP_X_DEVICE_ENTROPY"] = issued_entropy
+        is_valid = UserService.validate_otp(user, otp_code, request=request)
 
         if is_valid:
             if not user.is_active:
@@ -71,7 +79,7 @@ class ClientOTPValidationAPIView(APIView):
             result = AuthEngine.issue_tokens(user, request)
 
             if result["status"] == "restricted":
-                return ResponseFactory.success(
+                response = ResponseFactory.success(
                     message=result["message"],
                     data={
                         "is_restricted": True,
@@ -80,8 +88,11 @@ class ClientOTPValidationAPIView(APIView):
                     },
                     code=status.HTTP_200_OK,
                 )
+                if not existing_entropy:
+                    attach_device_entropy_cookie(response, issued_entropy)
+                return response
 
-            return ResponseFactory.success(
+            response = ResponseFactory.success(
                 message="Identification verified successfully. Welcome!",
                 data={
                     "is_restricted": False,
@@ -94,6 +105,9 @@ class ClientOTPValidationAPIView(APIView):
                     },
                 },
             )
+            if not existing_entropy:
+                attach_device_entropy_cookie(response, issued_entropy)
+            return response
 
         error_data = {"otp_code": "The code provided is incorrect or has timed out."}
         return ResponseFactory.error(

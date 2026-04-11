@@ -15,12 +15,15 @@ class ClientDevice(UUIDModel):
     device_id = models.CharField(max_length=255, db_index=True)
     device_type = models.CharField(max_length=50)
     device_name = models.CharField(max_length=255)
+    entropy_id = models.CharField(max_length=255, blank=True, default="", db_index=True)
+    last_seen_ip = models.GenericIPAddressField(null=True, blank=True)
     is_active = models.BooleanField(default=True, db_index=True)
     last_used_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         indexes: ClassVar[list[models.Index]] = [
             models.Index(fields=["client", "device_id"]),
+            models.Index(fields=["client", "entropy_id"]),
             models.Index(fields=["is_active"]),
         ]
 

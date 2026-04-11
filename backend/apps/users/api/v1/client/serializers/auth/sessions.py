@@ -11,4 +11,12 @@ class ClientSessionRevokeSerializer(serializers.Serializer):
     Requires the access JTI of the session to target.
     """
 
-    access_jti = v.string.label("Access JTI")
+    session_id = v.uuid.optional().label("Session ID")
+    access_jti = v.string.optional().label("Access JTI")
+
+    def validate(self, attrs):
+        if not attrs.get("session_id") and not attrs.get("access_jti"):
+            raise serializers.ValidationError(
+                {"detail": "Either session_id or access_jti is required."}
+            )
+        return attrs
