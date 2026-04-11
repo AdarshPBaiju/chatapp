@@ -18,7 +18,7 @@ class AdvancedJWTAuthentication(authentication.BaseAuthentication):
     Redis-based JTI blacklist check, and hardware fingerprint binding.
     """
 
-    def authenticate(self, request: Any) -> tuple[CustomUser, None] | None:
+    def authenticate(self, request: Any) -> tuple[CustomUser, dict[str, Any]] | None:
         auth_header = request.META.get("HTTP_AUTHORIZATION")
         if not auth_header or not auth_header.startswith("Bearer "):
             return None
@@ -33,15 +33,13 @@ class AdvancedJWTAuthentication(authentication.BaseAuthentication):
             msg = "Authentication protocol error"
             raise exceptions.AuthenticationFailed(msg) from e
 
-        if payload.get("type") != "access":
-            msg = "Invalid token category: expected access token"
-            raise exceptions.AuthenticationFailed(msg)
-
+        # Ensure we are checking the blacklist
         jti = payload.get("jti")
         if cache.get(f"auth:blacklist:{jti}"):
             msg = "This session has been revoked by the system"
             raise exceptions.AuthenticationFailed(msg)
 
+        # Hardware Fingerprint Binding Check
         current_fpt = AuthCryptoEngine.generate_fingerprint(request)
         if payload.get("fpt") != current_fpt:
             msg = "Security breach: Token context mismatch detected"
@@ -56,11 +54,13 @@ class AdvancedJWTAuthentication(authentication.BaseAuthentication):
             msg = "Subject user no longer exists or is inactive"
             raise exceptions.AuthenticationFailed(msg) from None
 
-        return (user, None)
+        # Return (user, payload) so request.auth holds the token data
+        return (user, payload)
 
     def authenticate_header(self, request: Any) -> str:
         """
         Returns the challenge for the WWW-Authenticate header.
         """
+        # Note: 'request' is required by the DRF method signature
         _ = request
         return "Bearer"

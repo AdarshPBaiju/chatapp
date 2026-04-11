@@ -8,6 +8,7 @@ from typing import Any
 from django.conf import settings
 from jwcrypto import jwe, jwk, jws
 from jwcrypto.common import json_decode
+from user_agents import parse
 
 
 class AuthCryptoEngine:
@@ -75,6 +76,24 @@ class AuthCryptoEngine:
             raise ValueError(error_msg)
 
         return payload
+
+    @staticmethod
+    def parse_device_info(request: Any) -> str:
+        """
+        Parses the User-Agent into a human-readable label (e.g., "Safari on iPhone").
+        """
+        ua_string = request.META.get("HTTP_USER_AGENT", "")
+        user_agent = parse(ua_string)
+
+        browser = user_agent.browser.family
+        os = user_agent.os.family
+        device = user_agent.device.family
+
+        if user_agent.is_mobile:
+            return f"{browser} on {device} ({os})"
+        if user_agent.is_pc:
+            return f"{browser} on {os}"
+        return f"{browser} on {os} ({device})"
 
     @staticmethod
     def generate_fingerprint(request: Any) -> str:
