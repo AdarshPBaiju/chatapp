@@ -9,7 +9,8 @@ from django.utils.deconstruct import deconstructible
 from django.utils.text import slugify
 
 
-@dataclass(frozen=True)
+@deconstructible
+@dataclass
 class UploadPathConfig:
     """Configuration for SmartUploadPath behaviour."""
 

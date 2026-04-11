@@ -1,154 +1,92 @@
 .DEFAULT_GOAL := help
 
 # Variables
-COMPOSE=docker compose
-DEV_COMPOSE=$(COMPOSE) -f docker-compose.dev.yml
-PROD_COMPOSE=$(COMPOSE) -f docker-compose.prod.yml --env-file .env.prod
-BACKEND=backend
-DB=db
-REDIS=redis
+COMPOSE = docker compose
+PROJECT_NAME = chatapp
 
-.PHONY: help build dev-build up down restart logs ps shell migrate makemigrations collectstatic createsuperuser test test-coverage lint lint-fix format quality prod-build prod-up prod-down clean teardown dev-setup db-shell db-reset redis-shell minio-init rebuild
+# Environment specific commands
+DEV_CMD = $(COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml
+PROD_CMD = $(COMPOSE) -f docker-compose.yml -f docker-compose.prod.yml --env-file .env.prod
+
+.PHONY: help dev-build dev-up dev-down dev-logs dev-shell dev-migrate dev-makemigrations prod-build prod-up prod-down prod-logs
 
 help:
-	@echo "Available commands:"
-	@echo "  build            - Build all Docker images"
-	@echo "  dev-build        - Build development images"
-	@echo "  up               - Start services in background"
-	@echo "  up-logs          - Start services with logs"
-	@echo "  down             - Stop all services"
-	@echo "  restart          - Restart services"
-	@echo "  logs             - Show logs"
-	@echo "  ps               - List running containers"
-	@echo "  shell            - Open backend shell"
-	@echo "  migrate          - Apply migrations"
-	@echo "  makemigrations   - Create migrations"
-	@echo "  collectstatic    - Collect static files"
-	@echo "  createsuperuser  - Create admin user"
-	@echo "  test             - Run tests"
-	@echo "  test-coverage    - Run tests with coverage"
-	@echo "  lint             - Run linter"
-	@echo "  lint-fix         - Fix lint issues"
-	@echo "  format           - Format code"
-	@echo "  quality          - Lint + format + test"
-	@echo "  prod-build       - Build production images"
-	@echo "  prod-up          - Start production"
-	@echo "  prod-down        - Stop production"
-	@echo "  clean            - ⚠️ Remove containers, volumes, images"
-	@echo "  teardown         - Stop + remove containers + volumes"
-	@echo "  rebuild          - Rebuild from scratch"
-	@echo "  dev-setup        - Full dev setup"
+	@echo "ChatApp Development Control"
+	@echo "---------------------------"
+	@echo "Development Commands:"
+	@echo "  make dev-build            - Build dev images"
+	@echo "  make dev-up               - Start dev environment"
+	@echo "  make dev-down             - Stop dev containers"
+	@echo "  make dev-teardown         - Stop and remove dev volumes"
+	@echo "  make dev-clean            - ⚠️ Full wipe (volumes + images)"
+	@echo "  make dev-logs             - Follow all dev logs"
+	@echo "  make dev-logs-<service>   - Follow logs for a specific dev service"
+	@echo "  make dev-backend          - Shortcut for backend logs"
+	@echo "  make dev-shell            - Open shell in backend container"
+	@echo "  make dev-migrate          - Run migrations in dev"
+	@echo "  make dev-makemigrations   - Create migrations in dev"
+	@echo ""
+	@echo "Production Commands:"
+	@echo "  make prod-build           - Build prod images"
+	@echo "  make prod-up              - Start prod environment"
+	@echo "  make prod-down            - Stop prod containers"
+	@echo "  make prod-teardown        - Stop and remove prod volumes"
+	@echo "  make prod-logs            - Follow all prod logs"
+	@echo "  make prod-logs-<service>  - Follow logs for a specific prod service"
+	@echo "  make prod-backend         - Shortcut for backend logs"
 
-# Build
-build:
-	$(COMPOSE) build
-
+# --- Development ---
 dev-build:
-	$(DEV_COMPOSE) build
+	$(DEV_CMD) build
 
-# Run
-up:
-	$(COMPOSE) up -d
+dev-up:
+	$(DEV_CMD) up -d
 
-up-logs:
-	$(COMPOSE) up
+dev-down:
+	$(DEV_CMD) down
 
-down:
-	$(COMPOSE) down
+dev-teardown:
+	$(DEV_CMD) down -v --remove-orphans
 
-restart:
-	$(COMPOSE) restart
+dev-clean:
+	$(DEV_CMD) down -v --rmi all --remove-orphans
 
-ps:
-	$(COMPOSE) ps
+dev-logs:
+	$(DEV_CMD) logs -f
 
-logs:
-	$(COMPOSE) logs -f
+dev-logs-%:
+	$(DEV_CMD) logs -f $*
 
-logs-%:
-	$(COMPOSE) logs -f $*
+dev-backend:
+	$(DEV_CMD) logs -f backend
 
-# Backend access
-shell:
-	$(COMPOSE) exec $(BACKEND) bash
+dev-shell:
+	$(DEV_CMD) exec backend bash
 
-# Django commands
-migrate:
-	$(COMPOSE) exec $(BACKEND) python manage.py migrate
+dev-migrate:
+	$(DEV_CMD) exec backend python manage.py migrate
 
-makemigrations:
-	$(COMPOSE) exec $(BACKEND) python manage.py makemigrations
+dev-makemigrations:
+	$(DEV_CMD) exec backend python manage.py makemigrations
 
-collectstatic:
-	$(COMPOSE) exec $(BACKEND) python manage.py collectstatic --noinput
-
-createsuperuser:
-	$(COMPOSE) exec $(BACKEND) python manage.py createsuperuser
-
-# Testing
-test:
-	$(COMPOSE) exec $(BACKEND) python manage.py test
-
-test-coverage:
-	$(COMPOSE) exec $(BACKEND) coverage run manage.py test
-	$(COMPOSE) exec $(BACKEND) coverage report
-	$(COMPOSE) exec $(BACKEND) coverage html
-
-# Code quality
-lint:
-	$(COMPOSE) exec $(BACKEND) ruff check .
-
-lint-fix:
-	$(COMPOSE) exec $(BACKEND) ruff check . --fix
-
-format:
-	$(COMPOSE) exec $(BACKEND) ruff format .
-
-quality: lint format test
-
-# Production
+# --- Production ---
 prod-build:
-	$(PROD_COMPOSE) build
+	$(PROD_CMD) build
 
 prod-up:
-	$(PROD_COMPOSE) up -d
+	$(PROD_CMD) up -d
 
 prod-down:
-	$(PROD_COMPOSE) down
+	$(PROD_CMD) down
 
-# Cleanup
-clean:
-	$(COMPOSE) down -v --rmi all
+prod-teardown:
+	$(PROD_CMD) down -v --remove-orphans
 
-teardown:
-	$(COMPOSE) down -v
+prod-logs:
+	$(PROD_CMD) logs -f
 
-# Rebuild everything
-rebuild: down build up
+prod-logs-%:
+	$(PROD_CMD) logs -f $*
 
-# Development setup
-dev-setup: build up
-	@echo "Waiting for services..."
-	@sleep 5
-	@$(MAKE) migrate
-
-# Database
-db-shell:
-	$(COMPOSE) exec $(DB) psql -U postgres -d chatapp
-
-db-reset:
-	$(COMPOSE) down
-	docker volume rm chatapp_postgres_data || true
-	$(COMPOSE) up -d
-	@echo "Waiting for DB..."
-	@sleep 5
-	@$(MAKE) migrate
-
-# Redis
-redis-shell:
-	$(COMPOSE) exec $(REDIS) redis-cli
-
-# MinIO (better moved to script in production)
-minio-init:
-	$(COMPOSE) exec $(BACKEND) python manage.py shell -c "import boto3; from django.conf import settings; client=boto3.client('s3',endpoint_url=settings.AWS_S3_ENDPOINT_URL,aws_access_key_id=settings.AWS_ACCESS_KEY_ID,aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,region_name='us-east-1'); \
-	print('Bucket ready' if not client.list_buckets() else 'Checked')"
+prod-backend:
+	$(PROD_CMD) logs -f backend

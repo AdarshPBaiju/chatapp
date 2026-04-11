@@ -1,9 +1,7 @@
-version: '3.8'
-
 services:
   db:
     ports:
-      - "5432:5432"
+      - "5444:5432"
 
   redis:
     ports:
@@ -31,7 +29,7 @@ services:
       - /app/__pycache__
     ports:
       - "8000:8000"
-    command: uvicorn chatapp.asgi:application --host 0.0.0.0 --port 8000 --reload --workers 1
+    command: uvicorn config.asgi:application --host 0.0.0.0 --port 8000 --reload --workers 1
 
   celery:
     environment:

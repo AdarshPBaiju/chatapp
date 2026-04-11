@@ -9,22 +9,21 @@ while ! nc -z $DB_HOST $DB_PORT; do
 done
 echo "PostgreSQL started"
 
-# Wait for Redis
 echo "Waiting for Redis..."
 while ! nc -z $REDIS_HOST $REDIS_PORT; do
   sleep 0.1
 done
 echo "Redis started"
 
-# Wait for MinIO
 echo "Waiting for MinIO..."
 while ! curl -f http://$MINIO_HOST:$MINIO_PORT/minio/health/live; do
   sleep 0.1
 done
 echo "MinIO started"
 
-# Run migrations and collect static files only if requested
 if [ "$RUN_MIGRATIONS" = "true" ]; then
+    echo "Running makemigrations..."
+    python manage.py makemigrations
     echo "Running migrations..."
     python manage.py migrate
 
@@ -32,8 +31,14 @@ if [ "$RUN_MIGRATIONS" = "true" ]; then
     python manage.py collectstatic --noinput
 
     if [ "$DJANGO_ENV" = "development" ]; then
-        echo "Creating superuser..."
-        python manage.py createsuperuser --noinput --username admin --email admin@example.com || true
+        echo "Creating development superuser..."
+        export DJANGO_SUPERUSER_PHONE_NUMBER=${DJANGO_SUPERUSER_PHONE_NUMBER:-"+12025550123"}
+        export DJANGO_SUPERUSER_PASSWORD=${DJANGO_SUPERUSER_PASSWORD:-"admin123"}
+        
+        python manage.py createsuperuser \
+            --no-input \
+            --user_type "staff" \
+            || echo "Superuser already exists or could not be created."
     fi
 fi
 

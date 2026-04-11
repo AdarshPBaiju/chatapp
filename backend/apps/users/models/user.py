@@ -1,3 +1,4 @@
+import re
 from typing import ClassVar
 
 from django.contrib.auth.models import (
@@ -6,12 +7,35 @@ from django.contrib.auth.models import (
     PermissionsMixin,
 )
 from django.db import models
+import phonenumbers
 
-from apps.users.exceptions import PhoneNumberRequiredError
+from apps.users.exceptions import (
+    InvalidPhoneNumberError,
+    PhoneNumberRequiredError,
+)
 from core.models.base import UUIDModel
 
 
 class UserManager(BaseUserManager):
+    def normalize_username(self, username):
+        if username is None:
+            return username
+
+        username = str(username).strip()
+        username = re.sub(r"[\s\-().]", "", username)
+        if username.startswith("00"):
+            username = "+" + username[2:]
+
+        try:
+            number = phonenumbers.parse(username, None)
+        except phonenumbers.NumberParseException as exc:
+            raise InvalidPhoneNumberError from exc
+
+        if not phonenumbers.is_valid_number(number):
+            raise InvalidPhoneNumberError
+
+        return phonenumbers.format_number(number, phonenumbers.PhoneNumberFormat.E164)
+
     def create_user(self, phone_number, password=None, **extra_fields):
         if not phone_number:
             raise PhoneNumberRequiredError
@@ -41,7 +65,7 @@ class CustomUser(UUIDModel, AbstractBaseUser, PermissionsMixin):
         default=UserType.USER,
         db_index=True,
     )
-    phone_number = models.CharField(max_length=15, unique=True)
+    phone_number = models.CharField(max_length=16, unique=True)
     is_active = models.BooleanField(default=False, db_index=True)
     is_staff = models.BooleanField(default=False)
     is_superuser = models.BooleanField(default=False)
