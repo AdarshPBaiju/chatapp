@@ -1,0 +1,99 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: chatapp-backend
+  namespace: chatapp
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: chatapp-backend
+  template:
+    metadata:
+      labels:
+        app: chatapp-backend
+    spec:
+      containers:
+      - name: backend
+        image: your-registry/chatapp-backend:latest
+        ports:
+        - containerPort: 8000
+        envFrom:
+        - configMapRef:
+            name: chatapp-config
+        - secretRef:
+            name: chatapp-secrets
+        env:
+        - name: DB_USER
+          valueFrom:
+            secretKeyRef:
+              name: chatapp-secrets
+              key: POSTGRES_USER
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: chatapp-secrets
+              key: POSTGRES_PASSWORD
+        - name: MINIO_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: chatapp-secrets
+              key: MINIO_ACCESS_KEY
+        - name: MINIO_SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: chatapp-secrets
+              key: MINIO_SECRET_KEY
+        command: ["gunicorn", "chatapp.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "4", "--threads", "4"]
+        livenessProbe:
+          httpGet:
+            path: /health/
+            port: 8000
+          initialDelaySeconds: 30
+          periodSeconds: 30
+        readinessProbe:
+          httpGet:
+            path: /health/
+            port: 8000
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: chatapp-backend-service
+  namespace: chatapp
+spec:
+  selector:
+    app: chatapp-backend
+  ports:
+  - port: 8000
+    targetPort: 8000
+  type: ClusterIP
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: chatapp-ingress
+  namespace: chatapp
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+spec:
+  rules:
+  - host: chatapp.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: chatapp-backend-service
+            port:
+              number: 8000

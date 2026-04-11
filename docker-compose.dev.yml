@@ -1,0 +1,57 @@
+version: '3.8'
+
+services:
+  db:
+    ports:
+      - "5432:5432"
+
+  redis:
+    ports:
+      - "6379:6379"
+
+  minio:
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+
+  zookeeper:
+    ports:
+      - "2181:2181"
+
+  kafka:
+    ports:
+      - "9092:9092"
+      - "9093:9093"
+
+  backend:
+    environment:
+      DJANGO_ENV: development
+    volumes:
+      - ./backend:/app
+      - /app/__pycache__
+    ports:
+      - "8000:8000"
+    command: uvicorn chatapp.asgi:application --host 0.0.0.0 --port 8000 --reload --workers 1
+
+  celery:
+    environment:
+      DJANGO_ENV: development
+    volumes:
+      - ./backend:/app
+      - /app/__pycache__
+
+  celery-beat:
+    environment:
+      DJANGO_ENV: development
+    volumes:
+      - ./backend:/app
+      - /app/__pycache__
+
+  flower:
+    environment:
+      DJANGO_ENV: development
+    volumes:
+      - ./backend:/app
+      - /app/__pycache__
+    ports:
+      - "5555:5555"
