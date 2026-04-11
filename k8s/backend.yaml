@@ -44,7 +44,7 @@ spec:
             secretKeyRef:
               name: chatapp-secrets
               key: MINIO_SECRET_KEY
-        command: ["gunicorn", "chatapp.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "4", "--threads", "4"]
+        command: ["sh", "-c", "gunicorn chatapp.asgi:application --bind 0.0.0.0:8000 -k uvicorn.workers.UvicornWorker --workers ${GUNICORN_WORKERS:-2} --timeout ${GUNICORN_TIMEOUT:-30}"]
         livenessProbe:
           httpGet:
             path: /health/

@@ -12,6 +12,7 @@ django-storages==1.14.2
 Pillow==10.2.0
 python-decouple==3.8
 uvicorn[standard]==0.27.1
+gunicorn==21.2.0
 ruff==0.4.4
 coverage==7.5.1
 pre-commit==3.7.1
