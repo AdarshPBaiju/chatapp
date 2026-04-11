@@ -9,14 +9,14 @@ class UserAdmin(BaseUserAdmin):
     """Admin configuration for the CustomUser model."""
 
     list_display = (
-        "phone_number",
+        "email",
         "user_type",
         "is_staff",
         "is_active",
     )
     list_filter = ("user_type", "is_staff", "is_superuser", "is_active")
     fieldsets = (
-        (None, {"fields": ("phone_number", "password")}),
+        (None, {"fields": ("email", "password")}),
         (
             "Personal info",
             {"fields": ("user_type",)},
@@ -35,8 +35,8 @@ class UserAdmin(BaseUserAdmin):
         ),
         ("Important dates", {"fields": ("last_login",)}),
     )
-    search_fields = ("phone_number",)
-    ordering = ("phone_number",)
+    search_fields = ("email",)
+    ordering = ("email",)
     filter_horizontal = (
         "groups",
         "user_permissions",

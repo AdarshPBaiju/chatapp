@@ -8,7 +8,7 @@ PROJECT_NAME = chatapp
 DEV_CMD = $(COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml
 PROD_CMD = $(COMPOSE) -f docker-compose.yml -f docker-compose.prod.yml --env-file .env.prod
 
-.PHONY: help dev-build dev-up dev-down dev-logs dev-shell dev-migrate dev-makemigrations prod-build prod-up prod-down prod-logs
+.PHONY: help dev-build dev-up dev-down dev-logs dev-shell dev-migrate dev-makemigrations prod-build prod-up prod-down prod-logs teardown clean
 
 help:
 	@echo "ChatApp Development Control"
@@ -34,6 +34,19 @@ help:
 	@echo "  make prod-logs            - Follow all prod logs"
 	@echo "  make prod-logs-<service>  - Follow logs for a specific prod service"
 	@echo "  make prod-backend         - Shortcut for backend logs"
+	@echo ""
+	@echo "Global Commands:"
+	@echo "  make teardown             - Full wipe of Dev & Prod (removes volumes)"
+	@echo "  make clean                - ⚠️ Nuclear wipe (volumes + images)"
+
+# --- Global ---
+teardown:
+	$(DEV_CMD) down -v --remove-orphans
+	$(PROD_CMD) down -v --remove-orphans
+
+clean:
+	$(DEV_CMD) down -v --rmi all --remove-orphans
+	$(PROD_CMD) down -v --rmi all --remove-orphans
 
 # --- Development ---
 dev-build:

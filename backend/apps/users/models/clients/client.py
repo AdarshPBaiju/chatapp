@@ -37,6 +37,7 @@ class Client(UUIDModel):
         choices=Gender.choices,
         blank=True,
     )
+    phone_number = models.CharField(max_length=16, unique=True, blank=True, null=True)
 
     class Meta:
         indexes: ClassVar[list[models.Index]] = [
@@ -45,7 +46,7 @@ class Client(UUIDModel):
         ]
 
     def __str__(self):
-        return f"{self.full_name} ({self.user.phone_number})"
+        return f"{self.full_name} ({self.user.email})"
 
     @property
     def is_suspended(self):
