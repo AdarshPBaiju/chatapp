@@ -5,8 +5,8 @@ import { resendOtp } from "@/features/auth/api";
 import { runOtpValidationFlow } from "@/features/auth/flows";
 import { useAuthStore } from "@/features/auth/state";
 import { readApiMessage } from "@/shared/lib/apiResponse";
-import { Card } from "@/shared/ui/Card";
-import { FormError } from "@/shared/ui/FormError";
+import { AuthLayout } from "@/shared/ui/AuthLayout";
+import { Button, Input } from "@/shared/ui/FormControls";
 
 export function OtpPage() {
   const navigate = useNavigate();
@@ -61,34 +61,38 @@ export function OtpPage() {
   }
 
   return (
-    <main className="container">
-      <Card>
-        <h1>Verify OTP</h1>
-        <p>Enter the code sent to {pending.email}</p>
-        <form className="stack" onSubmit={onSubmit}>
-          <input
-            type="text"
-            placeholder="6-digit code"
-            value={otpCode}
-            onChange={(e) => setOtpCode(e.target.value)}
-            minLength={6}
-            maxLength={6}
-            required
-          />
-          <FormError message={error} />
-          <button type="submit" disabled={loading}>
-            {loading ? "Verifying..." : "Verify"}
-          </button>
-        </form>
-        <button 
-          className="secondary" 
-          type="button" 
-          onClick={onResend} 
-          disabled={resendLoading || countdown > 0}
-        >
-          {resendLoading ? "Resending..." : countdown > 0 ? `Resend in ${countdown}s` : "Resend OTP"}
-        </button>
-      </Card>
-    </main>
+    <AuthLayout heading="Verify Identity">
+      <form onSubmit={onSubmit} className="space-y-6">
+        <p className="text-[var(--muted)]">
+          Enter the 6-digit code sent to <strong className="text-white">{pending.email}</strong>
+        </p>
+        <Input
+          type="text"
+          placeholder="6-digit code"
+          value={otpCode}
+          onChange={(e) => setOtpCode(e.target.value)}
+          minLength={6}
+          maxLength={6}
+          required
+          disabled={loading}
+          error={error}
+        />
+        <div className="flex flex-col gap-4">
+          <Button type="submit" className="w-full" isLoading={loading}>
+            Verify
+          </Button>
+          <div className="text-center">
+            <button
+              type="button"
+              className="text-sm text-[var(--muted)] hover:text-white transition-colors disabled:opacity-50"
+              onClick={onResend}
+              disabled={resendLoading || countdown > 0}
+            >
+              {resendLoading ? "Resending..." : countdown > 0 ? `Resend in ${countdown}s` : "Resend OTP"}
+            </button>
+          </div>
+        </div>
+      </form>
+    </AuthLayout>
   );
 }

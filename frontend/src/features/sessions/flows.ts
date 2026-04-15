@@ -3,9 +3,19 @@ import { listSessions, logout, revokeSession, revokeOthers } from "@/features/se
 import { authStorage } from "@/shared/lib/storage";
 
 export async function fetchSessionsFlow(): Promise<void> {
-  const sessions = await listSessions();
-  authStorage.setRestrictedSessions(sessions);
-  useAuthStore.setState({ restrictedSessions: sessions });
+  const result = await listSessions();
+  
+  if (result.is_promoted && result.access && result.refresh) {
+    useAuthStore.getState().setFull({
+      access: result.access,
+      refresh: result.refresh,
+    });
+  } else if (result.access) {
+    useAuthStore.getState().setRestricted(result.access, result.sessions);
+  } else {
+    useAuthStore.setState({ restrictedSessions: result.sessions });
+    authStorage.setRestrictedSessions(result.sessions);
+  }
 }
 
 export async function revokeSessionFlow(sessionId: string): Promise<void> {

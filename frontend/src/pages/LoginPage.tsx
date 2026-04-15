@@ -4,8 +4,8 @@ import { Link, useNavigate } from "react-router-dom";
 import { runLoginFlow } from "@/features/auth/flows";
 import { useAuthStore } from "@/features/auth/state";
 import { readApiMessage } from "@/shared/lib/apiResponse";
-import { Card } from "@/shared/ui/Card";
-import { FormError } from "@/shared/ui/FormError";
+import { AuthLayout } from "@/shared/ui/AuthLayout";
+import { Button, Input } from "@/shared/ui/FormControls";
 
 export function LoginPage() {
   const navigate = useNavigate();
@@ -31,37 +31,50 @@ export function LoginPage() {
     }
   }
 
+  const subheading = (
+    <span>
+      Don't have an account?{" "}
+      <Link to="/signup" className="text-[var(--color-primary)] hover:underline font-medium">
+        Create one
+      </Link>
+    </span>
+  );
+
   return (
-    <main className="container">
-      <Card>
-        <h1>Login</h1>
-        <form className="stack" onSubmit={onSubmit}>
-          <input
-            type="email"
-            placeholder="Email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-          />
-          <input
+    <AuthLayout heading="Welcome back" subheading={subheading}>
+      <form onSubmit={onSubmit} className="space-y-6">
+        <Input
+          type="email"
+          placeholder="Email address"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          required
+          disabled={loading}
+        />
+
+        <div className="space-y-1">
+          <Input
             type="password"
             placeholder="Password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
+            disabled={loading}
+            error={error}
           />
-          <FormError message={error} />
-          <button type="submit" disabled={loading}>
-            {loading ? "Logging in..." : "Login"}
-          </button>
-        </form>
-        <p style={{ textAlign: "right" }}>
-          <Link to="/forgot-password">Forgot password?</Link>
-        </p>
-        <p>
-          New account? <Link to="/signup">Create one</Link>
-        </p>
-      </Card>
-    </main>
+          <div className="text-right">
+            <Link
+              to="/forgot-password"
+              className="text-sm text-[var(--muted)] hover:text-white transition-colors"
+            >
+              Forgot password?
+            </Link>
+          </div>
+        </div>
+        <Button type="submit" className="w-full" isLoading={loading}>
+          Log in
+        </Button>
+      </form>
+    </AuthLayout>
   );
 }

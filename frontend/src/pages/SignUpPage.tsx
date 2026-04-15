@@ -4,8 +4,8 @@ import { Link, useNavigate } from "react-router-dom";
 import { signUpFinalize, signUpRequest, signUpResend, signUpVerify } from "@/features/auth/api";
 import { useAuthStore } from "@/features/auth/state";
 import { readApiMessage } from "@/shared/lib/apiResponse";
-import { Card } from "@/shared/ui/Card";
-import { FormError } from "@/shared/ui/FormError";
+import { AuthLayout } from "@/shared/ui/AuthLayout";
+import { Button, Input } from "@/shared/ui/FormControls";
 
 type Step = "EMAIL" | "OTP" | "DETAILS";
 
@@ -14,9 +14,11 @@ export function SignUpPage() {
   const [step, setStep] = useState<Step>("EMAIL");
   const [email, setEmail] = useState("");
   const [otpCode, setOtpCode] = useState("");
-  const [fullName, setFullName] = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [agree, setAgree] = useState(true);
   const [error, setError] = useState<string | undefined>();
   const [loading, setLoading] = useState(false);
   const [signupToken, setSignupToken] = useState("");
@@ -85,16 +87,20 @@ export function SignUpPage() {
       return;
     }
 
+    if (!agree) {
+      setError("You must agree to the Terms & Conditions.");
+      return;
+    }
+
     setLoading(true);
     try {
       const result = await signUpFinalize({
         signup_token: signupToken,
-        full_name: fullName,
+        full_name: `${firstName} ${lastName}`.trim(),
         password,
         confirm_password: confirmPassword,
       });
 
-      // Update auth store with the tokens
       if (result.is_restricted) {
         useAuthStore.getState().setRestricted(result.access, result.active_sessions || [], result.user);
       } else if ('refresh' in result) {
@@ -113,101 +119,145 @@ export function SignUpPage() {
     }
   }
 
+  const subheading = (
+    <span>
+      Already have an account?{" "}
+      <Link to="/login" className="text-[var(--color-primary)] hover:underline">
+        Log in
+      </Link>
+    </span>
+  );
+
   return (
-    <main className="container">
-      <Card>
-        <h1>Create Account</h1>
+    <AuthLayout heading="Create an account" subheading={subheading}>
+      {step === "EMAIL" && (
+        <form onSubmit={handleEmail} className="space-y-6">
+          <Input
+            type="email"
+            placeholder="Email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+            disabled={loading}
+            error={error}
+          />
+          <Button type="submit" className="w-full" isLoading={loading}>
+            Continue
+          </Button>
+        </form>
+      )}
 
-        {step === "EMAIL" && (
-          <form className="stack" onSubmit={handleEmail}>
-            <p>Enter your email to get started.</p>
-            <input
-              type="email"
-              placeholder="Email address"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
+      {step === "OTP" && (
+        <form onSubmit={handleVerify} className="space-y-6">
+          <p className="text-[var(--muted)]">
+            Verification code sent to <strong className="text-white">{email}</strong>.
+          </p>
+          <Input
+            type="text"
+            placeholder="6-digit code"
+            value={otpCode}
+            onChange={(e) => setOtpCode(e.target.value)}
+            required
+            maxLength={6}
+            disabled={loading}
+            error={error}
+          />
+          <div className="flex flex-col gap-4">
+            <Button type="submit" isLoading={loading}>
+              Verify Code
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setStep("EMAIL");
+                setOtpCode("");
+                setError(undefined);
+              }}
               disabled={loading}
-            />
-            <FormError message={error} />
-            <button type="submit" disabled={loading}>
-              {loading ? "Checking..." : "Continue"}
-            </button>
-          </form>
-        )}
-
-        {step === "OTP" && (
-          <form className="stack" onSubmit={handleVerify}>
-            <p>Verification code sent to <strong>{email}</strong>.</p>
-            <input
-              type="text"
-              placeholder="6-digit code"
-              value={otpCode}
-              onChange={(e) => setOtpCode(e.target.value)}
-              required
-              maxLength={6}
-              disabled={loading}
-            />
-            <FormError message={error} />
-            <div className="row">
-              <button type="button" className="secondary" onClick={() => setStep("EMAIL")}>
-                Back
-              </button>
-              <button type="submit" disabled={loading}>
-                {loading ? "Verifying..." : "Verify Code"}
-              </button>
-            </div>
-            <div className="center" style={{ marginTop: "1rem" }}>
-              <button 
-                type="button" 
-                className="link" 
-                onClick={handleResend} 
+            >
+              Change Email
+            </Button>
+            <div className="text-center">
+              <button
+                type="button"
+                className="text-sm text-[var(--muted)] hover:text-white transition-colors disabled:opacity-50"
+                onClick={handleResend}
                 disabled={countdown > 0}
               >
                 {countdown > 0 ? `Resend code in ${countdown}s` : "Resend Verification Code"}
               </button>
             </div>
-          </form>
-        )}
+          </div>
+        </form>
+      )}
 
-        {step === "DETAILS" && (
-          <form className="stack" onSubmit={handleFinalize}>
-            <p>Verification successful! Let's set up your profile.</p>
-            <input
+      {step === "DETAILS" && (
+        <form onSubmit={handleFinalize} className="space-y-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Input
               type="text"
-              placeholder="Full Name"
-              value={fullName}
-              onChange={(e) => setFullName(e.target.value)}
+              placeholder="First name"
+              value={firstName}
+              onChange={(e) => setFirstName(e.target.value)}
               required
               disabled={loading}
             />
-            <input
-              type="password"
-              placeholder="Password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
+            <Input
+              type="text"
+              placeholder="Last name"
+              value={lastName}
+              onChange={(e) => setLastName(e.target.value)}
               required
               disabled={loading}
             />
-            <input
-              type="password"
-              placeholder="Confirm Password"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              required
-              disabled={loading}
-            />
-            <FormError message={error} />
-            <button type="submit" disabled={loading}>
-              {loading ? "Creating Account..." : "Create Account"}
-            </button>
-          </form>
-        )}
+          </div>
+          <Input
+            type="email"
+            placeholder="Email"
+            value={email}
+            disabled
+            className="opacity-50 cursor-not-allowed"
+          />
+          <Input
+            type="password"
+            placeholder="Password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+            disabled={loading}
+          />
+          <Input
+            type="password"
+            placeholder="Confirm Password"
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+            required
+            disabled={loading}
+            error={error}
+          />
 
-        <p style={{ marginTop: "1.5rem", textAlign: "center" }}>
-          Already registered? <Link to="/login">Login</Link>
-        </p>
-      </Card>
-    </main>
+          <div className="flex items-center gap-3 py-2">
+            <input
+              id="terms"
+              type="checkbox"
+              checked={agree}
+              onChange={(e) => setAgree(e.target.checked)}
+              className="w-5 h-5 rounded border-[#37334a] bg-[#1e1b29] text-[var(--color-primary)] focus:ring-[var(--color-primary)] transition-all cursor-pointer"
+            />
+            <label htmlFor="terms" className="text-[var(--muted)] text-sm cursor-pointer select-none">
+              I agree to the{" "}
+              <a href="#" className="text-white hover:underline">
+                Terms & Conditions
+              </a>
+            </label>
+          </div>
+
+          <Button type="submit" className="w-full" isLoading={loading}>
+            Create account
+          </Button>
+        </form>
+      )}
+    </AuthLayout>
   );
 }

@@ -17,20 +17,56 @@ class ClientSessionListAPIView(APIView):
     def get(self, request):
         """
         Retrieves active sessions for the authenticated user.
-        Allowed for both full and restricted tokens.
+        If the user is currently using a restricted token but the session limit
+        is no longer exceeded (e.g., config changed), this triggers auto-promotion.
         """
         user_id = str(request.user.id)
+        current_sid = request.auth.get("sid")
         context = build_auth_request_context(request)
-        data = AuthEngine.list_active_sessions(
+
+        sessions = AuthEngine.list_active_sessions(
             user_id=user_id,
-            current_sid=request.auth.get("sid"),
+            current_sid=current_sid,
             current_access_jti=request.auth.get("jti"),
             current_fingerprint=context.fingerprint,
             current_device_entropy=context.device_entropy,
         )
 
+        promotion_data = None
+        new_access_token = None
+
+        if request.auth.get("scope") == "revoke_only":
+            try:
+                res = AuthEngine.promote_restricted_session(
+                    user_id=user_id,
+                    access_jti=request.auth["jti"],
+                    refresh_jti=request.auth["partner_jti"],
+                    session_id=current_sid,
+                    request=request,
+                )
+                promotion_data = {
+                    "is_promoted": True,
+                    "access": res["access"],
+                    "refresh": res["refresh"],
+                }
+            except ValueError:
+                new_access_token = AuthEngine._create_token(
+                    user_id=user_id,
+                    jti=request.auth["jti"],
+                    p_jti=request.auth["partner_jti"],
+                    sid=current_sid,
+                    fpt=context.fingerprint,
+                    t_type="access",
+                    scope="revoke_only",
+                )
+
         return ResponseFactory.success(
-            message="Active sessions retrieved successfully.", data=data
+            message="Active sessions retrieved successfully.",
+            data={
+                "sessions": sessions,
+                "access": new_access_token,
+                **(promotion_data or {}),
+            },
         )
 
 
@@ -71,7 +107,6 @@ class ClientSessionRevokeAPIView(APIView):
         target_sid = serializer.validated_data.get("session_id")
         user_id = str(request.user.id)
 
-        # Backend-side guard: never revoke the currently authenticated session via remote revoke.
         context = build_auth_request_context(request)
         current_session = AuthEngine.resolve_current_session(
             user_id=user_id,
@@ -82,7 +117,9 @@ class ClientSessionRevokeAPIView(APIView):
         )
         current_sid = str(current_session.session_id) if current_session else ""
         current_jti = current_session.access_jti if current_session else ""
-        if (target_sid and str(target_sid) == current_sid) or (target_jti and target_jti == current_jti):
+        if (target_sid and str(target_sid) == current_sid) or (
+            target_jti and target_jti == current_jti
+        ):
             return ResponseFactory.error(
                 message="Cannot revoke the current session from this action. Use logout instead."
             )
@@ -93,7 +130,9 @@ class ClientSessionRevokeAPIView(APIView):
             access_jti=target_jti,
         )
         if not revoked:
-            return ResponseFactory.error(message="Session not found or already expired.")
+            return ResponseFactory.error(
+                message="Session not found or already expired."
+            )
 
         if request.auth.get("scope") == "revoke_only":
             try:
@@ -156,5 +195,5 @@ class ClientSessionRevokeOthersAPIView(APIView):
 
         return ResponseFactory.success(
             message=f"Successfully revoked {count} other sessions.",
-            data={"revoked_count": count}
+            data={"revoked_count": count},
         )
