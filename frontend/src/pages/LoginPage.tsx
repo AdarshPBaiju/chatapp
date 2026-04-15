@@ -55,6 +55,9 @@ export function LoginPage() {
             {loading ? "Logging in..." : "Login"}
           </button>
         </form>
+        <p style={{ textAlign: "right" }}>
+          <Link to="/forgot-password">Forgot password?</Link>
+        </p>
         <p>
           New account? <Link to="/signup">Create one</Link>
         </p>

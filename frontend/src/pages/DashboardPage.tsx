@@ -18,9 +18,14 @@ export function DashboardPage() {
       <Card>
         <h1>Dashboard</h1>
         <p>Authenticated as: {user?.email ?? "Unknown user"}</p>
-        <button type="button" onClick={onLogout}>
-          Logout
-        </button>
+        <div className="stack">
+          <button type="button" className="secondary" onClick={() => navigate("/change-password")}>
+            Change Password
+          </button>
+          <button type="button" onClick={onLogout}>
+            Logout
+          </button>
+        </div>
       </Card>
     </main>
   );

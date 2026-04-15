@@ -45,6 +45,18 @@ class RuleBuilder:
         self._drf_kwargs["allow_blank"] = True
         return self
 
+    def allow_null(self, value: bool = True) -> RuleBuilder:
+        """Explicitly allow or disallow null values for this field."""
+        self._allow_null = value
+        self._drf_kwargs["allow_null"] = value
+        return self
+
+    def allow_blank(self, value: bool = True) -> RuleBuilder:
+        """Explicitly allow or disallow blank strings (CharField only)."""
+        self._allow_blank = value
+        self._drf_kwargs["allow_blank"] = value
+        return self
+
     def write_only(self) -> RuleBuilder:
         """Ensures the field is only used for input (deserialization)."""
         self._drf_kwargs["write_only"] = True
@@ -71,16 +83,16 @@ class RuleBuilder:
         self._rules.append(RequiredRule())
         return self
 
-    def email(self) -> RuleBuilder:
+    def email(self, message: str | None = None) -> RuleBuilder:
         """Validates format matches a standard email pattern."""
         self._field_type = serializers.EmailField
-        self._rules.append(EmailFormatRule())
+        self._rules.append(EmailFormatRule(message=message))
         return self
 
-    def url(self) -> RuleBuilder:
+    def url(self, message: str | None = None) -> RuleBuilder:
         """Validates format matches a valid URL pattern."""
         self._field_type = serializers.URLField
-        self._rules.append(URLFormatRule())
+        self._rules.append(URLFormatRule(message=message))
         return self
 
     def unique(
@@ -98,24 +110,24 @@ class RuleBuilder:
                 last_rule.options.update(kwargs)
         return self
 
-    def min(self, value: float) -> RuleBuilder:
+    def min(self, value: float, message: str | None = None) -> RuleBuilder:
         """Applies minimum length or minimum numeric value constraints."""
         if issubclass(
             self._field_type, serializers.IntegerField | serializers.DecimalField
         ):
-            self._rules.append(NumericRangeRule(min_val=value))
+            self._rules.append(NumericRangeRule(min_val=value, message=message))
         else:
-            self._rules.append(MinMaxLengthRule(min_len=int(value)))
+            self._rules.append(MinMaxLengthRule(min_len=int(value), message=message))
         return self
 
-    def max(self, value: float) -> RuleBuilder:
+    def max(self, value: float, message: str | None = None) -> RuleBuilder:
         """Applies maximum length or maximum numeric value constraints."""
         if issubclass(
             self._field_type, serializers.IntegerField | serializers.DecimalField
         ):
-            self._rules.append(NumericRangeRule(max_val=value))
+            self._rules.append(NumericRangeRule(max_val=value, message=message))
         else:
-            self._rules.append(MinMaxLengthRule(max_len=int(value)))
+            self._rules.append(MinMaxLengthRule(max_len=int(value), message=message))
         return self
 
     def matches(self, target_field: str) -> RuleBuilder:
@@ -123,9 +135,9 @@ class RuleBuilder:
         self._rules.append(MatchingFieldRule(target_field=target_field))
         return self
 
-    def regex(self, pattern: str) -> RuleBuilder:
+    def regex(self, pattern: str, message: str | None = None) -> RuleBuilder:
         """Validates the value against a custom regular expression."""
-        self._rules.append(RegexRule(pattern=pattern))
+        self._rules.append(RegexRule(pattern=pattern, message=message))
         return self
 
     def file(self, max_mb: float = 5, exts: list[str] | None = None) -> RuleBuilder:

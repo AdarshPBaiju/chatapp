@@ -1,7 +1,7 @@
 import { authStorage } from "@/shared/lib/storage";
-import { LoginRequest, RestrictedAuthPayload, SignUpRequest } from "@/features/auth/types";
+import { LoginRequest, RestrictedAuthPayload } from "@/features/auth/types";
 import { useAuthStore } from "@/features/auth/state";
-import { login, refreshToken, signUp, validateOtp } from "@/features/auth/api";
+import { login, refreshToken, signUpRequest, validateOtp } from "@/features/auth/api";
 
 function isLikelyJweCompact(token: string): boolean {
   // Current backend issues nested JWS-in-JWE compact tokens => 5 segments.
@@ -16,10 +16,10 @@ function applyRestrictedAuth(payload: RestrictedAuthPayload): void {
   );
 }
 
-export async function runSignUpFlow(payload: SignUpRequest): Promise<void> {
-  const data = await signUp(payload);
+export async function runSignUpFlow(payload: { email: string }): Promise<void> {
+  const data = await signUpRequest(payload);
   useAuthStore.getState().setPendingVerification({
-    user_id: data.id,
+    user_id: "",
     email: data.email,
     resend_interval: data.resend_interval,
   });

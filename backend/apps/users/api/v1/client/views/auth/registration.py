@@ -2,7 +2,6 @@ from __future__ import annotations
 
 
 from django.conf import settings
-from django.shortcuts import get_object_or_404
 from rest_framework import status
 from rest_framework.permissions import AllowAny
 from rest_framework.views import APIView
@@ -15,139 +14,148 @@ from core.auth.request_context import (
     get_device_entropy,
 )
 from users.api.v1.client.serializers.auth import (
-    ClientSignUpSerializer,
-    ClientOTPValidationSerializer,
-    ClientResendOTPSerializer,
+    ClientSignUpRequestSerializer,
+    ClientSignUpRequestResponseSerializer,
+    ClientSignUpVerifySerializer,
+    ClientSignUpVerifyResponseSerializer,
+    ClientSignUpFinalizeSerializer,
+    ClientRegistrationResendSerializer,
 )
 from users.services.user_services import UserService
 from users.services.auth_engine import AuthEngine
 
 
-
-class ClientSignUpAPIView(APIView):
+class ClientSignUpRequestAPIView(APIView):
     permission_classes = [AllowAny]
 
     @extend_schema(
-        request=ClientSignUpSerializer,
-        responses={201: ClientSignUpSerializer},
+        request=ClientSignUpRequestSerializer,
+        responses={201: ClientSignUpRequestResponseSerializer},
         tags=["Client Auth"],
     )
     def post(self, request):
-        serializer = ClientSignUpSerializer(data=request.data)
+        serializer = ClientSignUpRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        user = UserService.create_user(serializer.validated_data)
+        email = serializer.validated_data["email"]
+        UserService.initiate_signup(email)
 
         return ResponseFactory.created(
-            message="Your account has been created successfully. Please check your email for the verification code.",
+            message="Verification code sent to your email.",
             data={
-                "id": str(user.id),
-                "email": user.email,
-                "full_name": getattr(user.client, "full_name", ""),
+                "email": email,
                 "resend_interval": settings.OTP_RESEND_INTERVAL_SECONDS,
             },
         )
 
 
-class ClientOTPValidationAPIView(APIView):
+class ClientSignUpVerifyAPIView(APIView):
     permission_classes = [AllowAny]
 
     @extend_schema(
-        request=ClientOTPValidationSerializer,
+        request=ClientSignUpVerifySerializer,
+        responses={200: ClientSignUpVerifyResponseSerializer},
         tags=["Client Auth"],
     )
     def post(self, request):
-        serializer = ClientOTPValidationSerializer(data=request.data)
+        serializer = ClientSignUpVerifySerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        user_id = serializer.validated_data["user_id"]
+        email = serializer.validated_data["email"]
         otp_code = serializer.validated_data["otp_code"]
 
-        from users.models import CustomUser
-
-        user = get_object_or_404(CustomUser, id=user_id)
-        existing_entropy = get_device_entropy(request)
-        issued_entropy = existing_entropy or generate_device_entropy()
-        request.META["HTTP_X_DEVICE_ENTROPY"] = issued_entropy
-        is_valid = UserService.validate_otp(user, otp_code, request=request)
-
-        if is_valid:
-            if not user.is_active:
-                user.is_active = True
-                user.save(update_fields=["is_active"])
-
-            result = AuthEngine.issue_tokens(user, request)
-
-            if result["status"] == "restricted":
-                response = ResponseFactory.success(
-                    message=result["message"],
-                    data={
-                        "is_restricted": True,
-                        "access": result["access"],
-                        "active_sessions": result["active_sessions"],
-                        "user": {
-                            "id": str(user.id),
-                            "email": user.email,
-                            "full_name": getattr(user.client, "full_name", ""),
-                        },
-                    },
-                    code=status.HTTP_200_OK,
-                )
-                if not existing_entropy:
-                    attach_device_entropy_cookie(response, issued_entropy)
-                return response
-
-            response = ResponseFactory.success(
-                message="Identification verified successfully. Welcome!",
-                data={
-                    "is_restricted": False,
-                    "access": result["access"],
-                    "refresh": result["refresh"],
-                    "user": {
-                        "id": str(user.id),
-                        "email": user.email,
-                        "full_name": getattr(user.client, "full_name", ""),
-                    },
-                },
-            )
-            if not existing_entropy:
-                attach_device_entropy_cookie(response, issued_entropy)
-            return response
-
-        error_data = {"otp_code": "The code provided is incorrect or has timed out."}
-        return ResponseFactory.error(
-            message="Invalid or expired verification code.",
-            errors=error_data,
-            code=status.HTTP_400_BAD_REQUEST,
+        # Validate OTP and generate a signup token for the final step
+        signup_token = UserService.verify_registration_otp(
+            email=email,
+            otp_code=otp_code,
+            request=request,
         )
 
-
-class ClientResendOTPAPIView(APIView):
-    permission_classes = [AllowAny]
-
-    @extend_schema(
-        request=ClientResendOTPSerializer,
-        responses={
-            200: {"type": "object", "properties": {"success": {"type": "boolean"}}}
-        },
-        tags=["Client Auth"],
-    )
-    def post(self, request):
-        serializer = ClientResendOTPSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-
-        user_id = serializer.validated_data["user_id"]
-        from users.models import CustomUser
-
-        user = get_object_or_404(CustomUser, id=user_id)
-
-        if user.is_active:
+        if not signup_token:
             return ResponseFactory.error(
-                message="This account is already verified.",
+                message="Invalid or expired verification code.",
+                errors={"otp_code": "The code provided is incorrect or has timed out."},
                 code=status.HTTP_400_BAD_REQUEST,
             )
 
-        UserService.send_otp(user)
+        if signup_token == "ALREADY_EXISTS":
+            return ResponseFactory.error(
+                message="An account with this email already exists and is fully active. Please log in.",
+                code=status.HTTP_409_CONFLICT,
+            )
+
+        return ResponseFactory.success(
+            message="Verification successful.", data={"signup_token": signup_token}
+        )
+
+
+class ClientSignUpFinalizeAPIView(APIView):
+    permission_classes = [AllowAny]
+
+    @extend_schema(
+        request=ClientSignUpFinalizeSerializer,
+        tags=["Client Auth"],
+    )
+    def post(self, request):
+        serializer = ClientSignUpFinalizeSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        user = UserService.finalize_signup(
+            signup_token=serializer.validated_data["signup_token"],
+            full_name=serializer.validated_data["full_name"],
+            password=serializer.validated_data["password"],
+            request=request,
+        )
+
+        if not user:
+            return ResponseFactory.error(
+                message="Registration failed. Code may have expired.",
+                code=status.HTTP_400_BAD_REQUEST,
+            )
+
+        existing_entropy = get_device_entropy(request)
+        issued_entropy = existing_entropy or generate_device_entropy()
+        request.META["HTTP_X_DEVICE_ENTROPY"] = issued_entropy
+
+        result = AuthEngine.issue_tokens(user, request)
+
+        response_data = {
+            "is_restricted": result["status"] == "restricted",
+            "access": result["access"],
+            "user": {
+                "id": str(user.id),
+                "email": user.email,
+                "full_name": getattr(user.client, "full_name", ""),
+            },
+        }
+        if result["status"] == "full":
+            response_data["refresh"] = result["refresh"]
+        else:
+            response_data["active_sessions"] = result["active_sessions"]
+
+        response = ResponseFactory.success(
+            message="Account activated successfully!", data=response_data
+        )
+        if not existing_entropy:
+            attach_device_entropy_cookie(response, issued_entropy)
+        return response
+
+
+class ClientSignUpResendAPIView(APIView):
+    permission_classes = [AllowAny]
+
+    @extend_schema(
+        request=ClientRegistrationResendSerializer,
+        tags=["Client Auth"],
+    )
+    def post(self, request):
+        serializer = ClientRegistrationResendSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        email = serializer.validated_data["email"]
+
+        # Re-trigger the registration OTP flow
+        UserService.initiate_signup(email)
 
         return ResponseFactory.success(
             message="A fresh verification code has been dispatched to your email address."
