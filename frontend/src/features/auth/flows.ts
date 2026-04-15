@@ -11,6 +11,7 @@ function isLikelyJweCompact(token: string): boolean {
 function applyRestrictedAuth(payload: RestrictedAuthPayload): void {
   useAuthStore.getState().setRestricted(
     payload.access,
+    payload.refresh,
     payload.active_sessions,
     payload.user,
   );
@@ -77,6 +78,7 @@ export async function runBootstrapRefresh(): Promise<void> {
 
     useAuthStore.getState().setRestricted(
       restrictedAccess,
+      authStorage.getRefresh() ?? "",
       authStorage.getRestrictedSessions(),
       authStorage.getUser() ?? undefined,
     );

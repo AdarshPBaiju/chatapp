@@ -11,10 +11,15 @@ export async function fetchSessionsFlow(): Promise<void> {
       refresh: result.refresh,
     });
   } else if (result.access) {
-    useAuthStore.getState().setRestricted(result.access, result.sessions);
+    useAuthStore.getState().setRestricted(
+      result.access, 
+      result.refresh || "", 
+      result.sessions || []
+    );
   } else {
-    useAuthStore.setState({ restrictedSessions: result.sessions });
-    authStorage.setRestrictedSessions(result.sessions);
+    const sessions = result.sessions || [];
+    useAuthStore.setState({ restrictedSessions: sessions });
+    authStorage.setRestrictedSessions(sessions);
   }
 }
 

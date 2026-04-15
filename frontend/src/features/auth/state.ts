@@ -11,7 +11,7 @@ type AuthState = {
   restrictedSessions: SessionInfo[];
   setAnonymous: () => void;
   setPendingVerification: (payload: PendingVerification) => void;
-  setRestricted: (access: string, sessions: SessionInfo[], user?: UserInfo) => void;
+  setRestricted: (access: string, refresh: string, sessions: SessionInfo[], user?: UserInfo) => void;
   setFull: (params: { access: string; refresh: string; user?: UserInfo }) => void;
   hydrateUser: () => void;
 };
@@ -41,9 +41,9 @@ export const useAuthStore = create<AuthState>((set) => ({
       pendingVerification: payload,
       restrictedSessions: [],
     }),
-  setRestricted: (access, sessions, user) => {
+  setRestricted: (access, refresh, sessions, user) => {
     tokenManager.setAccess(access);
-    authStorage.clearRefresh();
+    authStorage.setRefresh(refresh);
     authStorage.setRestrictedAccess(access);
     authStorage.setRestrictedSessions(sessions);
     authStorage.setIsRestricted(true);
@@ -55,7 +55,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       status: "restricted",
       user: resolvedUser,
       pendingVerification: null,
-      restrictedSessions: sessions,
+      restrictedSessions: sessions ?? [],
     });
   },
   setFull: ({ access, refresh, user }) => {

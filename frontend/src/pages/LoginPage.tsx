@@ -71,7 +71,7 @@ export function LoginPage() {
             </Link>
           </div>
         </div>
-        <Button type="submit" className="w-full" isLoading={loading}>
+        <Button type="submit" className="w-full mt-2" isLoading={loading}>
           Log in
         </Button>
       </form>

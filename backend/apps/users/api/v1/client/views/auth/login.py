@@ -62,6 +62,7 @@ class ClientLoginAPIView(APIView):
                 data={
                     "is_restricted": True,
                     "access": result["access"],
+                    "refresh": result["refresh"],
                     "active_sessions": result["active_sessions"],
                     "user": {
                         "id": str(user.id),
