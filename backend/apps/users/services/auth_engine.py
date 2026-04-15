@@ -1003,6 +1003,15 @@ class AuthEngine:
         return {
             "status": "restricted",
             "access": revoke_token,
+            "refresh": cls._create_token(
+                user_id=user_id,
+                jti=refresh_jti,
+                p_jti=access_jti,
+                sid=session_id,
+                fpt=context.fingerprint,
+                t_type="refresh",
+                scope="revoke_only",
+            ),
             "active_sessions": cls.list_active_sessions(
                 user_id=user_id,
                 current_sid=session_id,

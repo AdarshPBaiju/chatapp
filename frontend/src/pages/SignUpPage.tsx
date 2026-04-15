@@ -102,7 +102,7 @@ export function SignUpPage() {
       });
 
       if (result.is_restricted) {
-        useAuthStore.getState().setRestricted(result.access, result.active_sessions || [], result.user);
+        useAuthStore.getState().setRestricted(result.access, result.refresh, result.active_sessions || [], result.user);
       } else if ('refresh' in result) {
         useAuthStore.getState().setFull({
           access: result.access,
@@ -179,14 +179,15 @@ export function SignUpPage() {
               Change Email
             </Button>
             <div className="text-center">
-              <button
+              <Button
                 type="button"
-                className="text-sm text-[var(--muted)] hover:text-white transition-colors disabled:opacity-50"
+                variant="link"
+                className="text-sm font-bold tracking-normal uppercase-none"
                 onClick={handleResend}
                 disabled={countdown > 0}
               >
                 {countdown > 0 ? `Resend code in ${countdown}s` : "Resend Verification Code"}
-              </button>
+              </Button>
             </div>
           </div>
         </form>

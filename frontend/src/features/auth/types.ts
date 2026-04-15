@@ -19,6 +19,7 @@ export type SessionInfo = {
 export type RestrictedAuthPayload = {
   is_restricted: true;
   access: string;
+  refresh: string;
   active_sessions: SessionInfo[];
   user?: UserInfo;
 };

@@ -81,15 +81,17 @@ export function OtpPage() {
           <Button type="submit" className="w-full" isLoading={loading}>
             Verify
           </Button>
-          <div className="text-center">
-            <button
+          <div className="text-center pt-2">
+            <Button
               type="button"
-              className="text-sm text-[var(--muted)] hover:text-white transition-colors disabled:opacity-50"
+              variant="link"
+              className="text-sm font-bold tracking-normal uppercase-none"
               onClick={onResend}
-              disabled={resendLoading || countdown > 0}
+              disabled={countdown > 0}
+              isLoading={resendLoading}
             >
-              {resendLoading ? "Resending..." : countdown > 0 ? `Resend in ${countdown}s` : "Resend OTP"}
-            </button>
+              {countdown > 0 ? `Resend in ${countdown}s` : "Resend OTP"}
+            </Button>
           </div>
         </div>
       </form>

@@ -50,21 +50,22 @@ class ClientSessionListAPIView(APIView):
                     "refresh": res["refresh"],
                 }
             except ValueError:
-                new_access_token = AuthEngine._create_token(
+                restricted_tokens = AuthEngine._build_restricted_response(
                     user_id=user_id,
-                    jti=request.auth["jti"],
-                    p_jti=request.auth["partner_jti"],
-                    sid=current_sid,
-                    fpt=context.fingerprint,
-                    t_type="access",
-                    scope="revoke_only",
+                    context=context,
+                    access_jti=request.auth["jti"],
+                    refresh_jti=request.auth["partner_jti"],
+                    session_id=current_sid,
                 )
+                new_access_token = restricted_tokens["access"]
+                new_refresh_token = restricted_tokens["refresh"]
 
         return ResponseFactory.success(
             message="Active sessions retrieved successfully.",
             data={
                 "sessions": sessions,
                 "access": new_access_token,
+                "refresh": new_refresh_token if new_access_token else None,
                 **(promotion_data or {}),
             },
         )

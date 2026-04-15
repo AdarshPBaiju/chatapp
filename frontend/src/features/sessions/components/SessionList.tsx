@@ -81,12 +81,12 @@ export function SessionList({
               variant={session.is_current ? "outline" : "outline"}
               onClick={() => onRevoke(session.session_id)}
               disabled={disabled || (session.is_current && !allowCurrentRevoke)}
+              leftIcon={!session.is_current ? <LogOut size={14} className="transition-transform group-hover/btn:-translate-x-0.5" /> : undefined}
               className={cn(
                 "group/btn w-full sm:w-auto py-2.5 px-6 !rounded-xl text-xs uppercase tracking-tight font-black transition-all duration-300",
                 !session.is_current && "hover:border-red-500/50 hover:text-red-500 hover:bg-red-500/5"
               )}
             >
-              {!session.is_current && <LogOut size={14} className="transition-transform group-hover/btn:-translate-x-0.5" />}
               {session.is_current ? "Current Device" : "Logout"}
             </Button>
           </div>

@@ -12,7 +12,7 @@ import { Button } from "@/shared/ui/FormControls";
 export function SessionGatePage() {
   const navigate = useNavigate();
   const setAnonymous = useAuthStore((state) => state.setAnonymous);
-  const sessions = useAuthStore((state) => state.restrictedSessions).filter((s) => !s.is_current);
+  const sessions = (useAuthStore((state) => state.restrictedSessions) || []).filter((s) => !s.is_current);
   const status = useAuthStore((state) => state.status);
   const [error, setError] = useState<string | undefined>();
   const [loading, setLoading] = useState(false);
@@ -90,8 +90,8 @@ export function SessionGatePage() {
               className="relative z-10 border-[#f59e0b]/20 text-[#f59e0b] hover:bg-[#f59e0b]/10 hover:border-[#f59e0b]/40 rounded-xl py-2 px-4 text-xs font-black uppercase tracking-tight"
               onClick={onRevokeAllOthers}
               disabled={loading}
+              leftIcon={<LogOut size={14} />}
             >
-              <LogOut size={14} />
               Logout All Other Devices
             </Button>
           </div>
@@ -108,13 +108,14 @@ export function SessionGatePage() {
         </div>
 
         <div className="pt-8 border-t border-white/5 flex flex-col items-center gap-4">
-          <button 
+          <Button 
+            variant="link"
             onClick={handleLogout}
-            className="group/logout flex items-center gap-3 text-[#5e5a75] hover:text-white transition-all duration-300 font-bold px-6 py-3 rounded-xl hover:bg-white/5"
+            leftIcon={<LogOut size={20} className="transition-transform group-hover/logout:-translate-x-1" />}
+            className="group/logout text-[#5e5a75] hover:text-white transition-all duration-300 font-bold px-6 py-3 tracking-normal uppercase-none"
           >
-            <LogOut size={20} className="transition-transform group-hover/logout:-translate-x-1" />
             Not you? Sign out and use another account
-          </button>
+          </Button>
         </div>
       </div>
     </AuthLayout>

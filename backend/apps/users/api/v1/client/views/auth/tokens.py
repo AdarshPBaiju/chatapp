@@ -97,6 +97,7 @@ class ClientTokenRefreshAPIView(APIView):
                     data={
                         "is_restricted": True,
                         "access": token_result["access"],
+                        "refresh": token_result["refresh"],
                         "active_sessions": token_result["active_sessions"],
                     },
                 )

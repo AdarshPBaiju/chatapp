@@ -122,15 +122,14 @@ class ClientSignUpFinalizeAPIView(APIView):
         response_data = {
             "is_restricted": result["status"] == "restricted",
             "access": result["access"],
+            "refresh": result["refresh"],
             "user": {
                 "id": str(user.id),
                 "email": user.email,
                 "full_name": getattr(user.client, "full_name", ""),
             },
         }
-        if result["status"] == "full":
-            response_data["refresh"] = result["refresh"]
-        else:
+        if result["status"] != "full":
             response_data["active_sessions"] = result["active_sessions"]
 
         response = ResponseFactory.success(

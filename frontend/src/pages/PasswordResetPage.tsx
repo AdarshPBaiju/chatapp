@@ -179,14 +179,15 @@ export function PasswordResetPage() {
               Back
             </Button>
             <div className="text-center">
-              <button
+              <Button
                 type="button"
-                className="text-sm text-[var(--muted)] hover:text-white transition-colors disabled:opacity-50"
+                variant="link"
+                className="text-sm font-bold tracking-normal uppercase-none"
                 onClick={handleResend}
                 disabled={countdown > 0}
               >
                 {countdown > 0 ? `Resend code in ${countdown}s` : "Resend Reset Code"}
-              </button>
+              </Button>
             </div>
           </div>
         </form>

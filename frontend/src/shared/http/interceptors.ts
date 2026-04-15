@@ -18,6 +18,7 @@ type RefreshPayload = {
 type RestrictedRefreshPayload = {
   is_restricted: true;
   access: string;
+  refresh: string;
   active_sessions: SessionInfo[];
 };
 
@@ -94,7 +95,7 @@ export async function refreshAccessToken(): Promise<RefreshOutcome> {
 
     const payload = response.data.data;
     if (payload.is_restricted) {
-      useAuthStore.getState().setRestricted(payload.access, payload.active_sessions);
+      useAuthStore.getState().setRestricted(payload.access, payload.refresh, payload.active_sessions);
       return { kind: "restricted" };
     }
 
