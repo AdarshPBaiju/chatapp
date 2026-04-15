@@ -7,8 +7,8 @@ import {
   verifyPasswordResetOtp,
 } from "@/features/auth/api";
 import { readApiMessage } from "@/shared/lib/apiResponse";
-import { Card } from "@/shared/ui/Card";
-import { FormError } from "@/shared/ui/FormError";
+import { AuthLayout } from "@/shared/ui/AuthLayout";
+import { Button, Input } from "@/shared/ui/FormControls";
 
 type Step = "REQUEST" | "VERIFY" | "CONFIRM" | "SUCCESS";
 
@@ -98,105 +98,127 @@ export function PasswordResetPage() {
     }
   }
 
+  const subheading = (
+    <span>
+      Remember your password?{" "}
+      <Link to="/login" className="text-[var(--color-primary)] hover:underline font-medium">
+        Back to Login
+      </Link>
+    </span>
+  );
+
   if (step === "SUCCESS") {
     return (
-      <main className="container">
-        <Card>
-          <h1>Success!</h1>
-          <p>Your password has been reset successfully.</p>
-          <button onClick={() => navigate("/login")}>Go to Login</button>
-        </Card>
-      </main>
+      <AuthLayout heading="Password Reset">
+        <div className="space-y-6 text-center">
+          <div className="w-20 h-20 bg-green-500/10 rounded-full flex items-center justify-center mx-auto">
+            <svg className="w-10 h-10 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+            </svg>
+          </div>
+          <p className="text-xl text-white">Your password has been reset successfully.</p>
+          <Button onClick={() => navigate("/login")} className="w-full">
+            Go to Login
+          </Button>
+        </div>
+      </AuthLayout>
     );
   }
 
   return (
-    <main className="container">
-      <Card>
-        <h1>Reset Password</h1>
-        
-        {step === "REQUEST" && (
-          <form className="stack" onSubmit={handleRequest}>
-            <p>Enter your email address to receive a verification code.</p>
-            <input
-              type="email"
-              placeholder="Email address"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              disabled={loading}
-            />
-            <FormError message={error} />
-            <button type="submit" disabled={loading}>
-              {loading ? "Sending..." : "Send Verification Code"}
-            </button>
-          </form>
-        )}
+    <AuthLayout heading="Reset Password" subheading={subheading}>
+      {step === "REQUEST" && (
+        <form onSubmit={handleRequest} className="space-y-6">
+          <p className="text-[var(--muted)]">
+            Enter your email address to receive a verification code.
+          </p>
+          <Input
+            type="email"
+            placeholder="Email address"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+            disabled={loading}
+            error={error}
+          />
+          <Button type="submit" className="w-full" isLoading={loading}>
+            Send Verification Code
+          </Button>
+        </form>
+      )}
 
-        {step === "VERIFY" && (
-          <form className="stack" onSubmit={handleVerify}>
-            <p>We've sent a 6-digit code to <strong>{email}</strong>.</p>
-            <input
-              type="text"
-              placeholder="6-digit code"
-              value={otpCode}
-              onChange={(e) => setOtpCode(e.target.value)}
-              required
-              maxLength={6}
+      {step === "VERIFY" && (
+        <form onSubmit={handleVerify} className="space-y-6">
+          <p className="text-[var(--muted)]">
+            We've sent a 6-digit code to <strong className="text-white">{email}</strong>.
+          </p>
+          <Input
+            type="text"
+            placeholder="6-digit code"
+            value={otpCode}
+            onChange={(e) => setOtpCode(e.target.value)}
+            required
+            maxLength={6}
+            disabled={loading}
+            error={error}
+          />
+          <div className="flex flex-col gap-4">
+            <Button type="submit" isLoading={loading}>
+              Verify Code
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setStep("REQUEST");
+                setOtpCode("");
+                setError(undefined);
+              }}
               disabled={loading}
-            />
-            <FormError message={error} />
-            <div className="row">
-              <button type="button" className="secondary" onClick={() => setStep("REQUEST")}>
-                Back
-              </button>
-              <button type="submit" disabled={loading}>
-                {loading ? "Verifying..." : "Verify Code"}
-              </button>
-            </div>
-            <div className="center" style={{ marginTop: "1rem" }}>
-              <button 
-                type="button" 
-                className="link" 
-                onClick={handleResend} 
+            >
+              Back
+            </Button>
+            <div className="text-center">
+              <button
+                type="button"
+                className="text-sm text-[var(--muted)] hover:text-white transition-colors disabled:opacity-50"
+                onClick={handleResend}
                 disabled={countdown > 0}
               >
                 {countdown > 0 ? `Resend code in ${countdown}s` : "Resend Reset Code"}
               </button>
             </div>
-          </form>
-        )}
+          </div>
+        </form>
+      )}
 
-        {step === "CONFIRM" && (
-          <form className="stack" onSubmit={handleConfirm}>
-            <p>Verification successful. Choose a new secure password.</p>
-            <input
-              type="password"
-              placeholder="New password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              disabled={loading}
-            />
-            <input
-              type="password"
-              placeholder="Confirm new password"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              required
-              disabled={loading}
-            />
-            <FormError message={error} />
-            <button type="submit" disabled={loading}>
-              {loading ? "Resetting..." : "Reset Password"}
-            </button>
-          </form>
-        )}
-
-        <p style={{ marginTop: "1.5rem", textAlign: "center" }}>
-          Remember your password? <Link to="/login">Back to Login</Link>
-        </p>
-      </Card>
-    </main>
+      {step === "CONFIRM" && (
+        <form onSubmit={handleConfirm} className="space-y-6">
+          <p className="text-[var(--muted)]">
+            Verification successful. Choose a new secure password.
+          </p>
+          <Input
+            type="password"
+            placeholder="New password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+            disabled={loading}
+          />
+          <Input
+            type="password"
+            placeholder="Confirm new password"
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+            required
+            disabled={loading}
+            error={error}
+          />
+          <Button type="submit" className="w-full" isLoading={loading}>
+            Reset Password
+          </Button>
+        </form>
+      )}
+    </AuthLayout>
   );
 }

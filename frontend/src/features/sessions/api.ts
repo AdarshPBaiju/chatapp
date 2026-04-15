@@ -9,8 +9,15 @@ export type RevokeResponse = {
   refresh?: string;
 };
 
-export async function listSessions(): Promise<SessionInfo[]> {
-  const response = await httpClient.get<ApiEnvelope<SessionInfo[]>>("/sessions/");
+export type ListSessionsResponse = {
+  sessions: SessionInfo[];
+  is_promoted?: boolean;
+  access?: string;
+  refresh?: string;
+};
+
+export async function listSessions(): Promise<ListSessionsResponse> {
+  const response = await httpClient.get<ApiEnvelope<ListSessionsResponse>>("/sessions/");
   return unwrapEnvelope(response);
 }
 

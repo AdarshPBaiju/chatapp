@@ -1,69 +1,117 @@
-:root {
-  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif;
-  line-height: 1.5;
-  color: #111827;
-  background: #f8fafc;
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", "system-ui", "-apple-system", "sans-serif";
+  
+  --color-primary: #7c5dfa;
+  --color-primary-hover: #9277ff;
+  
+  --color-bg-main: #1e1b29;
+  --color-bg-card: #252136;
+  --color-bg-input: #252136;
+  
+  --color-text-main: #ffffff;
+  --color-text-muted: #dfe3fa;
 }
 
-* {
-  box-sizing: border-box;
+@layer base {
+  :root {
+    --color-primary: #7c5dfa;
+    --color-primary-hover: #9277ff;
+    --background: #f8f8fb;
+    --foreground: #0c0e1e;
+    --card: #ffffff;
+    --input: #ffffff;
+    --border: #dfe3fa;
+    --muted: #7e88c3;
+  }
+
+  .dark {
+    --background: #1e1b29;
+    --foreground: #ffffff;
+    --card: #252136;
+    --input: #252136;
+    --border: #37334a;
+    --muted: #dfe3fa;
+  }
+
+  body {
+    background-color: var(--background);
+    color: var(--foreground);
+    @apply antialiased;
+  }
 }
 
-body {
-  margin: 0;
+@layer components {
+  .btn-primary {
+    @apply bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white px-6 py-3 rounded-full font-semibold transition-all duration-200 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  .form-input {
+    @apply w-full bg-[var(--input)] border border-[var(--border)] rounded-lg px-4 py-3 text-[var(--foreground)] placeholder:text-[var(--muted)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] transition-all;
+  }
 }
 
-.container {
-  max-width: 520px;
-  margin: 2rem auto;
-  padding: 1rem;
+.auth-gradient-overlay {
+  background: linear-gradient(180deg, rgba(30, 27, 41, 0) 0%, rgba(30, 27, 41, 0.8) 100%);
 }
 
-.card {
-  background: #fff;
-  border: 1px solid #e5e7eb;
+.radial-glow {
+  background: 
+    radial-gradient(circle at 60% 40%, #7c5dfa10 0%, transparent 60%),
+    radial-gradient(circle at 20% 80%, #7c5dfa05 0%, transparent 40%);
+}
+
+.noise-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  opacity: 0.03;
+  pointer-events: none;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.animate-fade-in-up {
+  animation: fadeInUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.delay-100 { animation-delay: 150ms; }
+.delay-200 { animation-delay: 250ms; }
+.delay-300 { animation-delay: 350ms; }
+
+.glass-card {
+  background: rgba(30, 27, 41, 0.6);
+  backdrop-filter: blur(32px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 
+    0 25px 50px -12px rgba(0, 0, 0, 0.6),
+    0 0 40px 0 rgba(124, 93, 250, 0.05);
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
   border-radius: 10px;
-  padding: 1rem;
 }
 
-.stack {
-  display: grid;
-  gap: 0.75rem;
-}
-
-input, button {
-  width: 100%;
-  padding: 0.65rem 0.75rem;
-  border-radius: 8px;
-  border: 1px solid #cbd5e1;
-}
-
-button {
-  background: #0f172a;
-  color: white;
-  border: none;
-  cursor: pointer;
-}
-
-button.secondary {
-  background: #e2e8f0;
-  color: #0f172a;
-}
-
-.error {
-  color: #b91c1c;
-  font-size: 0.9rem;
-}
-
-.row {
-  display: flex;
-  gap: 0.5rem;
-}
-
-.row > * {
-  flex: 1;
-}
-
-a {
-  color: #1d4ed8;
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
 }

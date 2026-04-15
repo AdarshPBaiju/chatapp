@@ -484,7 +484,7 @@ class AuthEngine:
             else settings.AUTH_ENGINE_SETTINGS["REFRESH_TOKEN_LIFETIME"]
         )
         if scope == "revoke_only":
-            ttl = 900
+            ttl = 120
 
         payload = {
             "user_id": user_id,
