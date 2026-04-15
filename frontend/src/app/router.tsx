@@ -4,6 +4,8 @@ import { useAuthStore } from "@/features/auth/state";
 import { DashboardPage } from "@/pages/DashboardPage";
 import { LoginPage } from "@/pages/LoginPage";
 import { OtpPage } from "@/pages/OtpPage";
+import { PasswordChangePage } from "@/pages/PasswordChangePage";
+import { PasswordResetPage } from "@/pages/PasswordResetPage";
 import { SessionGatePage } from "@/pages/SessionGatePage";
 import { SignUpPage } from "@/pages/SignUpPage";
 
@@ -42,10 +44,19 @@ function OtpGuard({ children }: { children: JSX.Element }) {
   return children;
 }
 
+function PublicGuard({ children }: { children: JSX.Element }) {
+  const status = useAuthStore((state) => state.status);
+  if (status === "full") return <Navigate to="/dashboard" replace />;
+  if (status === "restricted") return <Navigate to="/session-gate" replace />;
+  if (status === "pending_verification") return <Navigate to="/otp" replace />;
+  return children;
+}
+
 export const appRouter = createBrowserRouter([
   { path: "/", element: <RootRedirect /> },
-  { path: "/login", element: <LoginPage /> },
-  { path: "/signup", element: <SignUpPage /> },
+  { path: "/login", element: <PublicGuard><LoginPage /></PublicGuard> },
+  { path: "/signup", element: <PublicGuard><SignUpPage /></PublicGuard> },
+  { path: "/forgot-password", element: <PublicGuard><PasswordResetPage /></PublicGuard> },
   {
     path: "/otp",
     element: (
@@ -67,6 +78,14 @@ export const appRouter = createBrowserRouter([
     element: (
       <FullAuthGuard>
         <DashboardPage />
+      </FullAuthGuard>
+    ),
+  },
+  {
+    path: "/change-password",
+    element: (
+      <FullAuthGuard>
+        <PasswordChangePage />
       </FullAuthGuard>
     ),
   },

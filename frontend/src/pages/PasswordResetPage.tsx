@@ -1,39 +1,41 @@
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
-import { signUpFinalize, signUpRequest, signUpResend, signUpVerify } from "@/features/auth/api";
-import { useAuthStore } from "@/features/auth/state";
+import {
+  confirmPasswordReset,
+  requestPasswordReset,
+  verifyPasswordResetOtp,
+} from "@/features/auth/api";
 import { readApiMessage } from "@/shared/lib/apiResponse";
 import { Card } from "@/shared/ui/Card";
 import { FormError } from "@/shared/ui/FormError";
 
-type Step = "EMAIL" | "OTP" | "DETAILS";
+type Step = "REQUEST" | "VERIFY" | "CONFIRM" | "SUCCESS";
 
-export function SignUpPage() {
+export function PasswordResetPage() {
   const navigate = useNavigate();
-  const [step, setStep] = useState<Step>("EMAIL");
+  const [step, setStep] = useState<Step>("REQUEST");
   const [email, setEmail] = useState("");
   const [otpCode, setOtpCode] = useState("");
-  const [fullName, setFullName] = useState("");
+  const [resetToken, setResetToken] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState<string | undefined>();
   const [loading, setLoading] = useState(false);
-  const [signupToken, setSignupToken] = useState("");
   const [resendInterval, setResendInterval] = useState(60);
   const [countdown, setCountdown] = useState(0);
 
-  async function handleEmail(e: FormEvent) {
+  async function handleRequest(e: FormEvent) {
     e.preventDefault();
     setError(undefined);
     setLoading(true);
     try {
-      const data = await signUpRequest({ email });
+      const data = await requestPasswordReset({ email });
       setResendInterval(data.resend_interval);
       setCountdown(data.resend_interval);
-      setStep("OTP");
+      setStep("VERIFY");
     } catch (err) {
-      setError(readApiMessage(err, "Sign up failed."));
+      setError(readApiMessage(err, "Failed to send reset code."));
     } finally {
       setLoading(false);
     }
@@ -43,7 +45,7 @@ export function SignUpPage() {
     if (countdown > 0) return;
     setError(undefined);
     try {
-      await signUpResend({ email });
+      await requestPasswordReset({ email });
       setCountdown(resendInterval);
     } catch (err) {
       setError(readApiMessage(err, "Resend failed."));
@@ -62,21 +64,17 @@ export function SignUpPage() {
     setError(undefined);
     setLoading(true);
     try {
-      const data = await signUpVerify({ email, otp_code: otpCode });
-      setSignupToken(data.signup_token);
-      setStep("DETAILS");
-    } catch (err: any) {
-      if (err?.response?.status === 409) {
-        setError("This account already exists. Please login instead.");
-        return;
-      }
-      setError(readApiMessage(err, "Verification failed."));
+      const { reset_token } = await verifyPasswordResetOtp({ email, otp_code: otpCode });
+      setResetToken(reset_token);
+      setStep("CONFIRM");
+    } catch (err) {
+      setError(readApiMessage(err, "Invalid verification code."));
     } finally {
       setLoading(false);
     }
   }
 
-  async function handleFinalize(e: FormEvent) {
+  async function handleConfirm(e: FormEvent) {
     e.preventDefault();
     setError(undefined);
 
@@ -87,40 +85,39 @@ export function SignUpPage() {
 
     setLoading(true);
     try {
-      const result = await signUpFinalize({
-        signup_token: signupToken,
-        full_name: fullName,
+      await confirmPasswordReset({
+        reset_token: resetToken,
         password,
         confirm_password: confirmPassword,
       });
-
-      // Update auth store with the tokens
-      if (result.is_restricted) {
-        useAuthStore.getState().setRestricted(result.access, result.active_sessions || [], result.user);
-      } else if ('refresh' in result) {
-        useAuthStore.getState().setFull({
-          access: result.access,
-          refresh: result.refresh,
-          user: result.user
-        });
-      }
-
-      navigate(result.is_restricted ? "/session-gate" : "/dashboard");
+      setStep("SUCCESS");
     } catch (err) {
-      setError(readApiMessage(err, "Failed to complete sign up."));
+      setError(readApiMessage(err, "Failed to reset password."));
     } finally {
       setLoading(false);
     }
   }
 
+  if (step === "SUCCESS") {
+    return (
+      <main className="container">
+        <Card>
+          <h1>Success!</h1>
+          <p>Your password has been reset successfully.</p>
+          <button onClick={() => navigate("/login")}>Go to Login</button>
+        </Card>
+      </main>
+    );
+  }
+
   return (
     <main className="container">
       <Card>
-        <h1>Create Account</h1>
-
-        {step === "EMAIL" && (
-          <form className="stack" onSubmit={handleEmail}>
-            <p>Enter your email to get started.</p>
+        <h1>Reset Password</h1>
+        
+        {step === "REQUEST" && (
+          <form className="stack" onSubmit={handleRequest}>
+            <p>Enter your email address to receive a verification code.</p>
             <input
               type="email"
               placeholder="Email address"
@@ -131,14 +128,14 @@ export function SignUpPage() {
             />
             <FormError message={error} />
             <button type="submit" disabled={loading}>
-              {loading ? "Checking..." : "Continue"}
+              {loading ? "Sending..." : "Send Verification Code"}
             </button>
           </form>
         )}
 
-        {step === "OTP" && (
+        {step === "VERIFY" && (
           <form className="stack" onSubmit={handleVerify}>
-            <p>Verification code sent to <strong>{email}</strong>.</p>
+            <p>We've sent a 6-digit code to <strong>{email}</strong>.</p>
             <input
               type="text"
               placeholder="6-digit code"
@@ -150,7 +147,7 @@ export function SignUpPage() {
             />
             <FormError message={error} />
             <div className="row">
-              <button type="button" className="secondary" onClick={() => setStep("EMAIL")}>
+              <button type="button" className="secondary" onClick={() => setStep("REQUEST")}>
                 Back
               </button>
               <button type="submit" disabled={loading}>
@@ -164,26 +161,18 @@ export function SignUpPage() {
                 onClick={handleResend} 
                 disabled={countdown > 0}
               >
-                {countdown > 0 ? `Resend code in ${countdown}s` : "Resend Verification Code"}
+                {countdown > 0 ? `Resend code in ${countdown}s` : "Resend Reset Code"}
               </button>
             </div>
           </form>
         )}
 
-        {step === "DETAILS" && (
-          <form className="stack" onSubmit={handleFinalize}>
-            <p>Verification successful! Let's set up your profile.</p>
-            <input
-              type="text"
-              placeholder="Full Name"
-              value={fullName}
-              onChange={(e) => setFullName(e.target.value)}
-              required
-              disabled={loading}
-            />
+        {step === "CONFIRM" && (
+          <form className="stack" onSubmit={handleConfirm}>
+            <p>Verification successful. Choose a new secure password.</p>
             <input
               type="password"
-              placeholder="Password"
+              placeholder="New password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
@@ -191,7 +180,7 @@ export function SignUpPage() {
             />
             <input
               type="password"
-              placeholder="Confirm Password"
+              placeholder="Confirm new password"
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
               required
@@ -199,13 +188,13 @@ export function SignUpPage() {
             />
             <FormError message={error} />
             <button type="submit" disabled={loading}>
-              {loading ? "Creating Account..." : "Create Account"}
+              {loading ? "Resetting..." : "Reset Password"}
             </button>
           </form>
         )}
 
         <p style={{ marginTop: "1.5rem", textAlign: "center" }}>
-          Already registered? <Link to="/login">Login</Link>
+          Remember your password? <Link to="/login">Back to Login</Link>
         </p>
       </Card>
     </main>

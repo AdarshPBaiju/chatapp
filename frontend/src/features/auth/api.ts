@@ -5,7 +5,6 @@ import {
   LoginRequest,
   LoginResponse,
   RestrictedAuthPayload,
-  SignUpRequest,
   UserInfo,
 } from "@/features/auth/types";
 
@@ -31,8 +30,32 @@ export type RefreshResponse =
       refresh: string;
     };
 
-export async function signUp(payload: SignUpRequest): Promise<SignUpResponse> {
-  const response = await httpClient.post<ApiEnvelope<SignUpResponse>>("/signup/", payload);
+export async function signUpRequest(payload: { email: string }): Promise<{ email: string; resend_interval: number }> {
+  const response = await httpClient.post<ApiEnvelope<{ email: string; resend_interval: number }>>("/signup/request/", payload);
+  return unwrapEnvelope(response);
+}
+
+export async function signUpVerify(payload: {
+  email: string;
+  otp_code: string;
+}): Promise<{ signup_token: string }> {
+  const response = await httpClient.post<ApiEnvelope<{ signup_token: string }>>(
+    "/signup/verify/",
+    payload,
+  );
+  return unwrapEnvelope(response);
+}
+
+export async function signUpFinalize(payload: {
+  signup_token: string;
+  full_name: string;
+  password: string;
+  confirm_password: string;
+}): Promise<OTPValidationResponse> {
+  const response = await httpClient.post<ApiEnvelope<OTPValidationResponse>>(
+    "/signup/finalize/",
+    payload,
+  );
   return unwrapEnvelope(response);
 }
 
@@ -52,14 +75,63 @@ export async function validateOtp(payload: {
   return unwrapEnvelope(response);
 }
 
-export async function resendOtp(payload: { user_id: string }): Promise<unknown> {
-  const response = await httpClient.post<ApiEnvelope<unknown>>("/otp-resend/", payload);
+export async function signUpResend(payload: { email: string }): Promise<null> {
+  const response = await httpClient.post<ApiEnvelope<null>>("/signup/resend/", payload);
+  return unwrapEnvelope(response);
+}
+
+export async function resendOtp(payload: { user_id?: string; email?: string }): Promise<null> {
+  const response = await httpClient.post<ApiEnvelope<null>>("/otp-resend/", payload);
   return unwrapEnvelope(response);
 }
 
 export async function refreshToken(payload: { refresh: string }): Promise<RefreshResponse> {
   const response = await httpClient.post<ApiEnvelope<RefreshResponse>>(
     "/token/refresh/",
+    payload,
+  );
+  return unwrapEnvelope(response);
+}
+
+export async function requestPasswordReset(payload: {
+  email?: string;
+}): Promise<{ email: string; resend_interval: number }> {
+  const response = await httpClient.post<
+    ApiEnvelope<{ email: string; resend_interval: number }>
+  >("/password-reset/request/", payload);
+  return unwrapEnvelope(response);
+}
+
+export async function verifyPasswordResetOtp(payload: {
+  email: string;
+  otp_code: string;
+}): Promise<{ reset_token: string }> {
+  const response = await httpClient.post<ApiEnvelope<{ reset_token: string }>>(
+    "/password-reset/verify/",
+    payload,
+  );
+  return unwrapEnvelope(response);
+}
+
+export async function confirmPasswordReset(payload: {
+  reset_token: string;
+  password: string;
+  confirm_password: string;
+}): Promise<null> {
+  const response = await httpClient.post<ApiEnvelope<null>>(
+    "/password-reset/confirm/",
+    payload,
+  );
+  return unwrapEnvelope(response);
+}
+
+export async function changePassword(payload: {
+  old_password: string;
+  password: string;
+  confirm_password: string;
+}): Promise<{ revoked_sessions: number }> {
+  const response = await httpClient.post<ApiEnvelope<{ revoked_sessions: number }>>(
+    "/password-change/",
     payload,
   );
   return unwrapEnvelope(response);

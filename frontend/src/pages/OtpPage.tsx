@@ -1,4 +1,4 @@
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { resendOtp } from "@/features/auth/api";
@@ -15,6 +15,14 @@ export function OtpPage() {
   const [error, setError] = useState<string | undefined>();
   const [loading, setLoading] = useState(false);
   const [resendLoading, setResendLoading] = useState(false);
+  const [countdown, setCountdown] = useState(pending?.resend_interval || 0);
+
+  useEffect(() => {
+    if (countdown > 0) {
+      const timer = setTimeout(() => setCountdown(countdown - 1), 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [countdown]);
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
@@ -35,11 +43,12 @@ export function OtpPage() {
   }
 
   async function onResend() {
-    if (!pending) return;
+    if (!pending || countdown > 0) return;
     setResendLoading(true);
     setError(undefined);
     try {
       await resendOtp({ user_id: pending.user_id });
+      setCountdown(pending.resend_interval || 60);
     } catch (e) {
       setError(readApiMessage(e, "Failed to resend OTP."));
     } finally {
@@ -71,8 +80,13 @@ export function OtpPage() {
             {loading ? "Verifying..." : "Verify"}
           </button>
         </form>
-        <button className="secondary" type="button" onClick={onResend} disabled={resendLoading}>
-          {resendLoading ? "Resending..." : "Resend OTP"}
+        <button 
+          className="secondary" 
+          type="button" 
+          onClick={onResend} 
+          disabled={resendLoading || countdown > 0}
+        >
+          {resendLoading ? "Resending..." : countdown > 0 ? `Resend in ${countdown}s` : "Resend OTP"}
         </button>
       </Card>
     </main>

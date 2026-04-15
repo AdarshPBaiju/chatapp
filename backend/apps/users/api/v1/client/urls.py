@@ -1,9 +1,15 @@
 from django.urls import path
 from users.api.v1.client.views.auth import (
-    ClientSignUpAPIView,
+    ClientSignUpRequestAPIView,
+    ClientSignUpVerifyAPIView,
+    ClientSignUpFinalizeAPIView,
+    ClientSignUpResendAPIView,
     ClientLoginAPIView,
-    ClientOTPValidationAPIView,
-    ClientResendOTPAPIView,
+    ClientPasswordResetRequestAPIView,
+    ClientPasswordResetVerifyAPIView,
+    ClientPasswordResetConfirmAPIView,
+    ClientPasswordChangeAPIView,
+    ClientGenericResendOTPAPIView,
     ClientSessionListAPIView,
     ClientLogoutAPIView,
     ClientSessionRevokeAPIView,
@@ -13,14 +19,32 @@ from users.api.v1.client.views.auth import (
 )
 
 urlpatterns = [
-    path("signup/", ClientSignUpAPIView.as_view(), name="client-signup"),
+    path("signup/request/", ClientSignUpRequestAPIView.as_view(), name="client-signup-request"),
+    path("signup/verify/", ClientSignUpVerifyAPIView.as_view(), name="client-signup-verify"),
+    path("signup/finalize/", ClientSignUpFinalizeAPIView.as_view(), name="client-signup-finalize"),
     path("login/", ClientLoginAPIView.as_view(), name="client-login"),
     path(
-        "otp-validate/",
-        ClientOTPValidationAPIView.as_view(),
-        name="client-otp-validate",
+        "password-reset/request/",
+        ClientPasswordResetRequestAPIView.as_view(),
+        name="client-password-reset-request",
     ),
-    path("otp-resend/", ClientResendOTPAPIView.as_view(), name="client-otp-resend"),
+    path(
+        "password-reset/verify/",
+        ClientPasswordResetVerifyAPIView.as_view(),
+        name="client-password-reset-verify",
+    ),
+    path(
+        "password-reset/confirm/",
+        ClientPasswordResetConfirmAPIView.as_view(),
+        name="client-password-reset-confirm",
+    ),
+    path(
+        "password-change/",
+        ClientPasswordChangeAPIView.as_view(),
+        name="client-password-change",
+    ),
+    path("signup/resend/", ClientSignUpResendAPIView.as_view(), name="client-signup-resend"),
+    path("otp-resend/", ClientGenericResendOTPAPIView.as_view(), name="client-otp-resend"),
     # Token Protocols
     path(
         "token/verify/", ClientTokenVerifyAPIView.as_view(), name="client-token-verify"

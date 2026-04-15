@@ -1,11 +1,19 @@
 from __future__ import annotations
 
 from .registration import (
-    ClientSignUpAPIView,
-    ClientOTPValidationAPIView,
-    ClientResendOTPAPIView,
+    ClientSignUpRequestAPIView,
+    ClientSignUpVerifyAPIView,
+    ClientSignUpFinalizeAPIView,
+    ClientSignUpResendAPIView,
 )
+from .otp import ClientGenericResendOTPAPIView
 from .login import ClientLoginAPIView
+from .password_reset import (
+    ClientPasswordResetRequestAPIView,
+    ClientPasswordResetVerifyAPIView,
+    ClientPasswordResetConfirmAPIView,
+    ClientPasswordChangeAPIView,
+)
 from .sessions import (
     ClientSessionListAPIView,
     ClientLogoutAPIView,
@@ -15,10 +23,16 @@ from .sessions import (
 from .tokens import ClientTokenVerifyAPIView, ClientTokenRefreshAPIView
 
 __all__ = [
-    "ClientSignUpAPIView",
+    "ClientSignUpRequestAPIView",
+    "ClientSignUpVerifyAPIView",
+    "ClientSignUpFinalizeAPIView",
+    "ClientSignUpResendAPIView",
     "ClientLoginAPIView",
-    "ClientOTPValidationAPIView",
-    "ClientResendOTPAPIView",
+    "ClientPasswordResetRequestAPIView",
+    "ClientPasswordResetVerifyAPIView",
+    "ClientPasswordResetConfirmAPIView",
+    "ClientPasswordChangeAPIView",
+    "ClientGenericResendOTPAPIView",
     "ClientSessionListAPIView",
     "ClientLogoutAPIView",
     "ClientSessionRevokeAPIView",
