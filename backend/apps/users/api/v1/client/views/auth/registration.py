@@ -85,6 +85,11 @@ class ClientOTPValidationAPIView(APIView):
                         "is_restricted": True,
                         "access": result["access"],
                         "active_sessions": result["active_sessions"],
+                        "user": {
+                            "id": str(user.id),
+                            "email": user.email,
+                            "full_name": getattr(user.client, "full_name", ""),
+                        },
                     },
                     code=status.HTTP_200_OK,
                 )

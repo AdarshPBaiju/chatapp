@@ -13,7 +13,7 @@ class ResponseFactory:
     """
 
     @staticmethod
-    def _base_response(  # noqa: PLR0913
+    def _base_response(
         success: bool,
         message: str,
         data: Any = None,

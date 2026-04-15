@@ -24,6 +24,8 @@ from drf_spectacular.views import (
     SpectacularRedocView,
     SpectacularSwaggerView,
 )
+from django.conf import settings
+from django.conf.urls.static import static
 
 urlpatterns = [
     # Auth & Users
@@ -46,3 +48,8 @@ urlpatterns = [
 admin_url = os.environ.get("ADMIN_URL", "").strip()
 if admin_url:
     urlpatterns.append(path(f"{admin_url}/", admin.site.urls))
+
+# Serve static/media files during development
+if settings.DEBUG:
+    urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

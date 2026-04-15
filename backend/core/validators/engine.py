@@ -186,10 +186,14 @@ def auto_configure_fields(cls):
         cls.__bases__ = (ValidationMixin, *cls.__bases__)
 
     specs = {}
+    declared_fields = dict(getattr(cls, "_declared_fields", {}))
     for attr_name, attr_val in list(cls.__dict__.items()):
         if isinstance(attr_val, RuleBuilder):
             specs[attr_name] = attr_val.build()
-            setattr(cls, attr_name, attr_val.to_drf_field())
+            drf_field = attr_val.to_drf_field()
+            setattr(cls, attr_name, drf_field)
+            declared_fields[attr_name] = drf_field
 
+    cls._declared_fields = declared_fields
     cls.field_specs = {**getattr(cls, "field_specs", {}), **specs}
     return cls

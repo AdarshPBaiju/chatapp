@@ -5,6 +5,7 @@ from drf_spectacular.utils import extend_schema
 
 from core.api.responses import ResponseFactory
 from core.api.permissions import AllowRevokeOnly
+from core.auth.request_context import build_auth_request_context
 from users.api.v1.client.serializers.auth import ClientSessionRevokeSerializer
 from users.services.auth_engine import AuthEngine
 
@@ -19,9 +20,13 @@ class ClientSessionListAPIView(APIView):
         Allowed for both full and restricted tokens.
         """
         user_id = str(request.user.id)
+        context = build_auth_request_context(request)
         data = AuthEngine.list_active_sessions(
             user_id=user_id,
             current_sid=request.auth.get("sid"),
+            current_access_jti=request.auth.get("jti"),
+            current_fingerprint=context.fingerprint,
+            current_device_entropy=context.device_entropy,
         )
 
         return ResponseFactory.success(
@@ -65,6 +70,23 @@ class ClientSessionRevokeAPIView(APIView):
         target_jti = serializer.validated_data.get("access_jti")
         target_sid = serializer.validated_data.get("session_id")
         user_id = str(request.user.id)
+
+        # Backend-side guard: never revoke the currently authenticated session via remote revoke.
+        context = build_auth_request_context(request)
+        current_session = AuthEngine.resolve_current_session(
+            user_id=user_id,
+            session_id=request.auth.get("sid"),
+            access_jti=request.auth.get("jti"),
+            fingerprint=context.fingerprint,
+            device_entropy=context.device_entropy,
+        )
+        current_sid = str(current_session.session_id) if current_session else ""
+        current_jti = current_session.access_jti if current_session else ""
+        if (target_sid and str(target_sid) == current_sid) or (target_jti and target_jti == current_jti):
+            return ResponseFactory.error(
+                message="Cannot revoke the current session from this action. Use logout instead."
+            )
+
         revoked = AuthEngine.revoke_session(
             user_id=user_id,
             session_id=str(target_sid) if target_sid else None,
@@ -94,3 +116,45 @@ class ClientSessionRevokeAPIView(APIView):
             )
 
         return ResponseFactory.success(message="Remote session revoked successfully.")
+
+
+class ClientSessionRevokeOthersAPIView(APIView):
+    permission_classes = [AllowRevokeOnly]
+
+    @extend_schema(tags=["Client Security"])
+    def post(self, request):
+        """
+        Revokes all active sessions for the user except the current one.
+        """
+        user_id = str(request.user.id)
+        current_sid = request.auth.get("sid")
+
+        if not current_sid:
+            return ResponseFactory.error(message="Current session identity not found.")
+
+        count = AuthEngine.revoke_others(user_id, str(current_sid))
+
+        if request.auth.get("scope") == "revoke_only":
+            try:
+                res = AuthEngine.promote_restricted_session(
+                    user_id=user_id,
+                    access_jti=request.auth["jti"],
+                    refresh_jti=request.auth["partner_jti"],
+                    session_id=request.auth.get("sid"),
+                    request=request,
+                )
+            except ValueError as e:
+                return ResponseFactory.error(message=str(e))
+            return ResponseFactory.success(
+                message=f"Successfully revoked {count} other sessions. You have been granted full access.",
+                data={
+                    "is_promoted": True,
+                    "access": res["access"],
+                    "refresh": res["refresh"],
+                },
+            )
+
+        return ResponseFactory.success(
+            message=f"Successfully revoked {count} other sessions.",
+            data={"revoked_count": count}
+        )
