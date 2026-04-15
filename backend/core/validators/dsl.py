@@ -139,6 +139,10 @@ class RuleBuilder:
         kwargs = self._drf_kwargs.copy()
         if "required" not in kwargs:
             kwargs["required"] = self._required
+        if "allow_blank" in kwargs and not issubclass(
+            self._field_type, serializers.CharField
+        ):
+            kwargs.pop("allow_blank")
         return self._field_type(**kwargs)
 
     def build(self) -> ValidationSchema:

@@ -3,11 +3,13 @@ from __future__ import annotations
 import hashlib
 import secrets
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, TYPE_CHECKING
 
 from django.conf import settings
-from rest_framework.response import Response
 from user_agents import parse
+
+if TYPE_CHECKING:
+    from rest_framework.response import Response
 
 
 @dataclass(slots=True)

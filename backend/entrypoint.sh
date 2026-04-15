@@ -39,6 +39,9 @@ if [ "$RUN_MIGRATIONS" = "true" ]; then
             --no-input \
             --user_type "staff" \
             || echo "Superuser already exists or could not be created."
+
+        echo "Seeding global configurations..."
+        python manage.py seed_config
     fi
 fi
 

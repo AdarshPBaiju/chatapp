@@ -1,6 +1,6 @@
 from .base import *
 
-SECRET_KEY = "ci-only-not-a-real-secret"  # noqa: S105
+SECRET_KEY = "ci-only-not-a-real-secret"
 
 DEBUG = False
 
@@ -45,7 +45,7 @@ CELERY_TASK_ALWAYS_EAGER = True
 CELERY_TASK_EAGER_PROPAGATES = True
 
 AWS_ACCESS_KEY_ID = "minioadmin"
-AWS_SECRET_ACCESS_KEY = "minioadmin"  # noqa: S105
+AWS_SECRET_ACCESS_KEY = "minioadmin"
 AWS_STORAGE_BUCKET_NAME = "chatapp-ci"
 AWS_S3_ENDPOINT_URL = "http://localhost:9000"
 DEFAULT_FILE_STORAGE = "django.core.files.storage.FileSystemStorage"

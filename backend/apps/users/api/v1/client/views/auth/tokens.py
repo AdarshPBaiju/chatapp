@@ -82,17 +82,7 @@ class ClientTokenRefreshAPIView(APIView):
 
             if not existing_entropy:
                 request.META["HTTP_X_DEVICE_ENTROPY"] = generate_device_entropy()
-            new_tokens = AuthEngine.refresh_tokens(user, payload, request)
-
-            response = ResponseFactory.success(
-                message="Token rotation successful.",
-                data={"access": new_tokens["access"], "refresh": new_tokens["refresh"]},
-            )
-            if not existing_entropy:
-                attach_device_entropy_cookie(
-                    response, request.META["HTTP_X_DEVICE_ENTROPY"]
-                )
-            return response
+            token_result = AuthEngine.refresh_tokens(user, payload, request)
 
         except CustomUser.DoesNotExist:
             return ResponseFactory.error(message="Subject user no longer exists.")
@@ -100,3 +90,27 @@ class ClientTokenRefreshAPIView(APIView):
             return ResponseFactory.error(
                 message=str(e), code=status.HTTP_401_UNAUTHORIZED
             )
+        else:
+            if token_result["status"] == "restricted":
+                response = ResponseFactory.success(
+                    message=token_result["message"],
+                    data={
+                        "is_restricted": True,
+                        "access": token_result["access"],
+                        "active_sessions": token_result["active_sessions"],
+                    },
+                )
+            else:
+                response = ResponseFactory.success(
+                    message="Token rotation successful.",
+                    data={
+                        "is_restricted": False,
+                        "access": token_result["access"],
+                        "refresh": token_result["refresh"],
+                    },
+                )
+            if not existing_entropy:
+                attach_device_entropy_cookie(
+                    response, request.META["HTTP_X_DEVICE_ENTROPY"]
+                )
+            return response

@@ -27,7 +27,8 @@ def validate_token_for_request(
         raise TokenValidationError(str(exc)) from exc
 
     if expected_type and payload.get("type") != expected_type:
-        raise TokenValidationError(f"Invalid token type: expected {expected_type}.")
+        msg = f"Invalid token type: expected {expected_type}."
+        raise TokenValidationError(msg)
 
     jti = payload.get("jti", "")
     if AuthEngine.is_blacklisted(jti):

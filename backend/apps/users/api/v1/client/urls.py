@@ -1,17 +1,20 @@
 from django.urls import path
 from users.api.v1.client.views.auth import (
     ClientSignUpAPIView,
+    ClientLoginAPIView,
     ClientOTPValidationAPIView,
     ClientResendOTPAPIView,
     ClientSessionListAPIView,
     ClientLogoutAPIView,
     ClientSessionRevokeAPIView,
+    ClientSessionRevokeOthersAPIView,
     ClientTokenVerifyAPIView,
     ClientTokenRefreshAPIView,
 )
 
 urlpatterns = [
     path("signup/", ClientSignUpAPIView.as_view(), name="client-signup"),
+    path("login/", ClientLoginAPIView.as_view(), name="client-login"),
     path(
         "otp-validate/",
         ClientOTPValidationAPIView.as_view(),
@@ -34,5 +37,10 @@ urlpatterns = [
         "sessions/revoke/",
         ClientSessionRevokeAPIView.as_view(),
         name="client-session-revoke",
+    ),
+    path(
+        "sessions/revoke-others/",
+        ClientSessionRevokeOthersAPIView.as_view(),
+        name="client-session-revoke-others",
     ),
 ]

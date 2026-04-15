@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import json
 import logging
+import requests
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, UTC
 from typing import TYPE_CHECKING, Any
 
 from django.conf import settings
@@ -13,6 +14,7 @@ from django.utils import timezone as dj_timezone
 
 from core.auth.crypto import AuthCryptoEngine
 from core.auth.request_context import build_auth_request_context
+from core.models import GlobalConfiguration
 from users.models import AuthSession, ClientDevice, TokenBlacklist
 
 if TYPE_CHECKING:
@@ -61,32 +63,95 @@ class AuthEngine:
 
     @classmethod
     def issue_tokens(cls, user: CustomUser, request: Any) -> dict[str, Any]:
-        user_id = str(user.id)
-        now_ts = cls._now_ts()
-        refresh_ttl = settings.AUTH_ENGINE_SETTINGS["REFRESH_TOKEN_LIFETIME"]
-        refresh_expiry_ts = now_ts + refresh_ttl
-        refresh_expiry_dt = datetime.fromtimestamp(refresh_expiry_ts, tz=timezone.utc)
+        with transaction.atomic():
+            user_id = str(user.id)
+            now_ts = cls._now_ts()
+            refresh_ttl = settings.AUTH_ENGINE_SETTINGS["REFRESH_TOKEN_LIFETIME"]
+            refresh_expiry_ts = now_ts + refresh_ttl
+            refresh_expiry_dt = datetime.fromtimestamp(refresh_expiry_ts, tz=UTC)
+            context = build_auth_request_context(request)
+            location = cls._normalize_location(
+                cls._get_location_from_ip(context.ip_address)
+            )
+            current_session = cls.resolve_current_session(
+                user_id=user_id,
+                session_id=None,
+                access_jti=None,
+                fingerprint=context.fingerprint,
+                device_entropy=context.device_entropy,
+            )
 
-        access_jti = str(uuid.uuid4())
-        refresh_jti = str(uuid.uuid4())
-        session_id = str(uuid.uuid4())
-        context = build_auth_request_context(request)
-        session_meta = cls._session_meta(
-            session_id=session_id,
-            access_jti=access_jti,
-            refresh_jti=refresh_jti,
-            context=context,
-            started_at=now_ts,
-        )
+            if current_session:
+                is_anomaly = cls._check_impossible_travel(user_id, context, location)
 
-        register_res = cls._register_session_in_redis(
-            user_id=user_id,
-            session_id=session_id,
-            session_meta=session_meta,
-            refresh_expiry_ts=refresh_expiry_ts,
-        )
+                if is_anomaly or cls._count_active_sessions(user_id) > cls._device_limit():
+                    return cls._build_restricted_response(
+                        user_id=user_id,
+                        context=context,
+                        access_jti=str(uuid.uuid4()),
+                        refresh_jti=str(uuid.uuid4()),
+                        session_id=str(current_session.session_id),
+                        location=location,
+                    )
 
-        if register_res == "SUCCESS":
+                rotated = cls._rotate_session_tokens(
+                    user=user,
+                    session=current_session,
+                    context=context,
+                    location=location,
+                    blacklist_previous=True,
+                )
+                return {"status": "full", **rotated}
+
+            # New Session Path
+            access_jti = str(uuid.uuid4())
+            refresh_jti = str(uuid.uuid4())
+            session_id = str(uuid.uuid4())
+            session_meta = cls._session_meta(
+                session_id=session_id,
+                access_jti=access_jti,
+                refresh_jti=refresh_jti,
+                context=context,
+                started_at=now_ts,
+                location=location,
+            )
+
+            register_res = cls._register_session_in_redis(
+                user_id=user_id,
+                session_id=session_id,
+                session_meta=session_meta,
+                refresh_expiry_ts=refresh_expiry_ts,
+            )
+
+            if register_res != "SUCCESS":
+                active_db_count = AuthSession.objects.filter(
+                    user_id=user_id,
+                    is_active=True,
+                    expires_at__gt=dj_timezone.now(),
+                ).count()
+                if active_db_count == 0:
+                    cls._prune_stale_redis_sessions(
+                        user_id=user_id,
+                        session_ids=register_res
+                        if isinstance(register_res, list)
+                        else None,
+                    )
+                    register_res = cls._register_session_in_redis(
+                        user_id=user_id,
+                        session_id=session_id,
+                        session_meta=session_meta,
+                        refresh_expiry_ts=refresh_expiry_ts,
+                    )
+                if register_res != "SUCCESS":
+                    return cls._build_restricted_response(
+                        user_id=user_id,
+                        context=context,
+                        access_jti=access_jti,
+                        refresh_jti=refresh_jti,
+                        session_id=session_id,
+                        location=location,
+                    )
+
             cls._persist_session(
                 user=user,
                 session_id=session_id,
@@ -97,6 +162,10 @@ class AuthEngine:
                 device_entropy=context.device_entropy,
                 ip_address=context.ip_address,
                 expires_at=refresh_expiry_dt,
+                city=location.get("city") or "",
+                country_code=location.get("country_code") or "",
+                latitude=location.get("lat"),
+                longitude=location.get("lon"),
             )
             cls._sync_device_registry(user, context)
             return {
@@ -120,55 +189,214 @@ class AuthEngine:
                 "session_id": session_id,
             }
 
-        logger.info("session_limit_reached", extra={"user_id": user_id})
-        revoke_token = cls._create_token(
-            user_id=user_id,
-            jti=access_jti,
-            p_jti=refresh_jti,
-            sid=session_id,
-            fpt=context.fingerprint,
-            t_type="access",
-            scope="revoke_only",
-        )
-        return {
-            "status": "restricted",
-            "access": revoke_token,
-            "active_sessions": cls.list_active_sessions(user_id=user_id),
-            "message": "Maximum device limit reached. Please revoke an existing session to continue.",
-        }
-
     @classmethod
     def refresh_tokens(
         cls, user: CustomUser, old_payload: dict[str, Any], request: Any
+    ) -> dict[str, Any]:
+        with transaction.atomic():
+            user_id = str(user.id)
+            old_refresh_jti = old_payload["jti"]
+            old_access_jti = old_payload.get("partner_jti", "")
+            session_id = str(old_payload.get("sid", ""))
+            context = build_auth_request_context(request)
+            session = cls._get_active_session(
+                user_id=user_id,
+                session_id=session_id,
+                refresh_jti=old_refresh_jti,
+            )
+            if not session:
+                raise ValueError("Session context not found or already revoked.")
+
+            location = cls._normalize_location(
+                cls._get_location_from_ip(context.ip_address)
+            )
+            is_anomaly = cls._check_impossible_travel(user_id, context, location)
+
+            if is_anomaly or cls._count_active_sessions(user_id) > cls._device_limit():
+                cls.blacklist_tokens(
+                    [old_access_jti, old_refresh_jti],
+                    exp_timestamp=old_payload.get("exp"),
+                )
+                session.fingerprint = context.fingerprint
+                session.device_label = context.device_label
+                session.device_entropy = context.device_entropy
+                session.ip_address = context.ip_address
+                session.last_seen_at = dj_timezone.now()
+
+                # Update location fields in DB
+                session.city = location.get("city") or ""
+                session.country_code = location.get("country_code") or ""
+                session.latitude = location.get("lat")
+                session.longitude = location.get("lon")
+
+                session.save(
+                    update_fields=[
+                        "fingerprint",
+                        "device_label",
+                        "device_entropy",
+                        "ip_address",
+                        "last_seen_at",
+                        "updated_at",
+                        "city",
+                        "country_code",
+                        "latitude",
+                        "longitude",
+                    ]
+                )
+                return cls._build_restricted_response(
+                    user_id=user_id,
+                    context=context,
+                    access_jti=str(uuid.uuid4()),
+                    refresh_jti=str(uuid.uuid4()),
+                    session_id=str(session.session_id),
+                    location=location,
+                )
+
+            cls.blacklist_tokens([old_refresh_jti], exp_timestamp=old_payload.get("exp"))
+            rotated = cls._rotate_session_tokens(
+                user=user,
+                session=session,
+                context=context,
+                location=location,
+            )
+            return {"status": "full", **rotated}
+
+    @classmethod
+    def promote_restricted_session(
+        cls,
+        user_id: str,
+        access_jti: str,
+        refresh_jti: str,
+        request: Any,
+        session_id: str | None = None,
+    ) -> dict[str, str]:
+        with transaction.atomic():
+            context = build_auth_request_context(request)
+            location = cls._get_location_from_ip(context.ip_address)
+
+            from users.models import CustomUser
+
+            user = CustomUser.objects.get(id=user_id, is_active=True)
+            current_session = cls.resolve_current_session(
+                user_id=user_id,
+                session_id=session_id,
+                access_jti=None,
+                fingerprint=context.fingerprint,
+                device_entropy=context.device_entropy,
+            )
+            if current_session:
+                if cls._count_active_sessions(user_id) > cls._device_limit():
+                    logger.info(
+                        "restricted_promotion_blocked",
+                        extra={
+                            "user_id": user_id,
+                            "session_id": str(current_session.session_id),
+                        },
+                    )
+                    raise ValueError("Device limit still reached after revocation.")
+
+                return cls._rotate_session_tokens(
+                    user=user,
+                    session=current_session,
+                    context=context,
+                    location=location,
+                    access_jti=access_jti,
+                    refresh_jti=refresh_jti,
+                    blacklist_previous=True,
+                )
+
+            now_ts = cls._now_ts()
+            refresh_ttl = settings.AUTH_ENGINE_SETTINGS["REFRESH_TOKEN_LIFETIME"]
+            refresh_expiry_ts = now_ts + refresh_ttl
+            refresh_expiry_dt = datetime.fromtimestamp(refresh_expiry_ts, tz=UTC)
+            selected_session_id = session_id or str(uuid.uuid4())
+
+            session_meta = cls._session_meta(
+                session_id=selected_session_id,
+                access_jti=access_jti,
+                refresh_jti=refresh_jti,
+                context=context,
+                started_at=now_ts,
+                location=location,
+            )
+            register_res = cls._register_session_in_redis(
+                user_id=user_id,
+                session_id=selected_session_id,
+                session_meta=session_meta,
+                refresh_expiry_ts=refresh_expiry_ts,
+            )
+            if register_res != "SUCCESS":
+                logger.info(
+                    "restricted_promotion_blocked",
+                    extra={"user_id": user_id, "session_id": selected_session_id},
+                )
+                raise ValueError("Device limit still reached after revocation.")
+
+            cls._persist_session(
+                user=user,
+                session_id=selected_session_id,
+                access_jti=access_jti,
+                refresh_jti=refresh_jti,
+                fingerprint=context.fingerprint,
+                device_label=context.device_label,
+                device_entropy=context.device_entropy,
+                ip_address=context.ip_address,
+                expires_at=refresh_expiry_dt,
+                city=location.get("city") or "",
+                country_code=location.get("country_code") or "",
+                latitude=location.get("lat"),
+                longitude=location.get("lon"),
+            )
+            return {
+                "status": "full",
+                "access": cls._create_token(
+                    user_id=user_id,
+                    jti=access_jti,
+                    p_jti=refresh_jti,
+                    sid=selected_session_id,
+                    fpt=context.fingerprint,
+                    t_type="access",
+                ),
+                "refresh": cls._create_token(
+                    user_id=user_id,
+                    jti=refresh_jti,
+                    p_jti=access_jti,
+                    sid=selected_session_id,
+                    fpt=context.fingerprint,
+                    t_type="refresh",
+                ),
+            }
+
+    @classmethod
+    def _rotate_session_tokens(
+        cls,
+        *,
+        user: CustomUser,
+        session: AuthSession,
+        context: Any,
+        location: dict[str, Any] | None = None,
+        access_jti: str | None = None,
+        refresh_jti: str | None = None,
+        blacklist_previous: bool = False,
     ) -> dict[str, str]:
         user_id = str(user.id)
-        old_refresh_jti = old_payload["jti"]
-        session_id = str(old_payload.get("sid", ""))
-        context = build_auth_request_context(request)
         now_ts = cls._now_ts()
         refresh_ttl = settings.AUTH_ENGINE_SETTINGS["REFRESH_TOKEN_LIFETIME"]
         refresh_expiry_ts = now_ts + refresh_ttl
-        refresh_expiry_dt = datetime.fromtimestamp(refresh_expiry_ts, tz=timezone.utc)
+        refresh_expiry_dt = datetime.fromtimestamp(refresh_expiry_ts, tz=UTC)
+        next_access_jti = access_jti or str(uuid.uuid4())
+        next_refresh_jti = refresh_jti or str(uuid.uuid4())
+        previous_access_jti = session.access_jti
+        previous_refresh_jti = session.refresh_jti
 
-        cls.blacklist_tokens([old_refresh_jti], exp_timestamp=old_payload.get("exp"))
-        session = cls._get_active_session(
-            user_id=user_id,
-            session_id=session_id,
-            refresh_jti=old_refresh_jti,
-        )
-        if not session:
-            raise ValueError("Session context not found or already revoked.")
-
-        access_jti = str(uuid.uuid4())
-        refresh_jti = str(uuid.uuid4())
         session_meta = cls._session_meta(
             session_id=str(session.session_id),
-            access_jti=access_jti,
-            refresh_jti=refresh_jti,
+            access_jti=next_access_jti,
+            refresh_jti=next_refresh_jti,
             context=context,
             started_at=int(session.started_at.timestamp()),
+            location=location,
         )
-
         update_res = cls._update_session_in_redis(
             user_id=user_id,
             session_id=str(session.session_id),
@@ -186,14 +414,19 @@ class AuthEngine:
             if retry_res != "SUCCESS":
                 raise ValueError("Session state changed. Please authenticate again.")
 
-        session.access_jti = access_jti
-        session.refresh_jti = refresh_jti
+        normalized_location = cls._normalize_location(location)
+        session.access_jti = next_access_jti
+        session.refresh_jti = next_refresh_jti
         session.fingerprint = context.fingerprint
         session.device_label = context.device_label
         session.device_entropy = context.device_entropy
         session.ip_address = context.ip_address
         session.last_seen_at = dj_timezone.now()
         session.expires_at = refresh_expiry_dt
+        session.city = normalized_location["city"]
+        session.country_code = normalized_location["country_code"]
+        session.latitude = normalized_location["lat"]
+        session.longitude = normalized_location["lon"]
         session.save(
             update_fields=[
                 "access_jti",
@@ -204,96 +437,31 @@ class AuthEngine:
                 "ip_address",
                 "last_seen_at",
                 "expires_at",
+                "city",
+                "country_code",
+                "latitude",
+                "longitude",
                 "updated_at",
             ]
         )
+        if blacklist_previous and previous_access_jti and previous_refresh_jti:
+            cls.blacklist_tokens([previous_access_jti, previous_refresh_jti])
         cls._sync_device_registry(user, context)
 
         return {
             "access": cls._create_token(
                 user_id=user_id,
-                jti=access_jti,
-                p_jti=refresh_jti,
+                jti=next_access_jti,
+                p_jti=next_refresh_jti,
                 sid=str(session.session_id),
                 fpt=context.fingerprint,
                 t_type="access",
             ),
             "refresh": cls._create_token(
                 user_id=user_id,
-                jti=refresh_jti,
-                p_jti=access_jti,
+                jti=next_refresh_jti,
+                p_jti=next_access_jti,
                 sid=str(session.session_id),
-                fpt=context.fingerprint,
-                t_type="refresh",
-            ),
-        }
-
-    @classmethod
-    def promote_restricted_session(
-        cls,
-        user_id: str,
-        access_jti: str,
-        refresh_jti: str,
-        request: Any,
-        session_id: str | None = None,
-    ) -> dict[str, str]:
-        context = build_auth_request_context(request)
-        now_ts = cls._now_ts()
-        refresh_ttl = settings.AUTH_ENGINE_SETTINGS["REFRESH_TOKEN_LIFETIME"]
-        refresh_expiry_ts = now_ts + refresh_ttl
-        refresh_expiry_dt = datetime.fromtimestamp(refresh_expiry_ts, tz=timezone.utc)
-        selected_session_id = session_id or str(uuid.uuid4())
-
-        session_meta = cls._session_meta(
-            session_id=selected_session_id,
-            access_jti=access_jti,
-            refresh_jti=refresh_jti,
-            context=context,
-            started_at=now_ts,
-        )
-        register_res = cls._register_session_in_redis(
-            user_id=user_id,
-            session_id=selected_session_id,
-            session_meta=session_meta,
-            refresh_expiry_ts=refresh_expiry_ts,
-        )
-        if register_res != "SUCCESS":
-            logger.info(
-                "restricted_promotion_blocked",
-                extra={"user_id": user_id, "session_id": selected_session_id},
-            )
-            raise ValueError("Device limit still reached after revocation.")
-
-        from users.models import CustomUser
-
-        user = CustomUser.objects.get(id=user_id, is_active=True)
-        cls._persist_session(
-            user=user,
-            session_id=selected_session_id,
-            access_jti=access_jti,
-            refresh_jti=refresh_jti,
-            fingerprint=context.fingerprint,
-            device_label=context.device_label,
-            device_entropy=context.device_entropy,
-            ip_address=context.ip_address,
-            expires_at=refresh_expiry_dt,
-        )
-        cls._sync_device_registry(user, context)
-
-        return {
-            "access": cls._create_token(
-                user_id=user_id,
-                jti=access_jti,
-                p_jti=refresh_jti,
-                sid=selected_session_id,
-                fpt=context.fingerprint,
-                t_type="access",
-            ),
-            "refresh": cls._create_token(
-                user_id=user_id,
-                jti=refresh_jti,
-                p_jti=access_jti,
-                sid=selected_session_id,
                 fpt=context.fingerprint,
                 t_type="refresh",
             ),
@@ -342,7 +510,7 @@ class AuthEngine:
             if not jti:
                 continue
             expires_at = (
-                datetime.fromtimestamp(exp_timestamp, tz=timezone.utc)
+                datetime.fromtimestamp(exp_timestamp, tz=UTC)
                 if exp_timestamp
                 else now
                 + timedelta(
@@ -387,7 +555,10 @@ class AuthEngine:
             is_active=True,
             expires_at__gt=dj_timezone.now(),
         )
-        if query.filter(access_jti=jti).exists() or query.filter(refresh_jti=jti).exists():
+        if (
+            query.filter(access_jti=jti).exists()
+            or query.filter(refresh_jti=jti).exists()
+        ):
             return True
         if partner_jti and (
             query.filter(access_jti=partner_jti).exists()
@@ -397,12 +568,55 @@ class AuthEngine:
         return False
 
     @classmethod
-    def touch_session(cls, user_id: str, session_id: str) -> None:
-        AuthSession.objects.filter(
-            user_id=user_id,
-            session_id=session_id,
-            is_active=True,
-        ).update(last_seen_at=dj_timezone.now())
+    def touch_session(cls, _user_id: str, session_id: str) -> None:
+        """
+        Updates the session's last activity time in Redis for high-performance tracking.
+        """
+        cache_key = f"auth:session:{session_id}:touch"
+        cache.set(cache_key, int(dj_timezone.now().timestamp()), timeout=3600)
+
+    @classmethod
+    def _get_last_active(cls, session_id: str, db_time: datetime) -> int:
+        """
+        Returns the most recent activity timestamp from Redis or DB.
+        """
+        cache_key = f"auth:session:{session_id}:touch"
+        redis_time = cache.get(cache_key)
+        if redis_time:
+            return int(redis_time)
+        return int(db_time.timestamp())
+
+    @classmethod
+    def revoke_all_sessions(
+        cls, user_id: str, exclude_session_id: str | None = None
+    ) -> int:
+        with transaction.atomic():
+            """
+            Revokes all active sessions for a user, optionally excluding one session.
+            Useful for password resets.
+            """
+            query = AuthSession.objects.filter(user_id=user_id, is_active=True)
+            if exclude_session_id:
+                query = query.exclude(session_id=exclude_session_id)
+
+            sessions_to_revoke = query.all()
+            count = sessions_to_revoke.count()
+
+            for session in sessions_to_revoke:
+                cls.logout(
+                    user_id=user_id,
+                    access_jti=session.access_jti,
+                    refresh_jti=session.refresh_jti,
+                    session_id=str(session.session_id),
+                )
+            return count
+
+    @classmethod
+    def revoke_others(cls, user_id: str, current_sid: str) -> int:
+        """
+        Revokes all sessions for a user except the specified one.
+        """
+        return cls.revoke_all_sessions(user_id, exclude_session_id=current_sid)
 
     @classmethod
     @transaction.atomic
@@ -425,7 +639,9 @@ class AuthEngine:
             session.is_active = False
             session.last_seen_at = dj_timezone.now()
             session.save(update_fields=["is_active", "last_seen_at", "updated_at"])
-            cls._remove_session_from_redis(user_id=user_id, session_id=str(session.session_id))
+            cls._remove_session_from_redis(
+                user_id=user_id, session_id=str(session.session_id)
+            )
             logger.info(
                 "session_revoked",
                 extra={"user_id": user_id, "session_id": str(session.session_id)},
@@ -462,7 +678,14 @@ class AuthEngine:
         return True
 
     @classmethod
-    def list_active_sessions(cls, user_id: str, current_sid: str | None = None) -> list[dict[str, Any]]:
+    def list_active_sessions(
+        cls,
+        user_id: str,
+        current_sid: str | None = None,
+        current_access_jti: str | None = None,
+        current_fingerprint: str | None = None,
+        current_device_entropy: str | None = None,
+    ) -> list[dict[str, Any]]:
         sessions = (
             AuthSession.objects.filter(
                 user_id=user_id,
@@ -473,7 +696,24 @@ class AuthEngine:
             .all()
         )
         result = []
+        current_sid_str = str(current_sid or "")
+        current_jti_str = str(current_access_jti or "")
+        current_fingerprint_str = str(current_fingerprint or "")
+        current_device_entropy_str = str(current_device_entropy or "")
         for session in sessions:
+            is_current = False
+            if current_sid_str and str(session.session_id) == current_sid_str or current_jti_str and session.access_jti == current_jti_str or (current_device_entropy_str and (
+                session.device_entropy == current_device_entropy_str
+            ) or (
+                current_fingerprint_str
+                and session.fingerprint == current_fingerprint_str
+            )):
+                is_current = True
+
+            last_active = cls._get_last_active(
+                str(session.session_id), session.last_seen_at
+            )
+
             result.append(
                 {
                     "session_id": str(session.session_id),
@@ -481,8 +721,10 @@ class AuthEngine:
                     "refresh_jti": session.refresh_jti,
                     "device": session.device_label,
                     "started_at": int(session.started_at.timestamp()),
-                    "last_seen_at": int(session.last_seen_at.timestamp()),
-                    "is_current": str(session.session_id) == str(current_sid or ""),
+                    "last_seen_at": last_active,
+                    "is_current": is_current,
+                    "city": session.city or "",
+                    "country_code": session.country_code or "",
                 }
             )
             cls._hydrate_session_to_redis(session)
@@ -505,7 +747,7 @@ class AuthEngine:
             2,
             cls._active_key(user_id),
             cls._session_prefix(),
-            settings.AUTH_ENGINE_SETTINGS["MAX_DEVICES_PER_USER"],
+            cls._device_limit(),
             now_ts,
             session_id,
             json.dumps(session_meta),
@@ -560,7 +802,9 @@ class AuthEngine:
             "last_seen_at": int(session.last_seen_at.timestamp()),
         }
         conn = cache.client.get_client()
-        conn.zadd(cls._active_key(str(session.user_id)), {str(session.session_id): expiry_ts})
+        conn.zadd(
+            cls._active_key(str(session.user_id)), {str(session.session_id): expiry_ts}
+        )
         conn.setex(cls._session_key(str(session.session_id)), ttl, json.dumps(meta))
 
     @classmethod
@@ -568,6 +812,39 @@ class AuthEngine:
         conn = cache.client.get_client()
         conn.zrem(cls._active_key(user_id), session_id)
         conn.delete(cls._session_key(session_id))
+
+    @classmethod
+    def _prune_stale_redis_sessions(
+        cls, *, user_id: str, session_ids: list[str] | None = None
+    ) -> None:
+        conn = cache.client.get_client()
+        active_key = cls._active_key(user_id)
+        redis_ids = session_ids
+        if redis_ids is None:
+            raw_ids = conn.zrange(active_key, 0, -1)
+            redis_ids = [
+                rid.decode() if isinstance(rid, bytes) else str(rid) for rid in raw_ids
+            ]
+
+        if not redis_ids:
+            return
+
+        valid_ids = {
+            str(sid)
+            for sid in AuthSession.objects.filter(
+                user_id=user_id,
+                is_active=True,
+                expires_at__gt=dj_timezone.now(),
+            ).values_list("session_id", flat=True)
+        }
+
+        stale_ids = [sid for sid in redis_ids if sid not in valid_ids]
+        if not stale_ids:
+            return
+
+        conn.zrem(active_key, *stale_ids)
+        for sid in stale_ids:
+            conn.delete(cls._session_key(sid))
 
     @classmethod
     def _persist_session(
@@ -582,8 +859,20 @@ class AuthEngine:
         device_entropy: str,
         ip_address: str,
         expires_at: datetime,
+        city: str | None = None,
+        country_code: str | None = None,
+        latitude: float | None = None,
+        longitude: float | None = None,
     ) -> None:
         now = dj_timezone.now()
+        location = cls._normalize_location(
+            {
+                "city": city,
+                "country_code": country_code,
+                "lat": latitude,
+                "lon": longitude,
+            }
+        )
         AuthSession.objects.update_or_create(
             user=user,
             session_id=session_id,
@@ -594,11 +883,32 @@ class AuthEngine:
                 "device_label": device_label,
                 "device_entropy": device_entropy,
                 "ip_address": ip_address,
-                "is_active": True,
-                "started_at": now,
-                "last_seen_at": now,
                 "expires_at": expires_at,
+                "city": location["city"],
+                "country_code": location["country_code"],
+                "latitude": location["lat"],
+                "longitude": location["lon"],
+                "last_seen_at": now,
+                "is_active": True,
             },
+        )
+
+    @classmethod
+    def resolve_current_session(
+        cls,
+        *,
+        user_id: str,
+        session_id: str | None = None,
+        access_jti: str | None = None,
+        fingerprint: str | None = None,
+        device_entropy: str | None = None,
+    ) -> AuthSession | None:
+        return cls._get_active_session(
+            user_id=user_id,
+            session_id=session_id,
+            access_jti=access_jti,
+            fingerprint=fingerprint,
+            device_entropy=device_entropy,
         )
 
     @classmethod
@@ -628,19 +938,103 @@ class AuthEngine:
         session_id: str | None = None,
         refresh_jti: str | None = None,
         access_jti: str | None = None,
+        fingerprint: str | None = None,
+        device_entropy: str | None = None,
     ) -> AuthSession | None:
-        query = AuthSession.objects.filter(
+        base_query = AuthSession.objects.filter(
             user_id=user_id,
             is_active=True,
             expires_at__gt=dj_timezone.now(),
         )
+        # Use stable identifiers in priority order instead of requiring all provided
+        # identifiers to match simultaneously. Token rotation and stale partner JTIs
+        # should not prevent current-session logout from deactivating the DB session.
         if session_id:
-            query = query.filter(session_id=session_id)
-        if refresh_jti:
-            query = query.filter(refresh_jti=refresh_jti)
+            session = base_query.filter(session_id=session_id).first()
+            if session:
+                return session
         if access_jti:
-            query = query.filter(access_jti=access_jti)
-        return query.first()
+            session = base_query.filter(access_jti=access_jti).first()
+            if session:
+                return session
+        if refresh_jti:
+            session = base_query.filter(refresh_jti=refresh_jti).first()
+            if session:
+                return session
+        if device_entropy:
+            session = (
+                base_query.filter(device_entropy=device_entropy)
+                .order_by("-last_seen_at")
+                .first()
+            )
+            if session:
+                return session
+        if fingerprint:
+            session = (
+                base_query.filter(fingerprint=fingerprint)
+                .order_by("-last_seen_at")
+                .first()
+            )
+            if session:
+                return session
+        return None
+
+    @classmethod
+    def _build_restricted_response(
+        cls,
+        *,
+        user_id: str,
+        context: Any,
+        access_jti: str,
+        refresh_jti: str,
+        session_id: str,
+        location: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        _ = cls._normalize_location(location)
+        revoke_token = cls._create_token(
+            user_id=user_id,
+            jti=access_jti,
+            p_jti=refresh_jti,
+            sid=session_id,
+            fpt=context.fingerprint,
+            t_type="access",
+            scope="revoke_only",
+        )
+        return {
+            "status": "restricted",
+            "access": revoke_token,
+            "active_sessions": cls.list_active_sessions(
+                user_id=user_id,
+                current_sid=session_id,
+                current_fingerprint=context.fingerprint,
+                current_device_entropy=context.device_entropy,
+            ),
+            "message": "Maximum device limit reached. Please revoke an existing session to continue.",
+        }
+
+    @classmethod
+    def _count_active_sessions(cls, user_id: str) -> int:
+        return AuthSession.objects.filter(
+            user_id=user_id,
+            is_active=True,
+            expires_at__gt=dj_timezone.now(),
+        ).count()
+
+    @classmethod
+    def _device_limit(cls) -> int:
+        cache_key = "auth:config:max_devices_per_user"
+        limit = cache.get(cache_key)
+        if limit is None:
+            limit = GlobalConfiguration.get_value("max_devices_per_user")
+            if limit is None:
+                limit = settings.AUTH_ENGINE_SETTINGS["MAX_DEVICES_PER_USER"]
+            cache.set(cache_key, limit, timeout=3600)
+
+        limit_int = int(limit)
+        # 0 means unlimited
+        if limit_int == 0:
+            return 999999
+        return max(limit_int, 0)
 
     @staticmethod
     def _session_meta(
@@ -650,7 +1044,9 @@ class AuthEngine:
         refresh_jti: str,
         context: Any,
         started_at: int,
+        location: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
+        normalized_location = AuthEngine._normalize_location(location)
         return {
             "session_id": session_id,
             "access_jti": access_jti,
@@ -659,6 +1055,22 @@ class AuthEngine:
             "ip": context.ip_address,
             "started_at": started_at,
             "last_seen_at": AuthEngine._now_ts(),
+            "city": normalized_location["city"],
+            "country": normalized_location["country_code"],
+            "lat": normalized_location["lat"],
+            "lon": normalized_location["lon"],
+        }
+
+    @staticmethod
+    def _normalize_location(
+        location: dict[str, Any] | None,
+    ) -> dict[str, Any]:
+        location = location or {}
+        return {
+            "city": location.get("city") or "",
+            "country_code": location.get("country_code") or "",
+            "lat": location.get("lat"),
+            "lon": location.get("lon"),
         }
 
     @staticmethod
@@ -675,4 +1087,93 @@ class AuthEngine:
 
     @staticmethod
     def _now_ts() -> int:
-        return int(datetime.now(timezone.utc).timestamp())
+        return int(datetime.now(UTC).timestamp())
+
+    @classmethod
+    def _check_impossible_travel(
+        cls, user_id: str, _context: Any, location: dict[str, Any]
+    ) -> bool:
+        """
+        Detects anomalies by calculating travel velocity between consecutive sessions.
+        """
+        if not location.get("lat") or not location.get("lon"):
+            return False
+
+        last_session = (
+            AuthSession.objects.filter(user_id=user_id, is_active=True)
+            .order_by("-updated_at")
+            .first()
+        )
+        if not last_session or not last_session.latitude or not last_session.longitude:
+            return False
+
+        time_diff = (dj_timezone.now() - last_session.updated_at).total_seconds()
+        if (
+            time_diff < 30
+        ):  # Ignore very rapid consecutive hits (likely parallel requests)
+            return False
+
+        velocity = cls._calculate_velocity(
+            float(last_session.latitude),
+            float(last_session.longitude),
+            float(location["lat"]),
+            float(location["lon"]),
+            time_diff,
+        )
+
+        # 800 km/h is roughly the speed of a commercial aircraft.
+        if velocity > 800:
+            logger.warning(
+                "Anomaly: Impossible travel detected for user %s. Velocity: %s km/h.",
+                user_id,
+                velocity,
+            )
+            return True
+        return False
+
+    @staticmethod
+    def _get_location_from_ip(ip_address: str) -> dict[str, Any]:
+        """
+        Resolves IP address to geographic coordinates using ip-api.com.
+        """
+        try:
+            # We use a 3s timeout to avoid blocking the auth flow
+            response = requests.get(f"http://ip-api.com/json/{ip_address}", timeout=3)
+            data = response.json()
+            if data.get("status") == "success":
+                return {
+                    "city": data.get("city") or "",
+                    "country_code": data.get("countryCode") or "",
+                    "lat": data.get("lat"),
+                    "lon": data.get("lon"),
+                }
+        except Exception:
+            logger.exception("Geo-IP resolution failed for IP: %s", ip_address)
+        return {"city": "", "country_code": "", "lat": None, "lon": None}
+
+    @staticmethod
+    def _calculate_velocity(
+        lat1: float, lon1: float, lat2: float, lon2: float, time_diff_seconds: float
+    ) -> float:
+        """
+        Calculates travel velocity in km/h using the Haversine formula.
+        """
+        if time_diff_seconds <= 0:
+            return 0.0
+
+        from math import atan2, cos, radians, sin, sqrt
+
+        radius_km = 6371.0  # Earth radius in KM
+
+        dlat = radians(lat2 - lat1)
+        dlon = radians(lon2 - lon1)
+
+        a = (
+            sin(dlat / 2) ** 2
+            + cos(radians(lat1)) * cos(radians(lat2)) * sin(dlon / 2) ** 2
+        )
+        c = 2 * atan2(sqrt(a), sqrt(1 - a))
+        distance = radius_km * c
+
+        hours = time_diff_seconds / 3600.0
+        return distance / hours

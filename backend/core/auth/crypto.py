@@ -7,6 +7,13 @@ from datetime import datetime, timedelta, UTC
 from typing import Any
 
 from django.conf import settings
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+from cryptography.hazmat.primitives.serialization import (
+    Encoding,
+    NoEncryption,
+    PrivateFormat,
+    PublicFormat,
+)
 from jwcrypto import jwe, jwk, jws
 from jwcrypto.common import json_decode
 
@@ -46,7 +53,19 @@ class AuthCryptoEngine:
     def _signing_key(cls, kid: str) -> jwk.JWK:
         signing_seed = cls._material_for_kid(kid)["signing_seed"].encode("utf-8")
         derived_seed = hashlib.sha256(signing_seed).digest()
-        return jwk.JWK.generate(kty="OKP", crv="Ed25519", seed=derived_seed)
+        private_key = Ed25519PrivateKey.from_private_bytes(derived_seed)
+        private_raw = private_key.private_bytes(
+            encoding=Encoding.Raw,
+            format=PrivateFormat.Raw,
+            encryption_algorithm=NoEncryption(),
+        )
+        public_raw = private_key.public_key().public_bytes(
+            encoding=Encoding.Raw,
+            format=PublicFormat.Raw,
+        )
+        d = base64.urlsafe_b64encode(private_raw).decode("utf-8").rstrip("=")
+        x = base64.urlsafe_b64encode(public_raw).decode("utf-8").rstrip("=")
+        return jwk.JWK(kty="OKP", crv="Ed25519", d=d, x=x)
 
     @classmethod
     def _encryption_key(cls, kid: str) -> jwk.JWK:

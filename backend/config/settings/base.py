@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 
 from decouple import config
+from corsheaders.defaults import default_headers
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(BASE_DIR / "apps"))
@@ -10,7 +11,7 @@ sys.path.insert(0, str(BASE_DIR / "apps"))
 
 SECRET_KEY = config("SECRET_KEY", default="django-insecure-change-me")
 
-DEBUG = config("DEBUG", default=False, cast=bool)
+DEBUG = config("DEBUG", default=config("DJANGO_ENV", default="") == "development", cast=bool)
 
 ALLOWED_HOSTS = config(
     "ALLOWED_HOSTS",
@@ -32,6 +33,7 @@ INSTALLED_APPS = [
     "django_celery_results",
     "channels",
     "drf_spectacular",
+    "core",
     "users",
 ]
 
@@ -44,6 +46,7 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "core.middleware.request_context.SessionContextMiddleware",
 ]
 
 ROOT_URLCONF = "config.urls"
@@ -184,6 +187,17 @@ CORS_ALLOWED_ORIGINS = config(
     default="http://localhost:3000,http://127.0.0.1:3000",
     cast=lambda v: [s.strip() for s in v.split(",")],
 )
+CORS_ALLOWED_ORIGIN_REGEXES = config(
+    "CORS_ALLOWED_ORIGIN_REGEXES",
+    default=r"^http://localhost:\d+$,^http://127\.0\.0\.1:\d+$",
+    cast=lambda v: [s.strip() for s in v.split(",") if s.strip()],
+)
+CORS_ALLOW_HEADERS = [
+    *default_headers,
+    "x-timezone-offset",
+    "x-device-entropy",
+    "x-device-label",
+]
 CORS_ALLOW_CREDENTIALS = True
 
 CELERY_BROKER_URL = config("CELERY_BROKER_URL", default="redis://redis:6379/0")
