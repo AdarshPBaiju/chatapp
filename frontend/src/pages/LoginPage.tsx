@@ -28,7 +28,9 @@ export function LoginPage() {
     initialValues: { email: "", password: "" },
     schema: {
       email: v.string().email().required("Email is required"),
-      password: v.string().required("Password is required")
+      password: phase === "PASSWORD_CHECK" 
+        ? v.string().required("Password is required") 
+        : v.string().optional()
     },
     onSubmit: async (formValues) => {
       if (phase === "IDENTIFY") {
