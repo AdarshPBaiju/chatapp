@@ -10,6 +10,7 @@ import { Button, Input } from "@/shared/ui/FormControls";
 import { OtpGate } from "@/features/auth/ui/OtpGate";
 import { useForm } from "@/shared/hooks/useForm";
 import { v } from "@/shared/lib/validation";
+import { LoadingScreen } from "@/shared/ui/LoadingScreen";
 
 export function LoginPage() {
   const navigate = useNavigate();
@@ -191,11 +192,5 @@ export function LoginPage() {
     );
   }
 
-  return (
-    <AuthLayout heading="Signing you in..." subheading="Evaluating identity security protocols.">
-      <div className="flex justify-center py-10">
-         <div className="h-12 w-12 border-4 border-sky-500/20 border-t-sky-500 rounded-full animate-spin" />
-      </div>
-    </AuthLayout>
-  );
+  return <LoadingScreen />;
 }
