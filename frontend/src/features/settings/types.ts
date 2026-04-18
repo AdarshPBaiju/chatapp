@@ -6,6 +6,7 @@ export type UserProfile = {
   profile_picture: string | null;
   gender: 'male' | 'female' | 'other' | '';
   phone_number: string | null;
+  is_two_factor_enabled: boolean;
 };
 
 export type TwoFactorSetup = {

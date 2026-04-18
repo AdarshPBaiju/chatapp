@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
-import { Activity, Laptop, Smartphone, Monitor, MapPin, ShieldCheck, Trash2, Clock } from "lucide-react";
+import { Activity, Laptop, Smartphone, Monitor, MapPin, ShieldCheck, Trash2, Clock, Check } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 
 import { fetchSessions, revokeSession, revokeOtherSessions } from "../api";
 import { AuthSession } from "../types";
 import { Button } from "@/shared/ui/FormControls";
+import { cn } from "@/shared/lib/utils";
 
 export function ActiveSessionsSection() {
   const [sessions, setSessions] = useState<AuthSession[]>([]);
@@ -65,7 +67,7 @@ export function ActiveSessionsSection() {
     
     if (diff < 60) return "Just now";
     if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
-    if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+    if (diff < 8400) return `${Math.floor(diff / 3600)}h ago`;
     return new Date(timestamp * 1000).toLocaleDateString();
   }
 
@@ -78,9 +80,9 @@ export function ActiveSessionsSection() {
 
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center h-64 space-y-4">
-        <div className="h-10 w-10 border-4 border-sky-500/20 border-t-sky-500 rounded-full animate-spin" />
-        <p className="text-slate-500 font-medium">Synchronizing session state...</p>
+      <div className="flex flex-col items-center justify-center py-20 space-y-4">
+        <div className="h-10 w-10 border-4 border-slate-100 border-t-slate-900 rounded-full animate-spin" />
+        <p className="text-sm font-bold tracking-widest text-slate-400 uppercase">Verifying devices...</p>
       </div>
     );
   }
@@ -88,91 +90,110 @@ export function ActiveSessionsSection() {
   const otherSessions = sessions.filter(s => !s.is_current);
 
   return (
-    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="space-y-1">
-          <h2 className="text-2xl font-bold text-slate-900">Active Sessions</h2>
-          <p className="text-slate-500 text-sm">Monitor and manage the devices currently logged into your account.</p>
+    <motion.div 
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="space-y-10"
+    >
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 border-b border-slate-50 pb-8">
+        <div className="space-y-2">
+          <h2 className="text-3xl font-bold tracking-tight text-slate-900">Active Devices</h2>
+          <p className="text-slate-500 text-sm font-medium tracking-wide">Monitor and manage the hardware currently signed into your account.</p>
         </div>
         {otherSessions.length > 0 && (
           <Button 
             variant="outline" 
-            className="text-red-600 hover:bg-red-50 hover:border-red-100 border-red-50 text-xs font-bold px-4"
+            className="text-rose-600 hover:bg-rose-50 hover:border-rose-100 border-rose-100 text-[10px] font-black uppercase tracking-[0.2em] px-6"
             onClick={handleRevokeOthers}
             isLoading={revokingOthers}
           >
-            Revoke All Others
+            Revoke Others
           </Button>
         )}
       </div>
 
-      <div className="grid gap-4">
-        {sessions.map((session) => {
-          const Icon = getDeviceIcon(session.device);
-          return (
-            <div 
-              key={session.session_id}
-              className={`group relative flex flex-col md:flex-row md:items-center justify-between gap-6 p-6 rounded-[24px] border-2 transition-all ${
-                session.is_current 
-                  ? 'bg-sky-50/30 border-sky-100 hover:border-sky-200' 
-                  : 'bg-white border-slate-100 hover:border-slate-200 shadow-sm hover:shadow-md'
-              }`}
-            >
-              <div className="flex items-center gap-5">
-                <div className={`h-14 w-14 rounded-2xl flex items-center justify-center transition-colors ${
-                  session.is_current ? 'bg-sky-100 text-sky-600' : 'bg-slate-50 text-slate-400 group-hover:bg-slate-100 group-hover:text-slate-900'
-                }`}>
-                  <Icon size={28} />
-                </div>
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <p className="font-bold text-slate-900">{session.device || "Unknown Device"}</p>
-                    {session.is_current && (
-                      <span className="flex items-center gap-1 bg-sky-200/50 text-sky-700 text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full">
-                        <ShieldCheck size={10} /> This Device
+      <div className="grid gap-6">
+        <AnimatePresence mode="popLayout">
+          {sessions.map((session) => {
+            const Icon = getDeviceIcon(session.device);
+            return (
+              <motion.div 
+                layout
+                key={session.session_id}
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                className={cn(
+                  "group relative flex flex-col md:flex-row md:items-center justify-between gap-6 p-6 lg:p-8 rounded-[32px] border transition-all",
+                  session.is_current 
+                    ? "bg-slate-900 border-slate-900 text-white shadow-2xl shadow-slate-900/20" 
+                    : "bg-white border-slate-50 hover:border-slate-200 shadow-sm hover:shadow-xl hover:shadow-slate-200/50"
+                )}
+              >
+                <div className="flex items-center gap-6">
+                  <div className={cn(
+                    "h-16 w-16 rounded-[20px] flex items-center justify-center transition-all duration-500",
+                    session.is_current ? "bg-white/10 text-white" : "bg-slate-50 text-slate-400 group-hover:bg-slate-900 group-hover:text-white"
+                  )}>
+                    <Icon size={32} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <div className="flex items-center gap-3">
+                      <p className={cn("text-lg font-bold tracking-tight", session.is_current ? "text-white" : "text-slate-900")}>
+                        {session.device || "Secured Device"}
+                      </p>
+                      {session.is_current && (
+                        <span className="flex items-center gap-1.5 bg-emerald-500 text-white text-[9px] font-black uppercase tracking-[0.25em] px-2.5 py-1 rounded-full">
+                          <Check size={10} strokeWidth={4} /> Current
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex flex-wrap items-center gap-x-6 gap-y-1 text-xs">
+                      <span className={cn("flex items-center gap-2", session.is_current ? "text-slate-400" : "text-slate-500")}>
+                        <MapPin size={14} className={session.is_current ? "text-slate-600" : "text-slate-300"} />
+                        {session.city ? `${session.city}, ${session.country_code}` : "Private Location"}
                       </span>
-                    )}
-                  </div>
-                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-slate-500">
-                    <span className="flex items-center gap-1.5">
-                      <MapPin size={14} className="text-slate-300" />
-                      {session.city ? `${session.city}, ${session.country_code}` : "Location Unknown"}
-                    </span>
-                    <span className="flex items-center gap-1.5">
-                      <Clock size={14} className="text-slate-300" />
-                      Last seen {formatTime(session.last_seen_at)}
-                    </span>
+                      <span className={cn("flex items-center gap-2", session.is_current ? "text-slate-400" : "text-slate-500")}>
+                        <Clock size={14} className={session.is_current ? "text-slate-600" : "text-slate-300"} />
+                        {session.is_current ? "Active now" : `Seen ${formatTime(session.last_seen_at)}`}
+                      </span>
+                    </div>
                   </div>
                 </div>
-              </div>
 
-              {!session.is_current && (
-                <button 
-                  onClick={() => handleRevoke(session.session_id)}
-                  disabled={revokingId === session.session_id}
-                  className="flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-slate-50 text-slate-600 hover:bg-red-50 hover:text-red-600 font-bold text-sm transition-all disabled:opacity-50"
-                >
-                  {revokingId === session.session_id ? (
-                    <div className="h-4 w-4 border-2 border-red-500/20 border-t-red-500 rounded-full animate-spin" />
-                  ) : (
-                    <Trash2 size={16} />
-                  )}
-                  Revoke
-                </button>
-              )}
-            </div>
-          );
-        })}
+                {!session.is_current && (
+                  <button 
+                    onClick={() => handleRevoke(session.session_id)}
+                    disabled={revokingId === session.session_id}
+                    className="flex h-12 w-full animate-fade-in-up md:w-auto items-center justify-center gap-2 px-8 rounded-2xl bg-slate-50 text-slate-600 hover:bg-rose-50 hover:text-rose-600 font-bold text-[11px] uppercase tracking-widest transition-all disabled:opacity-50"
+                  >
+                    {revokingId === session.session_id ? (
+                      <div className="h-4 w-4 border-2 border-rose-500/20 border-t-rose-500 rounded-full animate-spin" />
+                    ) : (
+                      <>
+                        <Trash2 size={16} />
+                        Terminate
+                      </>
+                    )}
+                  </button>
+                )}
+              </motion.div>
+            );
+          })}
+        </AnimatePresence>
       </div>
       
       {sessions.length === 0 && !loading && (
-        <div className="flex flex-col items-center justify-center py-20 text-center space-y-4">
-          <div className="h-20 w-20 bg-slate-50 rounded-3xl flex items-center justify-center text-slate-200">
-             <Activity size={40} />
+        <div className="flex flex-col items-center justify-center py-20 text-center space-y-6">
+          <div className="h-24 w-24 bg-slate-50 rounded-[32px] flex items-center justify-center text-slate-200">
+             <Activity size={48} />
           </div>
-          <p className="text-slate-500 font-medium tracking-tight">No active sessions found. This is unusual.</p>
+          <div className="space-y-2">
+            <h3 className="text-xl font-bold text-slate-900">Zero Trust Secured</h3>
+            <p className="text-slate-400 text-sm font-medium tracking-tight">All sessions have been purged. You are currently isolated.</p>
+          </div>
         </div>
       )}
-    </div>
+    </motion.div>
   );
 }

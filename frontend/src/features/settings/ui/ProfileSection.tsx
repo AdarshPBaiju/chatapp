@@ -1,10 +1,11 @@
 import { useState, useEffect } from "react";
-import { User, Mail, Phone, Camera } from "lucide-react";
-
+import { User, Mail, Phone, Camera, Check, Info } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 
 import { Button, Input } from "@/shared/ui/FormControls";
 import { fetchProfile, updateProfile } from "../api";
 import { UserProfile } from "../types";
+import { cn } from "@/shared/lib/utils";
 
 export function ProfileSection() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -18,6 +19,13 @@ export function ProfileSection() {
   useEffect(() => {
     loadProfile();
   }, []);
+
+  useEffect(() => {
+    if (success) {
+      const timer = setTimeout(() => setSuccess(false), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [success]);
 
   async function loadProfile() {
     try {
@@ -80,14 +88,32 @@ export function ProfileSection() {
     }
   }
 
-  if (isLoading) return <div className="p-8 text-center text-slate-500">Loading profile...</div>;
-  if (!profile) return <div className="p-8 text-center text-red-500">Error loading profile data.</div>;
+  if (isLoading) return (
+    <div className="flex flex-col items-center justify-center p-12 space-y-4">
+      <div className="h-10 w-10 border-4 border-slate-100 border-t-slate-900 rounded-full animate-spin" />
+      <p className="text-sm font-bold tracking-widest text-slate-400 uppercase">Synchronizing...</p>
+    </div>
+  );
+
+  if (!profile) return (
+    <div className="p-8 text-center text-rose-500 font-bold">
+      Critical error loading identity data.
+    </div>
+  );
 
   return (
-    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <div className="flex flex-col md:flex-row md:items-center gap-6 pb-8 border-b border-slate-100">
+    <motion.div 
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="space-y-12"
+    >
+      {/* Profile Header Card */}
+      <div className="flex flex-col md:flex-row items-start md:items-center gap-8 group">
         <div className="relative group">
-          <div className="h-24 w-24 rounded-full bg-slate-100 border-4 border-white shadow-lg flex items-center justify-center overflow-hidden transition-transform duration-300 group-hover:scale-105">
+          <motion.div 
+            whileHover={{ scale: 1.05 }}
+            className="h-32 w-32 rounded-[32px] bg-slate-50 border-4 border-white shadow-2xl flex items-center justify-center overflow-hidden transition-all duration-500 group-hover:shadow-slate-200"
+          >
             {previewUrl || profile.profile_picture ? (
               <img 
                 src={previewUrl || profile.profile_picture || ""} 
@@ -95,18 +121,18 @@ export function ProfileSection() {
                 className="h-full w-full object-cover" 
               />
             ) : (
-              <User size={40} className="text-slate-400" />
+              <User size={48} className="text-slate-300" />
             )}
             
             {/* Upload Overlay */}
             <label 
               htmlFor="avatar-upload" 
-              className="absolute inset-0 bg-slate-900/40 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+              className="absolute inset-0 bg-slate-900/60 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer backdrop-blur-[2px]"
             >
-              <Camera size={24} className="text-white mb-1" />
-              <span className="text-[10px] text-white font-bold uppercase tracking-wider">Change</span>
+              <Camera size={28} className="text-white mb-2" />
+              <span className="text-[10px] text-white font-bold uppercase tracking-[0.2em]">Change</span>
             </label>
-          </div>
+          </motion.div>
           
           <input 
             id="avatar-upload"
@@ -117,78 +143,112 @@ export function ProfileSection() {
           />
         </div>
         
-        <div className="space-y-1">
-          <h2 className="text-2xl font-bold text-slate-900">{profile.full_name || "New User"}</h2>
-          <p className="text-slate-500">{profile.email}</p>
+        <div className="space-y-2">
+          <h2 className="text-4xl font-bold tracking-tight text-slate-900">{profile.full_name || "Guest Identity"}</h2>
+          <div className="flex items-center gap-2 text-slate-500">
+            <Mail size={16} />
+            <span className="text-sm font-medium tracking-wide">{profile.email}</span>
+            <div className="h-4 w-px bg-slate-200 mx-2" />
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-emerald-600">
+              <Check size={10} /> Verified
+            </span>
+          </div>
         </div>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-6">
-        <div className="grid md:grid-cols-2 gap-6">
-          <div className="space-y-2">
-            <label className="text-sm font-semibold text-slate-700">Full Name</label>
-            <Input
-              icon={<User size={18} />}
-              value={profile.full_name}
-              onChange={(e) => setProfile({ ...profile, full_name: e.target.value })}
-              placeholder="Your full name"
-            />
-          </div>
-          <div className="space-y-2">
-            <label className="text-sm font-semibold text-slate-700">Phone Number</label>
-            <Input
-              icon={<Phone size={18} />}
-              value={profile.phone_number || ""}
-              onChange={(e) => setProfile({ ...profile, phone_number: e.target.value })}
-              placeholder="+1 234 567 890"
-            />
-          </div>
-        </div>
-
-        <div className="space-y-2">
-          <label className="text-sm font-semibold text-slate-700">Email Address (Primary)</label>
+      {/* Profile Form */}
+      <form onSubmit={handleSubmit} className="space-y-10">
+        <div className="grid md:grid-cols-2 gap-8">
           <Input
-            icon={<Mail size={18} />}
-            value={profile.email}
-            disabled
-            className="bg-slate-50 text-slate-500 cursor-not-allowed"
+            label="Legal Full Name"
+            icon={<User size={18} />}
+            value={profile.full_name}
+            onChange={(e) => setProfile({ ...profile, full_name: e.target.value })}
+            placeholder="Johnathan Doe"
+            required
           />
-          <p className="text-xs text-slate-400">Your email address is verified and locked to your identity.</p>
-        </div>
-
-        <div className="space-y-2">
-          <label className="text-sm font-semibold text-slate-700">Bio</label>
-          <textarea
-            value={profile.bio}
-            onChange={(e) => setProfile({ ...profile, bio: e.target.value })}
-            placeholder="Tell us about yourself..."
-            className="w-full min-h-[120px] p-4 bg-white border-2 border-slate-100 rounded-xl focus:border-sky-500 focus:ring-4 focus:ring-sky-500/10 transition-all outline-none resize-none"
+          <Input
+            label="Mobile Identity"
+            icon={<Phone size={18} />}
+            value={profile.phone_number || ""}
+            onChange={(e) => setProfile({ ...profile, phone_number: e.target.value })}
+            placeholder="+1 (555) 000-0000"
           />
         </div>
 
-        <div className="space-y-2">
-          <label className="text-sm font-semibold text-slate-700">Gender</label>
-          <select
-            value={profile.gender}
-            onChange={(e) => setProfile({ ...profile, gender: e.target.value as any })}
-            className="w-full h-12 px-4 bg-white border-2 border-slate-100 rounded-xl focus:border-sky-500 focus:ring-4 focus:ring-sky-500/10 transition-all outline-none"
+        <div className="space-y-3">
+          <label className="pl-1 text-[11px] font-bold uppercase tracking-[0.2em] text-slate-400">Account Bio</label>
+          <div className="relative group">
+            <textarea
+              value={profile.bio}
+              onChange={(e) => setProfile({ ...profile, bio: e.target.value })}
+              placeholder="Who are you in the digital world?"
+              className="w-full min-h-[140px] p-5 bg-white border border-slate-100 rounded-[24px] focus:border-slate-900 focus:ring-4 focus:ring-slate-900/5 transition-all outline-none resize-none text-slate-950 placeholder:text-slate-400 text-sm leading-relaxed"
+            />
+            <div className="absolute top-5 right-5 text-slate-300 group-focus-within:text-slate-900 transition-colors">
+              <Info size={18} />
+            </div>
+          </div>
+        </div>
+
+        <div className="space-y-3">
+           <label className="pl-1 text-[11px] font-bold uppercase tracking-[0.2em] text-slate-400">Gender Identity</label>
+           <div className="grid grid-cols-3 gap-3">
+              {(['male', 'female', 'other'] as const).map((g) => (
+                <button
+                  key={g}
+                  type="button"
+                  onClick={() => setProfile({ ...profile, gender: g })}
+                  className={cn(
+                    "rounded-2xl border-2 py-4 text-xs font-bold uppercase tracking-widest transition-all",
+                    profile.gender === g 
+                      ? "border-slate-900 bg-slate-900 text-white shadow-xl shadow-slate-900/20" 
+                      : "border-slate-50 bg-slate-50 text-slate-400 hover:border-slate-200 hover:bg-white hover:text-slate-900"
+                  )}
+                >
+                  {g}
+                </button>
+              ))}
+           </div>
+        </div>
+
+        <div className="pt-6 flex items-center justify-between">
+          <div className="hidden sm:block">
+             <AnimatePresence>
+               {success && (
+                 <motion.p 
+                   initial={{ opacity: 0, x: -20 }}
+                   animate={{ opacity: 1, x: 0 }}
+                   exit={{ opacity: 0, x: -20 }}
+                   className="text-sm font-bold text-emerald-600 flex items-center gap-2"
+                 >
+                   <Check size={18} className="p-0.5 rounded-full bg-emerald-100" />
+                   Changes deployed successfully.
+                 </motion.p>
+               )}
+               {error && (
+                 <motion.p 
+                   initial={{ opacity: 0, x: -20 }}
+                   animate={{ opacity: 1, x: 0 }}
+                   exit={{ opacity: 0, x: -20 }}
+                   className="text-sm font-bold text-rose-500"
+                 >
+                   {error}
+                 </motion.p>
+               )}
+             </AnimatePresence>
+          </div>
+
+          <Button
+            type="submit" 
+            isLoading={isSaving} 
+            disabled={isSaving} 
+            className="w-full sm:w-auto px-12 py-5"
           >
-            <option value="">Select Gender</option>
-            <option value="male">Male</option>
-            <option value="female">Female</option>
-            <option value="other">Other</option>
-          </select>
-        </div>
-
-        {error && <p className="text-sm font-medium text-red-500">{error}</p>}
-        {success && <p className="text-sm font-medium text-green-500">Profile updated successfully!</p>}
-
-        <div className="pt-4">
-          <Button type="submit" isLoading={isSaving} disabled={isSaving} className="px-8">
-            Save Changes
+            Update Identity
           </Button>
         </div>
       </form>
-    </div>
+    </motion.div>
   );
 }

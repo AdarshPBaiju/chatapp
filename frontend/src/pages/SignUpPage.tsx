@@ -101,7 +101,7 @@ export function SignUpPage() {
         confirm_password: confirmPassword,
       });
 
-      navigate(result.is_restricted ? "/session-gate" : "/dashboard");
+      navigate(result.is_restricted ? "/auth/active-sessions" : "/settings/profile");
     } catch (err) {
       setError(readApiMessage(err, "Failed to complete sign up."));
     } finally {
@@ -112,7 +112,7 @@ export function SignUpPage() {
   const loginFooter = (
     <span className="flex flex-wrap items-center gap-2 text-sm">
       <span className="text-slate-600">Already have a ChitChat account?</span>
-      <Link to="/login" className="font-medium text-sky-700 transition-colors hover:text-sky-800">
+      <Link to="/auth/login" className="font-bold text-slate-900 transition-colors hover:text-slate-800">
         Log in
       </Link>
     </span>

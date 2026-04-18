@@ -1,112 +1,152 @@
-import { useState } from "react";
-import { User, Shield, Activity, Bell, LogOut, ChevronRight } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { User, Shield, Activity, Bell, LogOut, ChevronRight, ArrowLeft } from "lucide-react";
+import { useNavigate, useLocation, Outlet, NavLink } from "react-router-dom";
+import { motion, AnimatePresence } from "framer-motion";
 
 import { logoutFlow } from "@/features/sessions/flows";
-import { ProfileSection } from "@/features/settings/ui/ProfileSection";
-import { SecuritySection } from "@/features/settings/ui/SecuritySection";
-import { ActiveSessionsSection } from "@/features/settings/ui/ActiveSessionsSection";
+import { cn } from "@/shared/lib/utils";
 
-type Tab = "profile" | "security" | "sessions" | "notifications";
+const tabs = [
+  { id: "profile", label: "Profile", icon: User, path: "/settings/profile", desc: "Your identity & contact details" },
+  { id: "security", label: "Security", icon: Shield, path: "/settings/security", desc: "Protection & access control" },
+  { id: "devices", label: "Devices", icon: Activity, path: "/settings/devices", desc: "Active logins & session safety" },
+  { id: "notifications", label: "Alerts", icon: Bell, path: "/settings/notifications", desc: "System & message updates" },
+] as const;
 
 export function SettingsPage() {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<Tab>("profile");
+  const location = useLocation();
+  const [isMobileMenu, setIsMobileMenu] = useState(true);
+
+  // Sync mobile menu state with route depth
+  useEffect(() => {
+    const isRootSettings = location.pathname === "/settings" || location.pathname === "/settings/";
+    setIsMobileMenu(isRootSettings);
+  }, [location.pathname]);
 
   async function handleLogout() {
     await logoutFlow();
-    navigate("/login");
+    navigate("/auth/login");
   }
 
-  const tabs = [
-    { id: "profile", label: "Profile", icon: User, desc: "Personal information and bio" },
-    { id: "security", label: "Security", icon: Shield, desc: "Password and 2FA settings" },
-    { id: "sessions", label: "Active Sessions", icon: Activity, desc: "Manage your logged-in devices" },
-    { id: "notifications", label: "Notifications", icon: Bell, desc: "Manage alerts and updates" },
-  ] as const;
+  const activeTab = tabs.find(t => location.pathname.startsWith(t.path)) || tabs[0];
 
   return (
-    <div className="min-h-screen bg-slate-50/50">
-      {/* Settings Header */}
-      <header className="bg-white border-b border-slate-100">
-        <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="h-8 w-8 bg-slate-950 text-white rounded-lg flex items-center justify-center font-bold">C</div>
-            <span className="font-bold text-slate-900">Settings</span>
+    <div className="flex min-h-screen bg-white font-sans text-slate-950 selection:bg-slate-900 selection:text-white">
+      {/* Sidebar - Desktop (Integrated) & Mobile (List) */}
+      <aside 
+        className={cn(
+          "fixed inset-y-0 left-0 z-40 w-full border-r border-slate-100 bg-white transition-all duration-500 lg:static lg:w-[380px] lg:translate-x-0",
+          !isMobileMenu && "-translate-x-full lg:translate-x-0"
+        )}
+      >
+        <div className="flex h-full flex-col">
+          {/* Account Header */}
+          <div className="p-8 pb-4 lg:p-10 lg:pb-6">
+            <div className="mb-10 flex items-center justify-between">
+               <button 
+                 onClick={() => navigate("/settings/profile")}
+                 className="group flex h-10 w-10 items-center justify-center rounded-xl bg-slate-50 transition-colors hover:bg-slate-900 hover:text-white"
+               >
+                 <ArrowLeft size={20} />
+               </button>
+               <span className="text-[11px] font-bold uppercase tracking-[0.3em] text-slate-400">Account Control</span>
+            </div>
+            <h1 className="text-4xl font-bold tracking-tight text-slate-950">Settings</h1>
+            <p className="mt-2 text-sm font-medium text-slate-500">Manage your digital presence & safety.</p>
           </div>
-          <button 
-            onClick={() => navigate("/dashboard")}
-            className="text-sm font-medium text-slate-500 hover:text-slate-900 transition-colors"
-          >
-            Back to App
-          </button>
-        </div>
-      </header>
 
-      <main className="max-w-7xl mx-auto px-4 py-8 md:py-12">
-        <div className="flex flex-col lg:flex-row gap-8">
-          {/* Navigation Sidebar */}
-          <aside className="w-full lg:w-72 space-y-2">
-            <div className="px-4 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em]">Account Hub</div>
+          {/* Navigation Tabs */}
+          <nav className="flex-1 space-y-1 p-4 lg:p-6">
             {tabs.map((tab) => {
               const Icon = tab.icon;
+              const isActive = location.pathname.startsWith(tab.path);
+              
               return (
-                <button
+                <NavLink
                   key={tab.id}
-                  onClick={() => setActiveTab(tab.id as Tab)}
-                  className={`w-full flex items-center justify-between p-4 rounded-2xl transition-all duration-300 group ${
-                    activeTab === tab.id 
-                      ? 'bg-white shadow-xl shadow-slate-200/50 border-2 border-slate-100' 
-                      : 'hover:bg-white/60'
-                  }`}
+                  to={tab.path}
+                  className={({ isActive: linkActive }) => cn(
+                    "group flex items-center justify-between rounded-2xl p-4 transition-all duration-300",
+                    linkActive 
+                      ? "bg-slate-900 text-white shadow-2xl shadow-slate-900/20" 
+                      : "text-slate-500 hover:bg-slate-50 hover:text-slate-900"
+                  )}
                 >
-                  <div className="flex items-center gap-3">
-                    <div className={`h-10 w-10 rounded-xl flex items-center justify-center transition-colors ${
-                      activeTab === tab.id ? 'bg-sky-50 text-sky-600' : 'bg-slate-100 text-slate-500 group-hover:bg-white group-hover:text-slate-900'
-                    }`}>
-                      <Icon size={20} />
+                  <div className="flex items-center gap-4">
+                    <div className={cn(
+                      "flex h-12 w-12 items-center justify-center rounded-xl transition-colors",
+                      isActive ? "bg-white/10 text-white" : "bg-slate-100 text-slate-500 group-hover:bg-white group-hover:shadow-sm"
+                    )}>
+                      <Icon size={22} />
                     </div>
                     <div className="text-left">
-                      <p className={`font-bold text-sm ${activeTab === tab.id ? 'text-slate-900' : 'text-slate-600 group-hover:text-slate-900'}`}>
-                        {tab.label}
+                      <p className="text-sm font-bold tracking-tight">{tab.label}</p>
+                      <p className={cn(
+                        "text-[10px] font-medium tracking-wide",
+                        isActive ? "text-slate-400" : "text-slate-400 group-hover:text-slate-500"
+                      )}>
+                        {tab.desc}
                       </p>
                     </div>
                   </div>
-                  {activeTab === tab.id && <ChevronRight size={16} className="text-slate-400" />}
-                </button>
+                  <ChevronRight size={16} className={cn("transition-transform", isActive ? "translate-x-1" : "opacity-0 group-hover:opacity-100")} />
+                </NavLink>
               );
             })}
+          </nav>
 
-            <div className="pt-8 border-t border-slate-200 mt-8">
-              <button 
-                onClick={handleLogout}
-                className="w-full flex items-center gap-3 p-4 rounded-2xl text-red-500 hover:bg-red-50 transition-all font-bold text-sm"
-              >
-                <div className="h-10 w-10 rounded-xl bg-red-100/50 flex items-center justify-center">
-                  <LogOut size={20} />
-                </div>
-                Logout Session
-              </button>
-            </div>
-          </aside>
-
-          {/* Content Area */}
-          <section className="flex-1 bg-white border border-slate-100 rounded-[32px] shadow-sm p-6 md:p-10 min-h-[600px]">
-            {activeTab === "profile" && <ProfileSection />}
-            {activeTab === "security" && <SecuritySection />}
-            {activeTab === "sessions" && <ActiveSessionsSection />}
-            {activeTab === "notifications" && (
-              <div className="flex flex-col items-center justify-center h-full text-center space-y-4">
-                <div className="h-16 w-16 bg-slate-50 text-slate-400 rounded-2xl flex items-center justify-center">
-                  <Bell size={32} />
-                </div>
-                <div className="space-y-1">
-                  <h3 className="font-bold text-slate-900 text-xl">Communication Center</h3>
-                  <p className="text-slate-500 max-w-xs mx-auto">Manage how we keep you updated on your team's progress. Coming soon.</p>
-                </div>
+          {/* Logout Section */}
+          <div className="mt-auto p-4 lg:p-6 border-t border-slate-50">
+            <button 
+              onClick={handleLogout}
+              className="group flex w-full items-center gap-4 rounded-2xl p-4 text-rose-500 transition-all hover:bg-rose-50"
+            >
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-rose-50 text-rose-600 transition-colors group-hover:bg-rose-100">
+                <LogOut size={22} />
               </div>
-            )}
-          </section>
+              <span className="text-sm font-bold tracking-tight text-rose-600">Secure Logout</span>
+            </button>
+          </div>
+        </div>
+      </aside>
+
+      {/* Main Content Area */}
+      <main 
+        className={cn(
+          "fixed inset-0 z-50 flex h-full w-full flex-col bg-slate-50 transition-all duration-500 lg:static lg:z-auto lg:flex-1 lg:translate-x-0",
+          isMobileMenu && "translate-x-full lg:translate-x-0"
+        )}
+      >
+        {/* Sub-page Header (Mobile only) */}
+        <div className="flex items-center gap-4 border-b border-white bg-white/80 p-6 backdrop-blur-xl lg:hidden">
+          <button 
+            onClick={() => navigate("/settings")}
+            className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-50"
+          >
+            <ArrowLeft size={20} />
+          </button>
+          <div className="flex-1">
+            <h2 className="text-lg font-bold tracking-tight">{activeTab.label}</h2>
+          </div>
+        </div>
+
+        {/* Content Container */}
+        <div className="flex-1 overflow-y-auto custom-scrollbar">
+          <div className="p-6 py-10 lg:p-12 xl:p-16 w-full">
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={location.pathname}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.98 }}
+                transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+                className="w-full rounded-[40px] border border-white bg-white p-8 shadow-2xl shadow-slate-200/50 lg:p-14"
+              >
+                 <Outlet />
+              </motion.div>
+            </AnimatePresence>
+          </div>
         </div>
       </main>
     </div>

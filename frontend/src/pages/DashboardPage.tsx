@@ -10,7 +10,7 @@ export function DashboardPage() {
 
   async function onLogout() {
     await logoutFlow();
-    navigate("/login");
+    navigate("/auth/login");
   }
 
   return (

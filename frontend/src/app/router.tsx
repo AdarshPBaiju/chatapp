@@ -7,31 +7,37 @@ import { PasswordResetPage } from "@/pages/PasswordResetPage";
 import { SessionGatePage } from "@/pages/SessionGatePage";
 import { SignUpPage } from "@/pages/SignUpPage";
 import { SettingsPage } from "@/pages/SettingsPage";
+import { ErrorPage } from "@/pages/ErrorPage";
 import { AuthShell } from "@/shared/ui/AuthShell";
+
+// Features ui components for nested routing
+import { ProfileSection } from "@/features/settings/ui/ProfileSection";
+import { SecuritySection } from "@/features/settings/ui/SecuritySection";
+import { ActiveSessionsSection } from "@/features/settings/ui/ActiveSessionsSection";
 
 function RootRedirect() {
   const status = useAuthStore((state) => state.status);
 
-  if (status === "full") return <Navigate to="/dashboard" replace />;
-  if (status === "restricted") return <Navigate to="/session-gate" replace />;
-  if (status === "pending_verification") return <Navigate to="/otp" replace />;
-  return <Navigate to="/login" replace />;
+  if (status === "full") return <Navigate to="/settings/profile" replace />;
+  if (status === "restricted") return <Navigate to="/auth/active-sessions" replace />;
+  if (status === "pending_verification") return <Navigate to="/auth/verify" replace />;
+  return <Navigate to="/auth/login" replace />;
 }
 
 function FullAuthGuard({ children }: { children: JSX.Element }) {
   const status = useAuthStore((state) => state.status);
-  if (status === "restricted") return <Navigate to="/session-gate" replace />;
+  if (status === "restricted") return <Navigate to="/auth/active-sessions" replace />;
   if (status !== "full") {
-    return <Navigate to="/login" replace />;
+    return <Navigate to="/auth/login" replace />;
   }
   return children;
 }
 
 function RestrictedGuard({ children }: { children: JSX.Element }) {
   const status = useAuthStore((state) => state.status);
-  if (status === "full") return <Navigate to="/dashboard" replace />;
+  if (status === "full") return <Navigate to="/settings/profile" replace />;
   if (status !== "restricted") {
-    return <Navigate to="/login" replace />;
+    return <Navigate to="/auth/login" replace />;
   }
   return children;
 }
@@ -39,29 +45,37 @@ function RestrictedGuard({ children }: { children: JSX.Element }) {
 function OtpGuard({ children }: { children: JSX.Element }) {
   const status = useAuthStore((state) => state.status);
   if (status !== "pending_verification") {
-    return <Navigate to="/login" replace />;
+    return <Navigate to="/auth/login" replace />;
   }
   return children;
 }
 
 function PublicGuard({ children }: { children: JSX.Element }) {
   const status = useAuthStore((state) => state.status);
-  if (status === "full") return <Navigate to="/dashboard" replace />;
-  if (status === "restricted") return <Navigate to="/session-gate" replace />;
-  if (status === "pending_verification") return <Navigate to="/otp" replace />;
+  if (status === "full") return <Navigate to="/settings/profile" replace />;
+  if (status === "restricted") return <Navigate to="/auth/active-sessions" replace />;
+  if (status === "pending_verification") return <Navigate to="/auth/verify" replace />;
   return children;
 }
 
 export const appRouter = createBrowserRouter([
-  { path: "/", element: <RootRedirect /> },
+  { 
+    path: "/", 
+    element: <RootRedirect />,
+    errorElement: <ErrorPage />,
+  },
+  { path: "/dashboard", element: <Navigate to="/settings/profile" replace /> },
+  { path: "/app", element: <Navigate to="/settings/profile" replace /> },
+  { path: "/account", element: <Navigate to="/settings/profile" replace /> },
   {
     element: <AuthShell />,
+    errorElement: <ErrorPage />,
     children: [
-      { path: "/login", element: <PublicGuard><LoginPage /></PublicGuard> },
-      { path: "/signup", element: <PublicGuard><SignUpPage /></PublicGuard> },
-      { path: "/forgot-password", element: <PublicGuard><PasswordResetPage /></PublicGuard> },
+      { path: "/auth/login", element: <PublicGuard><LoginPage /></PublicGuard> },
+      { path: "/auth/join", element: <PublicGuard><SignUpPage /></PublicGuard> },
+      { path: "/auth/reset-password", element: <PublicGuard><PasswordResetPage /></PublicGuard> },
       {
-        path: "/otp",
+        path: "/auth/verify",
         element: (
           <OtpGuard>
             <OtpPage />
@@ -69,7 +83,7 @@ export const appRouter = createBrowserRouter([
         ),
       },
       {
-        path: "/session-gate",
+        path: "/auth/active-sessions",
         element: (
           <RestrictedGuard>
             <SessionGatePage />
@@ -79,19 +93,19 @@ export const appRouter = createBrowserRouter([
     ],
   },
   {
-    path: "/dashboard",
-    element: (
-      <FullAuthGuard>
-        <SettingsPage />
-      </FullAuthGuard>
-    ),
-  },
-  {
     path: "/settings",
+    errorElement: <ErrorPage />,
     element: (
       <FullAuthGuard>
         <SettingsPage />
       </FullAuthGuard>
     ),
+    children: [
+      { path: "profile", element: <ProfileSection /> },
+      { path: "security", element: <SecuritySection /> },
+      { path: "devices", element: <ActiveSessionsSection /> },
+      { path: "notifications", element: <div className="p-20 text-center font-bold text-slate-300 uppercase tracking-widest text-xs">Access Restricted • Coming Soon</div> },
+      { path: "", element: <Navigate to="profile" replace /> },
+    ],
   },
 ]);
