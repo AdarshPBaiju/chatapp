@@ -71,6 +71,8 @@ class AuthEngine:
                 cls._get_location_from_ip(context.ip_address)
             )
 
+            cls._revoke_existing_device_sessions(user_id, context)
+
             now_ts = cls._now_ts()
             refresh_expiry_ts = (
                 now_ts + settings.AUTH_ENGINE_SETTINGS["REFRESH_TOKEN_LIFETIME"]
@@ -250,6 +252,10 @@ class AuthEngine:
             location = cls._get_location_from_ip(context.ip_address)
 
             user = CustomUser.objects.get(id=user_id, is_active=True)
+
+            # Pre-emptively revoke other sessions on the same device to prevent duplicates.
+            cls._revoke_existing_device_sessions(user_id, context, exclude_session_id=session_id)
+
             current_session = cls.resolve_current_session(
                 user_id=user_id,
                 session_id=session_id,
@@ -1025,6 +1031,46 @@ class AuthEngine:
             if session:
                 return session
         return None
+
+    @classmethod
+    def _revoke_existing_device_sessions(
+        cls, user_id: str, context: Any, exclude_session_id: str | None = None
+    ) -> None:
+        """
+        Finds and revokes any existing active sessions that match the current
+        hardware context (fingerprint or device entropy). Ensures that
+        only one active session exists per device identity.
+        """
+        existing = AuthSession.objects.filter(
+            user_id=user_id,
+            is_active=True,
+            expires_at__gt=dj_timezone.now() - cls.ACTIVITY_GRACE_PERIOD,
+        )
+
+        if exclude_session_id:
+            existing = existing.exclude(session_id=exclude_session_id)
+
+        target_sessions = []
+        if context.device_entropy:
+            target_sessions = list(existing.filter(device_entropy=context.device_entropy))
+        elif context.fingerprint:
+            target_sessions = list(existing.filter(fingerprint=context.fingerprint))
+
+        for session in target_sessions:
+            logger.info(
+                "preemptive_session_revocation",
+                extra={
+                    "user_id": user_id,
+                    "session_id": str(session.session_id),
+                    "reason": "device_identity_overlap",
+                },
+            )
+            cls.logout(
+                user_id=user_id,
+                access_jti=session.access_jti,
+                refresh_jti=session.refresh_jti,
+                session_id=str(session.session_id),
+            )
 
     @classmethod
     def _build_restricted_response(
