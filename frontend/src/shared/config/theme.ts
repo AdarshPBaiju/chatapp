@@ -1,31 +1,56 @@
 export const themeConfig = {
   colors: {
     primary: {
-      DEFAULT: "#7c5dfa",
-      hover: "#9277ff",
-      foreground: "#ffffff",
+      light: "#0f172a", // Slate-900
+      dark: "#10b981",  // Emerald-500
+      foreground: {
+        light: "#ffffff",
+        dark: "#020617",
+      }
     },
     background: {
-      dark: "#1e1b29",
-      light: "#f8f8fb",
-      card: {
-        dark: "#252136",
-        light: "#ffffff",
+      light: "#ffffff",
+      dark: "#020617", // Near black slate
+      subtle: {
+        light: "#f8fafc", // Slate-50
+        dark: "#0f172a",  // Slate-900
+      }
+    },
+    card: {
+      light: "#ffffff",
+      dark: "#0f172a",
+      border: {
+        light: "#f1f5f9", // Slate-100
+        dark: "#1e293b",  // Slate-800
       }
     },
     text: {
-      primary: {
-        dark: "#ffffff",
-        light: "#0c0e1e",
+      main: {
+        light: "#020617", // Slate-950
+        dark: "#f8fafc",  // Slate-50
       },
-      secondary: {
-        dark: "#dfe3fa",
-        light: "#7e88c3",
+      muted: {
+        light: "#64748b", // Slate-500
+        dark: "#94a3b8",  // Slate-400
+      },
+      accent: {
+        light: "#0f172a",
+        dark: "#10b981",
+      }
+    },
+    input: {
+      bg: {
+        light: "#ffffff",
+        dark: "#0f172a",
+      },
+      border: {
+        light: "#f1f5f9",
+        dark: "#1e293b",
       }
     }
   },
   typography: {
-    fontFamily: "Inter, system-ui, sans-serif",
+    fontFamily: '"Outfit", "Inter", system-ui, sans-serif',
   }
 };
 

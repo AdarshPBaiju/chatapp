@@ -170,8 +170,8 @@ export function SignUpPage() {
 
   const loginFooter = (
     <span className="flex flex-wrap items-center gap-2 text-sm">
-      <span className="text-slate-600">Already have a ChitChat account?</span>
-      <Link to="/auth/login" className="font-bold text-slate-950 transition-colors hover:underline">
+      <span className="text-muted-foreground">Already have a ChitChat account?</span>
+      <Link to="/auth/login" className="font-bold text-foreground transition-colors hover:underline">
         Log in
       </Link>
     </span>
@@ -210,9 +210,9 @@ export function SignUpPage() {
 
       {step === "OTP" && (
         <form onSubmit={handleVerify} noValidate className="space-y-8">
-          <div className="flex flex-col items-center gap-1 rounded-[24px] border border-slate-200 bg-white/50 p-6 text-center backdrop-blur-sm">
-            <span className="text-[11px] font-bold uppercase tracking-[0.25em] text-slate-400">Sent to</span>
-            <span className="font-bold text-slate-950">{values.email}</span>
+          <div className="flex flex-col items-center gap-1 rounded-[24px] border border-border bg-muted/50 p-6 text-center backdrop-blur-sm">
+            <span className="text-[11px] font-bold uppercase tracking-[0.25em] text-muted-foreground">Sent to</span>
+            <span className="font-bold text-foreground">{values.email}</span>
           </div>
 
           <Input
@@ -246,7 +246,7 @@ export function SignUpPage() {
               <Button
                 type="button"
                 variant="link"
-                className="text-xs font-bold uppercase tracking-widest text-slate-400 hover:text-slate-950"
+                className="text-xs font-bold uppercase tracking-widest text-muted-foreground hover:text-foreground"
                 onClick={handleResend}
                 disabled={countdown > 0}
               >
@@ -295,17 +295,17 @@ export function SignUpPage() {
             disabled={loading}
           />
 
-          <div className="flex items-center gap-4 rounded-2xl border border-slate-100 bg-white/50 px-5 py-4 backdrop-blur-sm">
+          <div className="flex items-center gap-4 rounded-2xl border border-border bg-muted/50 px-5 py-4 backdrop-blur-sm">
             <input
               id="terms"
               type="checkbox"
               checked={values.agree}
               onChange={(e) => setFieldValue("agree", e.target.checked)}
-              className="h-5 w-5 cursor-pointer rounded border-slate-200 text-slate-950 focus:ring-slate-900/5 transition-all"
+              className="h-5 w-5 cursor-pointer rounded border-border bg-background text-primary focus:ring-primary/20 transition-all"
             />
-            <label htmlFor="terms" className="cursor-pointer select-none text-[13px] font-medium leading-6 text-slate-500">
+            <label htmlFor="terms" className="cursor-pointer select-none text-[13px] font-medium leading-6 text-muted-foreground">
               I agree to the{" "}
-              <Link to="/terms" className="font-bold text-slate-950 underline decoration-slate-200 underline-offset-4 transition-colors hover:decoration-slate-950">
+              <Link to="/terms" className="font-bold text-foreground underline decoration-border underline-offset-4 transition-colors hover:decoration-foreground">
                 Terms & Conditions
               </Link>
             </label>

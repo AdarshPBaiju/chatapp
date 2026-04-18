@@ -30,7 +30,7 @@ export function AuthLayout({
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
-            className="text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl"
+            className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl"
           >
             {heading}
           </motion.h1>
@@ -39,7 +39,7 @@ export function AuthLayout({
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.15 }}
-              className="text-sm font-medium leading-relaxed text-slate-500 sm:text-base"
+              className="text-sm font-bold leading-relaxed text-muted-foreground sm:text-base"
             >
               {subheading}
             </motion.div>
@@ -59,7 +59,7 @@ export function AuthLayout({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 0.3 }}
-            className="mt-10 border-t border-slate-100 pt-8"
+            className="mt-10 border-t border-border pt-8"
           >
             {footer}
           </motion.div>

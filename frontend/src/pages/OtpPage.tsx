@@ -69,13 +69,13 @@ export function OtpPage() {
       subheading="Enter the 6-digit code sent to your email to continue."
     >
       <form onSubmit={handleSubmit} noValidate className="space-y-8">
-        <div className="flex flex-col items-center gap-1 rounded-[24px] border border-slate-200 bg-white/50 p-6 text-center backdrop-blur-sm">
-          <span className="text-[11px] font-bold uppercase tracking-[0.25em] text-slate-400">Sent to</span>
-          <span className="font-bold text-slate-950">{pending.email}</span>
+        <div className="flex flex-col items-center gap-1 rounded-[24px] border border-border bg-muted/50 p-6 text-center backdrop-blur-sm">
+          <span className="text-[11px] font-bold uppercase tracking-[0.25em] text-muted-foreground">Sent to</span>
+          <span className="font-bold text-foreground">{pending.email}</span>
         </div>
 
         <div className="space-y-4">
-          <label className="pl-1 text-[11px] font-black uppercase tracking-[0.25em] text-slate-400" htmlFor="otp-field">
+          <label className="pl-1 text-[11px] font-black uppercase tracking-[0.25em] text-muted-foreground" htmlFor="otp-field">
             Verification Code
           </label>
           <OtpInput
@@ -84,7 +84,7 @@ export function OtpPage() {
             isLoading={loading}
           />
           {touched.otpCode && errors.otpCode && (
-            <p className="pl-1 text-[11px] font-bold text-rose-500 uppercase tracking-widest animate-shake">
+            <p className="pl-1 text-[11px] font-bold text-destructive uppercase tracking-widest animate-shake">
               {errors.otpCode}
             </p>
           )}
@@ -103,7 +103,7 @@ export function OtpPage() {
             <Button
               type="button"
               variant="link"
-              className="text-xs font-bold uppercase tracking-widest text-slate-400 hover:text-slate-950"
+              className="text-xs font-bold uppercase tracking-widest text-muted-foreground hover:text-foreground"
               onClick={onResend}
               disabled={countdown > 0}
               isLoading={resendLoading}
@@ -115,7 +115,7 @@ export function OtpPage() {
           <button
             type="button"
             onClick={() => navigate("/auth/login")}
-            className="flex items-center justify-center gap-2 text-sm font-bold text-slate-500 transition-colors hover:text-slate-950"
+            className="flex items-center justify-center gap-2 text-sm font-bold text-muted-foreground transition-colors hover:text-foreground"
           >
             <ArrowLeft size={14} /> Back to Sign In
           </button>

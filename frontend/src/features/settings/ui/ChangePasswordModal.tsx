@@ -60,24 +60,24 @@ export function ChangePasswordModal({ isOpen, onClose }: ChangePasswordModalProp
     <Modal isOpen={isOpen} onClose={handleClose} title="Change Password" maxWidth="md">
       {success ? (
         <div className="space-y-8 py-4 animate-in fade-in zoom-in-95 duration-300">
-          <div className="flex flex-col items-center gap-6 rounded-[28px] border-2 border-emerald-100 bg-emerald-50/30 p-8 text-center">
-            <div className="flex h-20 w-20 items-center justify-center rounded-full bg-emerald-100 shadow-xl shadow-emerald-500/10">
-              <CheckCircle className="text-emerald-700" size={40} />
+          <div className="flex flex-col items-center gap-6 rounded-[28px] border-2 border-success/10 bg-success/5 p-8 text-center">
+            <div className="flex h-20 w-20 items-center justify-center rounded-full bg-success/10 shadow-xl shadow-success/10">
+              <CheckCircle className="text-success" size={40} />
             </div>
             <div className="space-y-1">
-              <p className="text-xl font-bold text-slate-900">Password Updated</p>
-              <p className="text-sm text-slate-600 leading-relaxed">Your new security credentials are now active and all other sessions have been refreshed.</p>
+              <p className="text-xl font-bold text-foreground">Password Updated</p>
+              <p className="text-sm text-muted-foreground leading-relaxed">Your new security credentials are now active and all other sessions have been refreshed.</p>
             </div>
           </div>
-          <Button onClick={handleClose} className="w-full py-4 text-emerald-700 bg-emerald-100 border-2 border-emerald-200 hover:bg-emerald-200 shadow-none">
+          <Button onClick={handleClose} className="w-full py-4 text-success-foreground bg-success hover:bg-success/90 shadow-none">
             Done
           </Button>
         </div>
       ) : (
         <form onSubmit={handleSubmit} noValidate className="space-y-8 py-2">
-          <div className="flex items-start gap-4 rounded-2xl border-2 border-sky-100 bg-sky-50/50 p-4">
-            <ShieldAlert className="shrink-0 text-sky-700 mt-0.5" size={24} />
-            <p className="text-sm leading-relaxed text-slate-600">
+          <div className="flex items-start gap-4 rounded-2xl border-2 border-primary/10 bg-primary/5 p-4">
+            <ShieldAlert className="shrink-0 text-primary mt-0.5" size={24} />
+            <p className="text-sm leading-relaxed text-muted-foreground">
               Enter your current password to verify your identity before setting a new one.
             </p>
           </div>
@@ -111,7 +111,7 @@ export function ChangePasswordModal({ isOpen, onClose }: ChangePasswordModalProp
             />
           </div>
 
-          <Button type="submit" className="w-full py-4 shadow-xl shadow-sky-500/10" isLoading={loading}>
+          <Button type="submit" className="w-full py-4 shadow-xl shadow-primary/10" isLoading={loading}>
              Update Security Credentials
           </Button>
         </form>

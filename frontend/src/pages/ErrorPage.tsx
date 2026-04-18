@@ -24,43 +24,43 @@ export function ErrorPage() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-white p-6 text-slate-950 font-sans">
-      <motion.div 
+    <div className="flex min-h-screen flex-col items-center justify-center bg-background p-6 text-foreground font-sans">
+      <motion.div
         initial={{ opacity: 0, scale: 0.9 }}
         animate={{ opacity: 1, scale: 1 }}
         transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
         className="relative flex w-full max-w-xl flex-col items-center text-center"
       >
         {/* Background Decorative Element */}
-        <div className="absolute -top-24 -z-10 h-64 w-64 rounded-full bg-slate-50 blur-3xl" />
+        <div className="absolute -top-24 -z-10 h-64 w-64 rounded-full bg-primary/5 blur-3xl" />
 
-        <div className="mb-8 flex h-24 w-24 items-center justify-center rounded-[32px] bg-slate-900 text-white shadow-2xl shadow-slate-900/20">
-          <AlertTriangle size={40} className="text-rose-400" />
+        <div className="mb-8 flex h-24 w-24 items-center justify-center rounded-[32px] bg-primary text-primary-foreground shadow-2xl shadow-primary/20">
+          <AlertTriangle size={40} className="text-destructive-foreground" />
         </div>
 
-        <span className="mb-4 text-xs font-black uppercase tracking-[0.4em] text-slate-400">
+        <span className="mb-4 text-xs font-black uppercase tracking-[0.4em] text-muted-foreground">
           Security Protocol Error {code}
         </span>
-        
-        <h1 className="mb-4 text-5xl font-bold tracking-tight text-slate-950 sm:text-6xl">
+
+        <h1 className="mb-4 text-5xl font-bold tracking-tight text-foreground sm:text-6xl">
           {title}
         </h1>
-        
-        <p className="mb-12 max-w-sm text-lg font-medium leading-relaxed text-slate-500">
+
+        <p className="mb-12 max-w-sm text-lg font-medium leading-relaxed text-muted-foreground">
           {message}
         </p>
 
         <div className="flex flex-col sm:flex-row items-center gap-4 w-full sm:w-auto">
-          <Button 
-            onClick={() => navigate("/settings/profile")} 
+          <Button
+            onClick={() => navigate("/settings/profile")}
             className="w-full sm:w-auto px-10"
             leftIcon={<Home size={18} />}
           >
             Return to Safety
           </Button>
-          <Button 
+          <Button
             variant="outline"
-            onClick={() => window.location.reload()} 
+            onClick={() => window.location.reload()}
             className="w-full sm:w-auto px-10"
             leftIcon={<RefreshCcw size={18} />}
           >
@@ -68,9 +68,9 @@ export function ErrorPage() {
           </Button>
         </div>
 
-        <button 
+        <button
           onClick={() => navigate(-1)}
-          className="mt-12 flex items-center gap-2 text-sm font-bold uppercase tracking-widest text-slate-400 transition-colors hover:text-slate-900"
+          className="mt-12 flex items-center gap-2 text-sm font-bold uppercase tracking-widest text-muted-foreground transition-colors hover:text-foreground"
         >
           <ArrowLeft size={16} /> Previous View
         </button>
@@ -78,8 +78,8 @@ export function ErrorPage() {
 
       {/* Footer Branding */}
       <footer className="mt-20 flex items-center gap-3 opacity-30">
-        <div className="h-6 w-6 rounded-lg bg-slate-900" />
-        <span className="font-bold tracking-tighter text-slate-950">CHITCHAT OS</span>
+        <div className="h-6 w-6 rounded-lg bg-foreground" />
+        <span className="font-bold tracking-tighter text-foreground uppercase">CHITCHAT OS</span>
       </footer>
     </div>
   );

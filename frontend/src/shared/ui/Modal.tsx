@@ -52,7 +52,7 @@ export function Modal({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.3, ease: "easeOut" }}
-            className="fixed inset-0 bg-slate-900/40 backdrop-blur-md"
+            className="fixed inset-0 bg-background/80 backdrop-blur-md"
             onClick={onClose}
           />
 
@@ -68,16 +68,16 @@ export function Modal({
               mass: 0.8
             }}
             className={cn(
-              "relative w-full bg-white rounded-[40px] shadow-2xl overflow-hidden",
+              "relative w-full bg-card rounded-[40px] shadow-2xl overflow-hidden border border-border",
               maxWidthClasses[maxWidth]
             )}
           >
             {/* Header */}
-            <div className="flex items-center justify-between p-6 md:p-8 border-b border-slate-100">
-              <h3 className="text-xl font-bold text-slate-900">{title}</h3>
+            <div className="flex items-center justify-between p-6 md:p-8 border-b border-border">
+              <h3 className="text-xl font-bold text-foreground">{title}</h3>
               <button 
                 onClick={onClose}
-                className="h-10 w-10 flex items-center justify-center rounded-xl bg-slate-50 text-slate-400 hover:bg-slate-100 hover:text-slate-900 transition-all"
+                className="h-10 w-10 flex items-center justify-center rounded-xl bg-muted text-muted-foreground hover:bg-foreground hover:text-background transition-all"
               >
                 <X size={20} />
               </button>

@@ -32,14 +32,14 @@ export function TwoFactorManageModal({ onClose, onSuccess }: TwoFactorManageModa
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-300">
-      <div className="w-full max-w-sm bg-white rounded-3xl shadow-2xl overflow-hidden p-8 space-y-6 text-center">
-        <div className="h-16 w-16 bg-red-50 text-red-600 rounded-2xl flex items-center justify-center mx-auto">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm animate-in fade-in duration-300">
+      <div className="w-full max-w-sm bg-card rounded-3xl shadow-2xl overflow-hidden p-8 space-y-6 text-center border border-border">
+        <div className="h-16 w-16 bg-destructive/10 text-destructive rounded-2xl flex items-center justify-center mx-auto">
           <ShieldAlert size={32} />
         </div>
         <div className="space-y-2">
-          <h3 className="text-xl font-bold text-slate-900">Disable 2FA</h3>
-          <p className="text-sm text-slate-500">
+          <h3 className="text-xl font-bold text-foreground">Disable 2FA</h3>
+          <p className="text-sm text-muted-foreground">
             To disable two-factor authentication, please confirm your password.
           </p>
         </div>
@@ -52,7 +52,7 @@ export function TwoFactorManageModal({ onClose, onSuccess }: TwoFactorManageModa
             value={password}
             onChange={(e) => setPassword(e.target.value)}
           />
-          {error && <p className="text-sm font-medium text-red-500 text-center">{error}</p>}
+          {error && <p className="text-sm font-bold text-destructive text-center">{error}</p>}
         </div>
         
         <div className="flex gap-3 pt-2">
@@ -61,7 +61,7 @@ export function TwoFactorManageModal({ onClose, onSuccess }: TwoFactorManageModa
             onClick={handleDisable} 
             isLoading={isLoading} 
             disabled={!password || isLoading}
-            className="flex-1 bg-red-600 hover:bg-red-700 text-white min-w-[120px]"
+            className="flex-1 bg-destructive text-destructive-foreground hover:bg-destructive/90 min-w-[120px]"
           >
             Disable
           </Button>

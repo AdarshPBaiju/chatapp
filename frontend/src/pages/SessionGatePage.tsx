@@ -85,23 +85,23 @@ export function SessionGatePage() {
       subheading="You reached the device limit. Revoke another session to continue."
     >
       <div className="space-y-8 animate-fade-in-up">
-        <div className="flex items-start gap-4 rounded-[24px] border border-sky-200 bg-sky-50 p-5">
-          <ShieldAlert className="shrink-0 text-sky-700" size={20} />
-          <p className="text-sm leading-6 text-slate-600">
+        <div className="flex items-start gap-4 rounded-[24px] border border-primary/20 bg-primary/5 p-5">
+          <ShieldAlert className="shrink-0 text-primary" size={20} />
+          <p className="text-sm leading-6 text-muted-foreground">
             Revoke one of the other sessions below to complete sign-in on this device.
           </p>
         </div>
 
         <div className="space-y-4">
           <div className="flex items-center justify-between gap-4 px-1">
-            <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+            <span className="text-[11px] font-bold uppercase tracking-[0.18em] text-muted-foreground">
               Other Active Devices
             </span>
             {otherSessions.length > 1 && (
               <button
                 onClick={onRevokeAllOthers}
                 disabled={globalLoading}
-                className="text-sm font-medium text-rose-600 transition-colors hover:text-rose-700 disabled:opacity-50"
+                className="text-sm font-bold text-destructive transition-colors hover:text-destructive/80 disabled:opacity-50"
               >
                 Revoke All
               </button>
@@ -112,18 +112,18 @@ export function SessionGatePage() {
             {otherSessions.map((session) => (
               <div
                 key={session.session_id}
-                className="group relative rounded-[24px] border border-slate-200 bg-white p-5 transition-all duration-300 hover:border-sky-200 hover:shadow-[0_24px_50px_-35px_rgba(15,23,42,0.35)]"
+                className="group relative rounded-[24px] border border-border bg-card p-5 transition-all duration-300 hover:border-primary/20 hover:shadow-xl hover:shadow-primary/5"
               >
                 <div className="flex items-center justify-between gap-4">
                   <div className="flex min-w-0 items-center gap-4">
-                    <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-100 text-slate-500 transition-all duration-300 group-hover:bg-sky-50 group-hover:text-sky-700">
+                    <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-muted text-muted-foreground transition-all duration-300 group-hover:bg-primary group-hover:text-primary-foreground">
                       {session.device?.toLowerCase().includes("phone") ? <Smartphone size={18} /> : <Laptop size={18} />}
                     </div>
                     <div className="min-w-0 space-y-0.5">
-                      <h3 className="truncate text-sm font-semibold leading-tight text-slate-950">
+                      <h3 className="truncate text-sm font-bold leading-tight text-foreground">
                         {session.device || "Unknown Device"}
                       </h3>
-                      <p className="truncate text-[11px] font-medium uppercase tracking-[0.16em] text-slate-500">
+                      <p className="truncate text-[11px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
                         {session.city || "Unknown"}, {session.country_code} • {timeAgo(session.last_seen_at)}
                       </p>
                     </div>
@@ -131,7 +131,7 @@ export function SessionGatePage() {
 
                   <Button
                     variant="social"
-                    className="group/btn h-10 w-10 shrink-0 rounded-xl border-rose-200 p-0 text-rose-600 hover:border-rose-300 hover:bg-rose-50"
+                    className="group/btn h-10 w-10 shrink-0 rounded-xl border-destructive/20 p-0 text-destructive hover:border-destructive/30 hover:bg-destructive/10"
                     onClick={() => onRevoke(session.session_id)}
                     isLoading={loading === session.session_id}
                     disabled={!!loading || globalLoading}
@@ -143,19 +143,19 @@ export function SessionGatePage() {
             ))}
 
             {otherSessions.length === 0 && (
-              <div className="rounded-[24px] border-2 border-dashed border-slate-200 bg-slate-50 py-12 text-center">
-                <div className="flex flex-col items-center gap-3 text-slate-400">
+              <div className="rounded-[24px] border-2 border-dashed border-border bg-muted/30 py-12 text-center">
+                <div className="flex flex-col items-center gap-3 text-muted-foreground/40">
                   <Monitor size={32} />
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.2em]">Everything Clear</p>
+                  <p className="text-[11px] font-bold uppercase tracking-[0.2em]">Everything Clear</p>
                 </div>
               </div>
             )}
           </div>
         </div>
 
-        <div className="mt-6 flex flex-col gap-4 border-t border-slate-200 pt-6">
+        <div className="mt-6 flex flex-col gap-4 border-t border-border pt-6">
           {error && (
-            <div className="animate-shake rounded-xl border border-rose-200 bg-rose-50 px-5 py-3 text-center text-sm text-rose-700">
+            <div className="animate-shake rounded-xl border border-destructive/20 bg-destructive/10 px-5 py-3 text-center text-sm text-destructive">
               {error}
             </div>
           )}

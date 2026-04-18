@@ -104,7 +104,7 @@ export const appRouter = createBrowserRouter([
       { path: "profile", element: <ProfileSection /> },
       { path: "security", element: <SecuritySection /> },
       { path: "devices", element: <ActiveSessionsSection /> },
-      { path: "notifications", element: <div className="p-20 text-center font-bold text-slate-300 uppercase tracking-widest text-xs">Access Restricted • Coming Soon</div> },
+      { path: "notifications", element: <div className="p-20 text-center font-bold text-muted-foreground/30 uppercase tracking-widest text-xs">Access Restricted • Coming Soon</div> },
       { path: "", element: <Navigate to="profile" replace /> },
     ],
   },

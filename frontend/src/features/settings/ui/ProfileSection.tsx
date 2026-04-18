@@ -112,13 +112,13 @@ export function ProfileSection() {
 
   if (isLoading) return (
     <div className="flex flex-col items-center justify-center p-12 space-y-4">
-      <div className="h-10 w-10 border-4 border-slate-100 border-t-slate-900 rounded-full animate-spin" />
-      <p className="text-sm font-bold tracking-widest text-slate-400 uppercase">Synchronizing...</p>
+      <div className="h-10 w-10 border-4 border-muted border-t-primary rounded-full animate-spin" />
+      <p className="text-sm font-bold tracking-widest text-muted-foreground uppercase">Synchronizing...</p>
     </div>
   );
 
   if (!initialProfile) return (
-    <div className="p-8 text-center text-rose-500 font-bold">
+    <div className="p-8 text-center text-destructive font-bold">
       Critical error loading identity data.
     </div>
   );
@@ -135,8 +135,8 @@ export function ProfileSection() {
           <motion.div 
             whileHover={{ scale: 1.05 }}
             className={cn(
-              "h-32 w-32 rounded-[32px] bg-slate-50 border-4 border-white shadow-2xl flex items-center justify-center overflow-hidden transition-all duration-500",
-              touched.profile_picture && errors.profile_picture ? "border-rose-400 ring-4 ring-rose-500/10" : "group-hover:shadow-slate-200"
+              "h-32 w-32 rounded-[32px] bg-muted border-4 border-background shadow-2xl flex items-center justify-center overflow-hidden transition-all duration-500",
+              touched.profile_picture && errors.profile_picture ? "border-destructive/40 ring-4 ring-destructive/10" : "group-hover:shadow-primary/5"
             )}
           >
             {previewUrl || initialProfile.profile_picture ? (
@@ -146,16 +146,16 @@ export function ProfileSection() {
                 className="h-full w-full object-cover" 
               />
             ) : (
-              <User size={48} className="text-slate-300" />
+              <User size={48} className="text-muted-foreground/30" />
             )}
             
             {/* Upload Overlay */}
             <label 
               htmlFor="avatar-upload" 
-              className="absolute inset-0 bg-slate-900/60 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer backdrop-blur-[2px]"
+              className="absolute inset-0 bg-foreground/60 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer backdrop-blur-[2px]"
             >
-              <Camera size={28} className="text-white mb-2" />
-              <span className="text-[10px] text-white font-bold uppercase tracking-[0.2em]">Change</span>
+              <Camera size={28} className="text-background mb-2" />
+              <span className="text-[10px] text-background font-bold uppercase tracking-[0.2em]">Change</span>
             </label>
           </motion.div>
           
@@ -169,12 +169,12 @@ export function ProfileSection() {
         </div>
         
         <div className="space-y-2">
-          <h2 className="text-4xl font-bold tracking-tight text-slate-900">{initialProfile.full_name || "Guest Identity"}</h2>
-          <div className="flex items-center gap-2 text-slate-500">
+          <h2 className="text-4xl font-bold tracking-tight text-foreground">{initialProfile.full_name || "Guest Identity"}</h2>
+          <div className="flex items-center gap-2 text-muted-foreground">
             <Mail size={16} />
             <span className="text-sm font-medium tracking-wide">{initialProfile.email}</span>
-            <div className="h-4 w-px bg-slate-200 mx-2" />
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-emerald-600">
+            <div className="h-4 w-px bg-border mx-2" />
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-success/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-success">
               <Check size={10} /> Verified
             </span>
           </div>
@@ -185,7 +185,7 @@ export function ProfileSection() {
         <motion.div 
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
-          className="flex items-center gap-3 rounded-2xl bg-rose-50 px-5 py-3 text-rose-600 text-xs font-bold uppercase tracking-widest border border-rose-100 w-fit"
+          className="flex items-center gap-3 rounded-2xl bg-destructive/10 px-5 py-3 text-destructive text-xs font-bold uppercase tracking-widest border border-destructive/20 w-fit"
         >
           <AlertCircle size={16} />
           {errors.profile_picture}
@@ -214,7 +214,7 @@ export function ProfileSection() {
         <div className="space-y-3">
           <label className={cn(
             "pl-1 text-[11px] font-bold uppercase tracking-[0.2em] transition-colors",
-            touched.bio && errors.bio ? "text-rose-500" : "text-slate-400"
+            touched.bio && errors.bio ? "text-destructive" : "text-muted-foreground"
           )}>
             Account Bio
           </label>
@@ -222,28 +222,28 @@ export function ProfileSection() {
             <textarea
               placeholder="Who are you in the digital world?"
               className={cn(
-                "w-full min-h-[140px] p-5 bg-white border transition-all outline-none resize-none text-slate-950 placeholder:text-slate-400 text-sm leading-relaxed rounded-[24px]",
+                "w-full min-h-[140px] p-5 bg-background border transition-all outline-none resize-none text-foreground placeholder:text-muted-foreground/40 text-sm leading-relaxed rounded-[24px]",
                 touched.bio && errors.bio 
-                  ? "border-rose-400 ring-4 ring-rose-500/5" 
-                  : "border-slate-100 focus:border-slate-900 focus:ring-4 focus:ring-slate-900/5 shadow-sm"
+                  ? "border-destructive/40 ring-4 ring-destructive/5" 
+                  : "border-border focus:border-primary focus:ring-4 focus:ring-primary/5 shadow-sm"
               )}
               {...getFieldProps("bio")}
               disabled={isSaving}
             />
             <div className={cn(
               "absolute top-5 right-5 transition-colors",
-              touched.bio && errors.bio ? "text-rose-400" : "text-slate-300 group-focus-within:text-slate-900"
+              touched.bio && errors.bio ? "text-destructive" : "text-muted-foreground group-focus-within:text-foreground"
             )}>
               {touched.bio && errors.bio ? <AlertCircle size={18} /> : <Info size={18} />}
             </div>
           </div>
           {touched.bio && errors.bio && (
-            <p className="pl-1 text-[10px] font-bold text-rose-500 uppercase tracking-widest">{errors.bio}</p>
+            <p className="pl-1 text-[10px] font-bold text-destructive uppercase tracking-widest">{errors.bio}</p>
           )}
         </div>
 
         <div className="space-y-3">
-           <label className="pl-1 text-[11px] font-bold uppercase tracking-[0.2em] text-slate-400">Gender Identity</label>
+           <label className="pl-1 text-[11px] font-bold uppercase tracking-[0.2em] text-muted-foreground">Gender Identity</label>
            <div className="grid grid-cols-3 gap-3">
               {(['male', 'female', 'other'] as const).map((g) => (
                 <button
@@ -253,8 +253,8 @@ export function ProfileSection() {
                   className={cn(
                     "rounded-2xl border-2 py-4 text-xs font-bold uppercase tracking-widest transition-all",
                     values.gender === g 
-                      ? "border-slate-900 bg-slate-900 text-white shadow-xl shadow-slate-900/20" 
-                      : "border-slate-50 bg-slate-50 text-slate-400 hover:border-slate-200 hover:bg-white hover:text-slate-900"
+                      ? "border-primary bg-primary text-primary-foreground shadow-xl shadow-primary/20" 
+                      : "border-muted bg-muted text-muted-foreground hover:border-border hover:bg-background hover:text-foreground"
                   )}
                   disabled={isSaving}
                 >
@@ -272,9 +272,9 @@ export function ProfileSection() {
                    initial={{ opacity: 0, x: -20 }}
                    animate={{ opacity: 1, x: 0 }}
                    exit={{ opacity: 0, x: -20 }}
-                   className="text-sm font-bold text-emerald-600 flex items-center gap-2"
+                   className="text-sm font-bold text-success flex items-center gap-2"
                  >
-                   <Check size={18} className="p-0.5 rounded-full bg-emerald-100" />
+                   <Check size={18} className="p-0.5 rounded-full bg-success/10" />
                    Changes deployed successfully.
                  </motion.p>
                )}
@@ -283,7 +283,7 @@ export function ProfileSection() {
                    initial={{ opacity: 0, x: -20 }}
                    animate={{ opacity: 1, x: 0 }}
                    exit={{ opacity: 0, x: -20 }}
-                   className="text-sm font-bold text-rose-500"
+                   className="text-sm font-bold text-destructive"
                  >
                    {errorVisible}
                  </motion.p>

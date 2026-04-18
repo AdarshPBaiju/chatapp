@@ -91,13 +91,13 @@ export function OtpGate({ method }: OtpGateProps) {
             onKeyDown={(e) => handleKeyDown(idx, e)}
             onPaste={handlePaste}
             disabled={isLoading}
-            className="w-full h-14 sm:h-16 text-center text-2xl font-bold bg-white border-2 border-slate-200 rounded-xl focus:border-sky-500 focus:ring-4 focus:ring-sky-500/10 transition-all outline-none disabled:opacity-50"
+            className="w-full h-14 sm:h-16 text-center text-2xl font-bold bg-background border-2 border-border rounded-xl focus:border-primary focus:ring-4 focus:ring-primary/20 transition-all outline-none disabled:opacity-50"
           />
         ))}
       </div>
 
       {error && (
-        <p className="text-sm font-medium text-red-500 text-center animate-shake">
+        <p className="text-sm font-bold text-destructive text-center animate-shake">
           {error}
         </p>
       )}
@@ -105,7 +105,7 @@ export function OtpGate({ method }: OtpGateProps) {
       <div className="space-y-4">
         <Button 
           type="button" 
-          className="w-full py-4" 
+          className="w-full py-4 text-sm font-black" 
           isLoading={isLoading}
           onClick={submit}
           disabled={digits.some(d => d === "")}
@@ -114,12 +114,12 @@ export function OtpGate({ method }: OtpGateProps) {
         </Button>
         
         {method === "email_otp" && (
-          <p className="text-center text-sm text-slate-500">
+          <p className="text-center text-sm text-muted-foreground">
             Didn't receive a code?{" "}
             <button 
               type="button" 
               onClick={handleResend}
-              className="font-medium text-sky-700 hover:text-sky-800 transition-colors disabled:opacity-50"
+              className="font-bold text-primary hover:text-primary/80 transition-colors disabled:opacity-50"
               disabled={isLoading}
             >
               Resend

@@ -72,8 +72,8 @@ export function LoginPage() {
 
   const footer = (
     <span className="flex flex-wrap items-center gap-2 text-sm">
-      <span className="text-slate-600">New to ChitChat?</span>
-      <Link to="/auth/join" className="font-bold text-slate-900 transition-colors hover:text-slate-800">
+      <span className="text-muted-foreground">New to ChitChat?</span>
+      <Link to="/auth/join" className="font-bold text-foreground transition-colors hover:text-primary">
         Create an account
       </Link>
     </span>
@@ -110,21 +110,21 @@ export function LoginPage() {
       <AuthLayout
         heading="Security Check"
         subheading={`Continue as ${userEmail}`}
-        footer={<button onClick={handleBack} className="text-sm font-medium text-slate-950 font-bold hover:underline transition-all"><ArrowLeft size={16} className="inline mr-1"/> Use a different email</button>}
+        footer={<button onClick={handleBack} className="text-sm font-bold text-foreground hover:underline transition-all"><ArrowLeft size={16} className="inline mr-1"/> Use a different email</button>}
       >
         <div className="space-y-4">
           <button
             onClick={() => setPhase("PASSWORD_CHECK")}
             disabled={isLoading}
-            className="w-full flex items-center justify-between p-5 bg-white border border-slate-100 rounded-2xl hover:border-slate-900 hover:shadow-xl hover:shadow-slate-900/5 transition-all group disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full flex items-center justify-between p-5 bg-background border border-border rounded-2xl hover:border-primary hover:shadow-xl hover:shadow-primary/5 transition-all group disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <div className="flex items-center gap-4">
-              <div className="h-12 w-12 rounded-xl bg-slate-50 flex items-center justify-center text-slate-600 group-hover:bg-slate-900 group-hover:text-white transition-colors">
+              <div className="h-12 w-12 rounded-xl bg-muted flex items-center justify-center text-muted-foreground group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
                 <KeyRound size={24} />
               </div>
               <div className="text-left">
-                <p className="font-semibold text-slate-900">Sign in with password</p>
-                <p className="text-sm text-slate-500">Secure traditional login</p>
+                <p className="font-semibold text-foreground">Sign in with password</p>
+                <p className="text-sm text-muted-foreground">Secure traditional login</p>
               </div>
             </div>
           </button>
@@ -135,15 +135,15 @@ export function LoginPage() {
               runIdentityChallenge({ method: "email_otp" }); // Trigger send
             }}
             disabled={isLoading}
-            className="w-full flex items-center justify-between p-5 bg-white border border-slate-100 rounded-2xl hover:border-slate-900 hover:shadow-xl hover:shadow-slate-900/5 transition-all group disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full flex items-center justify-between p-5 bg-background border border-border rounded-2xl hover:border-primary hover:shadow-xl hover:shadow-primary/5 transition-all group disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <div className="flex items-center gap-4">
-              <div className="h-12 w-12 rounded-xl bg-slate-50 flex items-center justify-center text-slate-600 group-hover:bg-slate-900 group-hover:text-white transition-colors">
+              <div className="h-12 w-12 rounded-xl bg-muted flex items-center justify-center text-muted-foreground group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
                 <Mail size={24} />
               </div>
               <div className="text-left">
-                <p className="font-semibold text-slate-900">Email a login code</p>
-                <p className="text-sm text-slate-500">Fast, passwordless access</p>
+                <p className="font-semibold text-foreground">Email a login code</p>
+                <p className="text-sm text-muted-foreground">Fast, passwordless access</p>
               </div>
             </div>
           </button>
@@ -158,7 +158,7 @@ export function LoginPage() {
       <AuthLayout
         heading="Welcome back"
         subheading="Please enter your account password."
-        footer={<button onClick={handleBack} className="text-sm font-medium text-slate-950 font-bold hover:underline transition-all"><ArrowLeft size={16} className="inline mr-1"/> Other login methods</button>}
+        footer={<button onClick={handleBack} className="text-sm font-bold text-foreground hover:underline transition-all"><ArrowLeft size={16} className="inline mr-1"/> Other login methods</button>}
       >
         <form onSubmit={handleSubmit} noValidate className="space-y-6">
           <Input
@@ -183,7 +183,7 @@ export function LoginPage() {
       <AuthLayout
         heading="Verification"
         subheading={phase === "MFA_EMAIL_OTP" ? `Enter the 6-digit code sent to ${userEmail}` : "Enter the code from your authenticator app."}
-        footer={<button onClick={handleBack} className="text-sm font-medium text-sky-700"><ArrowLeft size={16} className="inline mr-1"/> Choose another method</button>}
+        footer={<button onClick={handleBack} className="text-sm font-medium text-primary hover:underline"><ArrowLeft size={16} className="inline mr-1"/> Choose another method</button>}
       >
         <OtpGate 
           method={phase === "MFA_EMAIL_OTP" ? "email_otp" : "totp"} 
