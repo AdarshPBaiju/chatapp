@@ -4,8 +4,9 @@ import json
 import logging
 import requests
 import uuid
+from math import atan2, cos, radians, sin, sqrt
 from datetime import datetime, timedelta, UTC
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from django.conf import settings
 from django.core.cache import cache
@@ -15,10 +16,9 @@ from django.utils import timezone as dj_timezone
 from core.auth.crypto import AuthCryptoEngine
 from core.auth.request_context import build_auth_request_context
 from core.models import GlobalConfiguration
-from users.models import AuthSession, ClientDevice, TokenBlacklist
+from users.models import AuthSession, ClientDevice, TokenBlacklist, CustomUser
 
-if TYPE_CHECKING:
-    from users.models import CustomUser
+
 
 logger = logging.getLogger("core")
 
@@ -274,7 +274,6 @@ class AuthEngine:
             context = build_auth_request_context(request)
             location = cls._get_location_from_ip(context.ip_address)
 
-            from users.models import CustomUser
 
             user = CustomUser.objects.get(id=user_id, is_active=True)
             current_session = cls.resolve_current_session(
@@ -1170,7 +1169,6 @@ class AuthEngine:
         if time_diff_seconds <= 0:
             return 0.0
 
-        from math import atan2, cos, radians, sin, sqrt
 
         radius_km = 6371.0  # Earth radius in KM
 

@@ -4,6 +4,7 @@ import hashlib
 import json
 import logging
 import secrets
+import contextlib
 from django.utils import timezone
 from typing import Any
 
@@ -14,6 +15,9 @@ from django.db import transaction
 from django.template.loader import render_to_string
 from django.utils.html import strip_tags
 from rest_framework.serializers import ValidationError
+
+from core.auth.crypto import AuthCryptoEngine
+from users.services.auth_engine import AuthEngine
 
 from users.models import Client, CustomUser
 from core.auth.request_context import get_request_ip
@@ -263,7 +267,6 @@ class UserService:
         """
         Generates a secure, short-lived token for the final password reset step.
         """
-        from core.auth.crypto import AuthCryptoEngine
 
         payload = {
             "sub": str(user.id),
@@ -278,7 +281,6 @@ class UserService:
         """
         Validates the reset token and returns the user ID if valid.
         """
-        from core.auth.crypto import AuthCryptoEngine
 
         try:
             payload = AuthCryptoEngine.decrypt_and_verify(token)
@@ -305,7 +307,6 @@ class UserService:
         user.set_password(password)
         user.save(update_fields=["password"])
 
-        from users.services.auth_engine import AuthEngine
 
         AuthEngine.revoke_all_sessions(str(user.id))
 
@@ -424,7 +425,6 @@ class UserService:
             cache.set(key, int(current) + 1, timeout=ttl)
             return
 
-        import contextlib
 
         touch = getattr(cache, "touch", None)
         if callable(touch):

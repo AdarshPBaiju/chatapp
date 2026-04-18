@@ -1,15 +1,15 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from rest_framework import authentication, exceptions
 
 from core.auth.token_validator import TokenValidationError, validate_token_for_request
 from core.middleware.request_context import set_current_session_id
 from users.services.auth_engine import AuthEngine
+from users.models import CustomUser
 
-if TYPE_CHECKING:
-    from users.models import CustomUser
+
 
 
 class AdvancedJWTAuthentication(authentication.BaseAuthentication):
@@ -54,7 +54,6 @@ class AdvancedJWTAuthentication(authentication.BaseAuthentication):
             raise exceptions.AuthenticationFailed(msg) from e
 
         user_id = payload.get("user_id")
-        from users.models import CustomUser
 
         try:
             user = CustomUser.objects.get(id=user_id, is_active=True)
