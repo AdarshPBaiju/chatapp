@@ -133,7 +133,7 @@ class ClientTokenRefreshAPIView(APIView):
         else:
             if token_result["status"] == "restricted":
                 response = ResponseFactory.success(
-                    message=token_result["message"],
+                    message="Session restricted: device limit exceeded.",
                     data={
                         "is_restricted": True,
                         "access": token_result["access"],
@@ -141,6 +141,7 @@ class ClientTokenRefreshAPIView(APIView):
                         "access_exp": token_result["access_exp"],
                         "refresh_exp": token_result["refresh_exp"],
                         "active_sessions": token_result["active_sessions"],
+                        "user": token_result.get("user"),
                     },
                 )
             else:
@@ -152,6 +153,7 @@ class ClientTokenRefreshAPIView(APIView):
                         "refresh": token_result["refresh"],
                         "access_exp": token_result["access_exp"],
                         "refresh_exp": token_result["refresh_exp"],
+                        "user": token_result.get("user"),
                     },
                 )
             if not existing_entropy:

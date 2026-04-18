@@ -211,30 +211,23 @@ export async function runBootstrapRefresh(): Promise<void> {
     const isRestricted = authStorage.getIsRestricted();
     const restrictedAccess = authStorage.getRestrictedAccess();
 
-    if (isRestricted && restrictedAccess) {
+    // 1. Proactively populate state from storage for immediate UI response (Optimistic)
+    if (isRestricted && restrictedAccess && isLikelyJweCompact(restrictedAccess)) {
       const restrictedAccessExp = authStorage.getRestrictedAccessExp();
-      if (
-        !restrictedAccessExp ||
-        restrictedAccessExp <= Math.floor(Date.now() / 1000)
-      ) {
-        useAuthStore.getState().setAnonymous();
-        return;
+      // Only populate if not expired, otherwise leave it to the refresh call for a cleanup
+      if (restrictedAccessExp && restrictedAccessExp > Math.floor(Date.now() / 1000)) {
+        useAuthStore.getState().setRestricted({
+          access: restrictedAccess,
+          refresh: authStorage.getRefresh() ?? "",
+          access_exp: restrictedAccessExp,
+          refresh_exp: authStorage.getRefreshExp() ?? 0,
+          sessions: authStorage.getRestrictedSessions(),
+          user: authStorage.getUser() ?? undefined,
+        });
       }
-      if (!isLikelyJweCompact(restrictedAccess)) {
-        useAuthStore.getState().setAnonymous();
-        return;
-      }
-      useAuthStore.getState().setRestricted({
-        access: restrictedAccess,
-        refresh: authStorage.getRefresh() ?? "",
-        access_exp: restrictedAccessExp,
-        refresh_exp: authStorage.getRefreshExp() ?? 0,
-        sessions: authStorage.getRestrictedSessions(),
-        user: authStorage.getUser() ?? undefined,
-      });
-      return;
     }
 
+    // 2. Perform the Hard Refresh check with the backend to verify session integrity
     const refresh = authStorage.getRefresh();
     if (!refresh || !isLikelyJweCompact(refresh)) {
       useAuthStore.getState().setAnonymous();
