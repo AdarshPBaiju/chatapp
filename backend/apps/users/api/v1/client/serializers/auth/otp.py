@@ -10,8 +10,9 @@ class ClientGenericResendOTPSerializer(serializers.Serializer):
     Used for MFA, restricted access, or secondary verification.
     """
 
-    user_id = v.uuid.optional().label("User ID")
-    email = v.email.optional().label("Email Address")
+    user_id = v.uuid().optional().label("User ID")
+    email = v.email().optional().label("Email Address")
+    otp_code = v.string().min(6).max(6).label("One-Time Password")
 
     def validate(self, data):
         if not data.get("user_id") and not data.get("email"):

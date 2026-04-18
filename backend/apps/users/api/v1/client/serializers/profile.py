@@ -1,24 +1,40 @@
+from __future__ import annotations
+
 from rest_framework import serializers
-from users.models import Client, CustomUser
 
-class ClientProfileSerializer(serializers.ModelSerializer):
-    email = serializers.EmailField(source='user.email', read_only=True)
-    user_id = serializers.UUIDField(source='user.id', read_only=True)
+from core.validators import auto_configure_fields, v
+from users.models import Client
 
-    class Meta:
-        model = Client
-        fields = [
-            'user_id',
-            'email',
-            'full_name',
-            'bio',
-            'profile_picture',
-            'gender',
-            'phone_number',
-            'is_two_factor_enabled',
-        ]
-        read_only_fields = ['is_two_factor_enabled']
 
-    def update(self, instance, validated_data):
-        # Handle profile picture deletion if needed (logic can be expanded here)
-        return super().update(instance, validated_data)
+@auto_configure_fields
+class ClientProfileSerializer(serializers.Serializer):
+    """
+    Serializer for retrieving and updating client profile information.
+    Uses the core.validators DSL for advanced validation logic.
+    Decoupled from ModelSerializer to provide more explicit control.
+    """
+
+    user_id = v.uuid().source("user.id").access(read=True).label("User ID")
+    email = v.email().source("user.email").access(read=True).label("Email Address")
+
+    full_name = v.string().max(255).label("Full Name")
+    bio = v.string().optional().label("Bio")
+
+    profile_picture = (
+        v.file(max_mb=2, exts=["jpg", "jpeg", "png", "webp"])
+        .optional()
+        .label("Profile Picture")
+    )
+
+    gender = v.choice(Client.Gender.choices).optional().label("Gender")
+    phone_number = v.string().optional().label("Phone Number")
+
+    def update(self, instance: Client, validated_data: dict):
+        """
+        Manually handle the update of the Client model instance.
+        """
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+
+        instance.save()
+        return instance

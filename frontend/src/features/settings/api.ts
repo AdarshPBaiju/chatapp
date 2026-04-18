@@ -7,8 +7,10 @@ export async function fetchProfile(): Promise<ApiEnvelope<UserProfile>> {
   return response.data;
 }
 
-export async function updateProfile(data: Partial<UserProfile>): Promise<ApiEnvelope<UserProfile>> {
-  const response = await httpClient.patch("/profile/", data);
+export async function updateProfile(data: Partial<UserProfile> | FormData): Promise<ApiEnvelope<UserProfile>> {
+  const response = await httpClient.patch("/profile/", data, {
+    headers: data instanceof FormData ? { "Content-Type": "multipart/form-data" } : {},
+  });
   return response.data;
 }
 

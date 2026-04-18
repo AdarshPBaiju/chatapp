@@ -11,5 +11,5 @@ class ClientLoginSerializer(serializers.Serializer):
     Serializer for client login using email/password credentials.
     """
 
-    email = v.email.label("Email Address")
-    password = v.string.min(1).label("Password")
+    email = v.email().label("Email Address")
+    password = v.string().min(1).label("Password")
