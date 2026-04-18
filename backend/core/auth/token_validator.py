@@ -20,9 +20,10 @@ def validate_token_for_request(
     *,
     expected_type: str | None = None,
     check_session: bool = False,
+    grace_period_sec: int = 0,
 ) -> dict[str, Any]:
     try:
-        payload = AuthCryptoEngine.decrypt_and_verify(token)
+        payload = AuthCryptoEngine.decrypt_and_verify(token, grace_period_sec=grace_period_sec)
     except ValueError as exc:
         raise TokenValidationError(str(exc)) from exc
 

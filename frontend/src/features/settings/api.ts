@@ -1,6 +1,6 @@
 import { httpClient } from "@/shared/http/client";
 import { ApiEnvelope } from "@/shared/types/api";
-import { UserProfile, TwoFactorSetup, TwoFactorVerification } from "./types";
+import { UserProfile, TwoFactorSetup, TwoFactorVerification, AuthSession } from "./types";
 
 export async function fetchProfile(): Promise<ApiEnvelope<UserProfile>> {
   const response = await httpClient.get("/profile/");
@@ -24,5 +24,20 @@ export async function verifyTwoFactor(code: string): Promise<ApiEnvelope<TwoFact
 
 export async function getBackupCodes(password: string): Promise<ApiEnvelope<TwoFactorVerification>> {
   const response = await httpClient.post("/security/2fa/backup-codes/", { password });
+  return response.data;
+}
+
+export async function fetchSessions(): Promise<ApiEnvelope<{ sessions: AuthSession[] }>> {
+  const response = await httpClient.get("/sessions/");
+  return response.data;
+}
+
+export async function revokeSession(sessionId: string): Promise<ApiEnvelope<null>> {
+  const response = await httpClient.post("/sessions/revoke/", { session_id: sessionId });
+  return response.data;
+}
+
+export async function revokeOtherSessions(): Promise<ApiEnvelope<{ revoked_count: number }>> {
+  const response = await httpClient.post("/sessions/revoke-others/");
   return response.data;
 }

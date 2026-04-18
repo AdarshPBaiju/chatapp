@@ -3,7 +3,6 @@ import { Navigate, createBrowserRouter } from "react-router-dom";
 import { useAuthStore } from "@/features/auth/state";
 import { LoginPage } from "@/pages/LoginPage";
 import { OtpPage } from "@/pages/OtpPage";
-import { PasswordChangePage } from "@/pages/PasswordChangePage";
 import { PasswordResetPage } from "@/pages/PasswordResetPage";
 import { SessionGatePage } from "@/pages/SessionGatePage";
 import { SignUpPage } from "@/pages/SignUpPage";
@@ -75,14 +74,6 @@ export const appRouter = createBrowserRouter([
           <RestrictedGuard>
             <SessionGatePage />
           </RestrictedGuard>
-        ),
-      },
-      {
-        path: "/change-password",
-        element: (
-          <FullAuthGuard>
-            <PasswordChangePage />
-          </FullAuthGuard>
         ),
       },
     ],

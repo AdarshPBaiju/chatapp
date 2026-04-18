@@ -2,16 +2,15 @@ import { useState } from "react";
 import { User, Shield, Activity, Bell, LogOut, ChevronRight } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
-import { useAuthStore } from "@/features/auth/state";
 import { logoutFlow } from "@/features/sessions/flows";
 import { ProfileSection } from "@/features/settings/ui/ProfileSection";
 import { SecuritySection } from "@/features/settings/ui/SecuritySection";
+import { ActiveSessionsSection } from "@/features/settings/ui/ActiveSessionsSection";
 
 type Tab = "profile" | "security" | "sessions" | "notifications";
 
 export function SettingsPage() {
   const navigate = useNavigate();
-  const user = useAuthStore((state) => state.user);
   const [activeTab, setActiveTab] = useState<Tab>("profile");
 
   async function handleLogout() {
@@ -95,17 +94,7 @@ export function SettingsPage() {
           <section className="flex-1 bg-white border border-slate-100 rounded-[32px] shadow-sm p-6 md:p-10 min-h-[600px]">
             {activeTab === "profile" && <ProfileSection />}
             {activeTab === "security" && <SecuritySection />}
-            {activeTab === "sessions" && (
-              <div className="flex flex-col items-center justify-center h-full text-center space-y-4">
-                <div className="h-16 w-16 bg-slate-50 text-slate-400 rounded-2xl flex items-center justify-center">
-                  <Activity size={32} />
-                </div>
-                <div className="space-y-1">
-                  <h3 className="font-bold text-slate-900 text-xl">Session Management</h3>
-                  <p className="text-slate-500 max-w-xs mx-auto">This section is being synchronized with your security hub. Coming soon.</p>
-                </div>
-              </div>
-            )}
+            {activeTab === "sessions" && <ActiveSessionsSection />}
             {activeTab === "notifications" && (
               <div className="flex flex-col items-center justify-center h-full text-center space-y-4">
                 <div className="h-16 w-16 bg-slate-50 text-slate-400 rounded-2xl flex items-center justify-center">

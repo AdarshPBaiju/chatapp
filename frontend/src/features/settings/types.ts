@@ -17,3 +17,15 @@ export type TwoFactorSetup = {
 export type TwoFactorVerification = {
   backup_codes: string[];
 };
+
+export type AuthSession = {
+  session_id: string;
+  access_jti: string;
+  refresh_jti: string;
+  device: string;
+  started_at: number;
+  last_seen_at: number;
+  is_current: boolean;
+  city: string;
+  country_code: string;
+};
