@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Shield, KeyRound, ChevronRight, Check, Lock } from "lucide-react";
+import { Shield, KeyRound, Check, Lock } from "lucide-react";
 import { motion } from "framer-motion";
 
 import { Button } from "@/shared/ui/FormControls";

@@ -1,4 +1,4 @@
-import { useEffect, useState, FormEvent } from "react";
+import { useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Mail, Lock, ArrowLeft, KeyRound } from "lucide-react";
 
@@ -8,6 +8,8 @@ import { useIdentityMachine } from "@/features/auth/machine";
 import { AuthLayout } from "@/shared/ui/AuthLayout";
 import { Button, Input } from "@/shared/ui/FormControls";
 import { OtpGate } from "@/features/auth/ui/OtpGate";
+import { useForm } from "@/shared/hooks/useForm";
+import { v } from "@/shared/lib/validation";
 
 export function LoginPage() {
   const navigate = useNavigate();
@@ -21,8 +23,32 @@ export function LoginPage() {
     setPhase 
   } = useIdentityMachine();
 
-  const [localEmail, setLocalEmail] = useState("");
-  const [password, setPassword] = useState("");
+  // Unified Form Hook
+  const { getFieldProps, handleSubmit, setErrors } = useForm({
+    initialValues: { email: "", password: "" },
+    schema: {
+      email: v.string().email().required("Email is required"),
+      password: v.string().required("Password is required")
+    },
+    onSubmit: async (formValues) => {
+      if (phase === "IDENTIFY") {
+        await runIdentityInit(formValues.email);
+      } else if (phase === "PASSWORD_CHECK") {
+        await runIdentityChallenge({
+          method: "password",
+          password: formValues.password
+        });
+      }
+    }
+  });
+
+  // Sync machine errors to form errors
+  useEffect(() => {
+    if (error) {
+      if (phase === "IDENTIFY") setErrors({ email: error });
+      else if (phase === "PASSWORD_CHECK") setErrors({ password: error });
+    }
+  }, [error, phase, setErrors]);
 
   // Clean up machine on unmount
   useEffect(() => {
@@ -35,19 +61,6 @@ export function LoginPage() {
     else if (authStatus === "restricted") navigate("/auth/active-sessions");
     else if (authStatus === "pending_verification") navigate("/auth/verify");
   }, [authStatus, navigate]);
-
-  const onInit = async (e: FormEvent) => {
-    e.preventDefault();
-    await runIdentityInit(localEmail);
-  };
-
-  const onPasswordSubmit = async (e: FormEvent) => {
-    e.preventDefault();
-    await runIdentityChallenge({
-      method: "password",
-      password
-    });
-  };
 
   const handleBack = () => {
     if (phase === "METHOD_SELECT") reset();
@@ -71,17 +84,14 @@ export function LoginPage() {
         subheading="Enter your email to access your workspace."
         footer={footer}
       >
-        <form onSubmit={onInit} className="space-y-6">
+        <form onSubmit={handleSubmit} noValidate className="space-y-6">
           <Input
             type="email"
             label="Email Address"
             placeholder="name@company.com"
             icon={<Mail size={20} />}
-            value={localEmail}
-            onChange={(e) => setLocalEmail(e.target.value)}
-            required
+            {...getFieldProps("email")}
             disabled={isLoading}
-            error={error ?? undefined}
           />
           <Button type="submit" className="w-full py-4" isLoading={isLoading}>
             Continue
@@ -97,16 +107,16 @@ export function LoginPage() {
       <AuthLayout
         heading="Security Check"
         subheading={`Continue as ${userEmail}`}
-        footer={<button onClick={handleBack} className="text-sm font-medium text-sky-700"><ArrowLeft size={16} className="inline mr-1"/> Use a different email</button>}
+        footer={<button onClick={handleBack} className="text-sm font-medium text-slate-950 font-bold hover:underline transition-all"><ArrowLeft size={16} className="inline mr-1"/> Use a different email</button>}
       >
         <div className="space-y-4">
           <button
             onClick={() => setPhase("PASSWORD_CHECK")}
             disabled={isLoading}
-            className="w-full flex items-center justify-between p-5 bg-white border-2 border-slate-100 rounded-2xl hover:border-sky-500 hover:shadow-xl hover:shadow-sky-500/5 transition-all group disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full flex items-center justify-between p-5 bg-white border border-slate-100 rounded-2xl hover:border-slate-900 hover:shadow-xl hover:shadow-slate-900/5 transition-all group disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <div className="flex items-center gap-4">
-              <div className="h-12 w-12 rounded-xl bg-slate-50 flex items-center justify-center text-slate-600 group-hover:bg-sky-50 group-hover:text-sky-600 transition-colors">
+              <div className="h-12 w-12 rounded-xl bg-slate-50 flex items-center justify-center text-slate-600 group-hover:bg-slate-900 group-hover:text-white transition-colors">
                 <KeyRound size={24} />
               </div>
               <div className="text-left">
@@ -122,10 +132,10 @@ export function LoginPage() {
               runIdentityChallenge({ method: "email_otp" }); // Trigger send
             }}
             disabled={isLoading}
-            className="w-full flex items-center justify-between p-5 bg-white border-2 border-slate-100 rounded-2xl hover:border-sky-500 hover:shadow-xl hover:shadow-sky-500/5 transition-all group disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full flex items-center justify-between p-5 bg-white border border-slate-100 rounded-2xl hover:border-slate-900 hover:shadow-xl hover:shadow-slate-900/5 transition-all group disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <div className="flex items-center gap-4">
-              <div className="h-12 w-12 rounded-xl bg-slate-50 flex items-center justify-center text-slate-600 group-hover:bg-sky-50 group-hover:text-sky-600 transition-colors">
+              <div className="h-12 w-12 rounded-xl bg-slate-50 flex items-center justify-center text-slate-600 group-hover:bg-slate-900 group-hover:text-white transition-colors">
                 <Mail size={24} />
               </div>
               <div className="text-left">
@@ -145,19 +155,16 @@ export function LoginPage() {
       <AuthLayout
         heading="Welcome back"
         subheading="Please enter your account password."
-        footer={<button onClick={handleBack} className="text-sm font-medium text-sky-700"><ArrowLeft size={16} className="inline mr-1"/> Other login methods</button>}
+        footer={<button onClick={handleBack} className="text-sm font-medium text-slate-950 font-bold hover:underline transition-all"><ArrowLeft size={16} className="inline mr-1"/> Other login methods</button>}
       >
-        <form onSubmit={onPasswordSubmit} className="space-y-6">
+        <form onSubmit={handleSubmit} noValidate className="space-y-6">
           <Input
             type="password"
             label="Password"
             placeholder="Enter your password"
             icon={<Lock size={20} />}
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
+            {...getFieldProps("password")}
             disabled={isLoading}
-            error={error ?? undefined}
           />
           <Button type="submit" className="w-full py-4" isLoading={isLoading}>
             Sign in

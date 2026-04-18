@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Activity, Laptop, Smartphone, Monitor, MapPin, ShieldCheck, Trash2, Clock, Check } from "lucide-react";
+import { Activity, Laptop, Smartphone, Monitor, MapPin, Trash2, Clock, Check } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 import { fetchSessions, revokeSession, revokeOtherSessions } from "../api";

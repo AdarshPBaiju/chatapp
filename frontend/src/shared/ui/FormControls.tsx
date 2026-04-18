@@ -26,7 +26,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
           {icon && (
             <div className={cn(
               "absolute left-5 top-1/2 -translate-y-1/2 transition-all duration-300",
-              isFocused ? "text-slate-900 scale-110" : "text-slate-400"
+              isFocused ? "text-slate-900" : "text-slate-400"
             )}>
               {icon}
             </div>
@@ -44,7 +44,11 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
             }}
             type={isPassword ? (showPassword ? "text" : "password") : type}
             className={cn(
-              "form-input-premium w-full",
+              "w-full rounded-2xl border bg-white px-5 py-4 text-slate-950 outline-none transition-all duration-300",
+              "placeholder:text-slate-300 font-medium",
+              isFocused 
+                ? "border-slate-900 shadow-[0_0_0_4px_rgba(15,23,42,0.03),0_20px_25px_-5px_rgba(15,23,42,0.05)]" 
+                : "border-slate-100 shadow-sm",
               icon ? "pl-14 pr-14" : "px-6 pr-14",
               error && "border-rose-200 focus:border-rose-400 focus:ring-rose-500/5",
               className,
@@ -59,13 +63,6 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
               {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
             </button>
           )}
-          
-          {/* Animated bottom border focus effect */}
-          <motion.div 
-            initial={false}
-            animate={{ scaleX: isFocused ? 1 : 0 }}
-            className="absolute bottom-0 left-6 right-6 h-[2px] bg-slate-900 origin-center transition-transform duration-500"
-          />
         </div>
         <AnimatePresence mode="wait">
           {error && (
@@ -84,6 +81,70 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
   },
 );
 Input.displayName = "Input";
+
+interface OtpInputProps {
+  value: string;
+  onChange: (value: string) => void;
+  isLoading?: boolean;
+}
+
+export function OtpInput({ value, onChange, isLoading }: OtpInputProps) {
+  const inputs = Array(6).fill(0);
+  const values = value.split("").concat(Array(6 - value.length).fill(""));
+
+  const handleChange = (index: number, val: string) => {
+    if (!/^\d*$/.test(val)) return;
+    const newValues = [...values];
+    newValues[index] = val.slice(-1);
+    const finalValue = newValues.join("");
+    onChange(finalValue);
+
+    if (val && index < 5) {
+      const nextInput = document.getElementById(`otp-${index + 1}`);
+      nextInput?.focus();
+    }
+  };
+
+  const handleKeyDown = (index: number, e: React.KeyboardEvent) => {
+    if (e.key === "Backspace" && !values[index] && index > 0) {
+      const prevInput = document.getElementById(`otp-${index - 1}`);
+      prevInput?.focus();
+    }
+  };
+
+  const handlePaste = (e: React.ClipboardEvent) => {
+    e.preventDefault();
+    const pastedData = e.clipboardData.getData("text").slice(0, 6);
+    if (/^\d+$/.test(pastedData)) {
+      onChange(pastedData);
+    }
+  };
+
+  return (
+    <div className="flex justify-between gap-3 sm:gap-4 md:gap-5" onPaste={handlePaste}>
+      {inputs.map((_, i) => (
+        <motion.input
+          key={i}
+          id={`otp-${i}`}
+          type="text"
+          inputMode="numeric"
+          autoComplete="one-time-code"
+          maxLength={1}
+          value={values[i]}
+          disabled={isLoading}
+          onChange={(e) => handleChange(i, e.target.value)}
+          onKeyDown={(e) => handleKeyDown(i, e)}
+          className={cn(
+            "h-16 w-full rounded-2xl border transition-all duration-300 text-center text-2xl font-bold",
+            values[i] 
+              ? "border-slate-900 bg-slate-950 text-white shadow-xl shadow-slate-900/10" 
+              : "border-slate-100 bg-white text-slate-950 focus:border-slate-900 focus:shadow-[0_0_0_4px_rgba(15,23,42,0.03)] shadow-sm"
+          )}
+        />
+      ))}
+    </div>
+  );
+}
 
 const variants = {
   primary: "btn-premium text-white",
@@ -112,7 +173,6 @@ export function Button({
 }: ButtonProps) {
   return (
     <motion.button
-      whileHover={{ y: -2 }}
       whileTap={{ scale: 0.98 }}
       className={cn(
         "group relative flex items-center justify-center gap-3 overflow-hidden whitespace-nowrap rounded-2xl px-8 py-4 text-sm font-bold uppercase tracking-wider transition-all duration-300 disabled:cursor-not-allowed disabled:opacity-50",

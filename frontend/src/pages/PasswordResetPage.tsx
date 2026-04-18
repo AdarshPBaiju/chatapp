@@ -1,4 +1,4 @@
-import { FormEvent, useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Mail, ShieldCheck, Lock, CheckCircle, ArrowLeft } from "lucide-react";
 
@@ -10,33 +10,57 @@ import {
 import { readApiMessage } from "@/shared/lib/apiResponse";
 import { AuthLayout } from "@/shared/ui/AuthLayout";
 import { Button, Input } from "@/shared/ui/FormControls";
+import { useForm } from "@/shared/hooks/useForm";
+import { v } from "@/shared/lib/validation";
 
 type Step = "REQUEST" | "VERIFY" | "CONFIRM" | "SUCCESS";
 
 export function PasswordResetPage() {
   const navigate = useNavigate();
   const [step, setStep] = useState<Step>("REQUEST");
-  const [email, setEmail] = useState("");
-  const [otpCode, setOtpCode] = useState("");
-  const [resetToken, setResetToken] = useState("");
-  const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [error, setError] = useState<string | undefined>();
   const [loading, setLoading] = useState(false);
+  const [signupToken, setSignupToken] = useState("");
   const [resendInterval, setResendInterval] = useState(60);
   const [countdown, setCountdown] = useState(0);
 
-  async function handleRequest(e: FormEvent) {
+  const { values, getFieldProps, setErrors, setFieldTouched, setFieldValue } = useForm({
+    initialValues: {
+      email: "",
+      otpCode: "",
+      password: "",
+      confirmPassword: "",
+    },
+    schema: {
+      email: v.string().email().required("Email is required"),
+      otpCode: v.string().min(6, "Must be 6 digits").required("Code is required"),
+      password: v.string().min(8, "Minimum 8 characters").required("Password is required"),
+      confirmPassword: v.string().matches("password", "Passwords do not match").required("Confirmation is required")
+    },
+    onSubmit: () => {} // Handled manually per step for flow control
+  });
+
+  async function handleRequest(e: React.FormEvent) {
     e.preventDefault();
-    setError(undefined);
+    
+    const rules = v.string().email().required().build();
+    for(const rule of rules) {
+      const err = rule(values.email);
+      if (err) {
+        setErrors({ email: err });
+        setFieldTouched("email");
+        return;
+      }
+    }
+
     setLoading(true);
+    setErrors({});
     try {
-      const data = await requestPasswordReset({ email });
+      const data = await requestPasswordReset({ email: values.email });
       setResendInterval(data.resend_interval);
       setCountdown(data.resend_interval);
       setStep("VERIFY");
     } catch (err) {
-      setError(readApiMessage(err, "Failed to send reset code."));
+      setErrors({ email: readApiMessage(err, "Failed to send reset code.") });
     } finally {
       setLoading(false);
     }
@@ -44,12 +68,11 @@ export function PasswordResetPage() {
 
   async function handleResend() {
     if (countdown > 0) return;
-    setError(undefined);
     try {
-      await requestPasswordReset({ email });
+      await requestPasswordReset({ email: values.email });
       setCountdown(resendInterval);
     } catch (err) {
-      setError(readApiMessage(err, "Resend failed."));
+      setErrors({ otpCode: readApiMessage(err, "Resend failed.") });
     }
   }
 
@@ -60,40 +83,68 @@ export function PasswordResetPage() {
     }
   }, [countdown]);
 
-  async function handleVerify(e: FormEvent) {
+  async function handleVerify(e: React.FormEvent) {
     e.preventDefault();
-    setError(undefined);
+    
+    const rules = v.string().min(6).required().build();
+    for(const rule of rules) {
+      const err = rule(values.otpCode);
+      if (err) {
+        setErrors({ otpCode: err || "Invalid code" });
+        setFieldTouched("otpCode");
+        return;
+      }
+    }
+
     setLoading(true);
+    setErrors({});
     try {
-      const { reset_token } = await verifyPasswordResetOtp({ email, otp_code: otpCode });
-      setResetToken(reset_token);
+      const { reset_token } = await verifyPasswordResetOtp({ email: values.email, otp_code: values.otpCode });
+      setSignupToken(reset_token);
       setStep("CONFIRM");
     } catch (err) {
-      setError(readApiMessage(err, "Invalid verification code."));
+      setErrors({ otpCode: readApiMessage(err, "Invalid verification code.") });
     } finally {
       setLoading(false);
     }
   }
 
-  async function handleConfirm(e: FormEvent) {
+  async function handleConfirm(e: React.FormEvent) {
     e.preventDefault();
-    setError(undefined);
 
-    if (password !== confirmPassword) {
-      setError("Passwords do not match.");
+    const detailSchema: Record<string, any> = {
+      password: v.string().min(8).required(),
+      confirmPassword: v.string().matches("password").required()
+    };
+
+    const detailErrors: any = {};
+    Object.keys(detailSchema).forEach(key => {
+      const rules = detailSchema[key].build();
+      for(const rule of rules) {
+        const err = rule((values as any)[key], values);
+        if (err) {
+          detailErrors[key] = err;
+          setFieldTouched(key as any);
+          break;
+        }
+      }
+    });
+
+    if (Object.keys(detailErrors).length > 0) {
+      setErrors(detailErrors);
       return;
     }
 
     setLoading(true);
     try {
       await confirmPasswordReset({
-        reset_token: resetToken,
-        password,
-        confirm_password: confirmPassword,
+        reset_token: signupToken,
+        password: values.password,
+        confirm_password: values.confirmPassword,
       });
       setStep("SUCCESS");
     } catch (err) {
-      setError(readApiMessage(err, "Failed to reset password."));
+      setErrors({ confirmPassword: readApiMessage(err, "Failed to reset password.") });
     } finally {
       setLoading(false);
     }
@@ -136,17 +187,14 @@ export function PasswordResetPage() {
     <AuthLayout heading={getHeading()} subheading={getSubheading()}>
       <div className="space-y-6">
         {step === "REQUEST" && (
-          <form onSubmit={handleRequest} className="space-y-8 animate-fade-in-up">
+          <form onSubmit={handleRequest} noValidate className="space-y-8 animate-fade-in-up">
             <Input
               type="email"
               label="Email Address"
               placeholder="name@company.com"
               icon={<Mail size={20} />}
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
+              {...getFieldProps("email")}
               disabled={loading}
-              error={error}
             />
             <div className="flex flex-col gap-6">
               <Button type="submit" className="w-full py-4" isLoading={loading}>
@@ -164,10 +212,10 @@ export function PasswordResetPage() {
         )}
 
         {step === "VERIFY" && (
-          <form onSubmit={handleVerify} className="space-y-8 animate-fade-in-up">
+          <form onSubmit={handleVerify} noValidate className="space-y-8 animate-fade-in-up">
             <div className="flex flex-col items-center gap-1 rounded-[24px] border border-slate-200 bg-slate-50 p-6 text-center">
               <span className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">Sent to</span>
-              <span className="font-semibold text-slate-950">{email}</span>
+              <span className="font-semibold text-slate-950">{values.email}</span>
             </div>
 
             <Input
@@ -175,12 +223,9 @@ export function PasswordResetPage() {
               label="Recovery Code"
               placeholder="6-digit code"
               icon={<ShieldCheck size={20} />}
-              value={otpCode}
-              onChange={(e) => setOtpCode(e.target.value)}
-              required
+              {...getFieldProps("otpCode")}
               maxLength={6}
               disabled={loading}
-              error={error}
             />
             <div className="flex flex-col gap-5">
               <Button type="submit" className="py-4" isLoading={loading}>
@@ -192,7 +237,11 @@ export function PasswordResetPage() {
                   type="button"
                   variant="outline"
                   className="w-full py-4"
-                  onClick={() => setStep("REQUEST")}
+                  onClick={() => {
+                    setStep("REQUEST");
+                    setFieldValue("otpCode", "");
+                    setErrors({});
+                  }}
                   disabled={loading}
                 >
                   Change Email
@@ -203,7 +252,7 @@ export function PasswordResetPage() {
                 <Button
                   type="button"
                   variant="link"
-                  className="text-sm"
+                  className="text-sm font-bold uppercase tracking-widest text-slate-400 hover:text-slate-950"
                   onClick={handleResend}
                   disabled={countdown > 0}
                 >
@@ -215,15 +264,13 @@ export function PasswordResetPage() {
         )}
 
         {step === "CONFIRM" && (
-          <form onSubmit={handleConfirm} className="space-y-8 animate-fade-in-up">
+          <form onSubmit={handleConfirm} noValidate className="space-y-8 animate-fade-in-up">
             <Input
               type="password"
               label="New Password"
-              placeholder="Enter new password"
+              placeholder="Minimum 8 characters"
               icon={<Lock size={20} />}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
+              {...getFieldProps("password")}
               disabled={loading}
             />
             <Input
@@ -231,13 +278,10 @@ export function PasswordResetPage() {
               label="Confirm Password"
               placeholder="Repeat your password"
               icon={<Lock size={20} />}
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              required
+              {...getFieldProps("confirmPassword")}
               disabled={loading}
-              error={error}
             />
-            <Button type="submit" className="w-full py-4" isLoading={loading}>
+            <Button type="submit" className="w-full py-4 shadow-xl shadow-sky-500/10" isLoading={loading}>
               Update Password
             </Button>
           </form>
