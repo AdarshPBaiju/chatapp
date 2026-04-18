@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Mail, Lock, User, CheckCircle } from "lucide-react";
 
@@ -7,35 +7,62 @@ import { runSignUpFlow, runSignUpFinalizeFlow } from "@/features/auth/flows";
 import { readApiMessage } from "@/shared/lib/apiResponse";
 import { AuthLayout } from "@/shared/ui/AuthLayout";
 import { Button, Input } from "@/shared/ui/FormControls";
+import { useForm } from "@/shared/hooks/useForm";
+import { v } from "@/shared/lib/validation";
 
 type Step = "EMAIL" | "OTP" | "DETAILS";
 
 export function SignUpPage() {
   const navigate = useNavigate();
   const [step, setStep] = useState<Step>("EMAIL");
-  const [email, setEmail] = useState("");
-  const [otpCode, setOtpCode] = useState("");
-  const [firstName, setFirstName] = useState("");
-  const [lastName, setLastName] = useState("");
-  const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [agree, setAgree] = useState(true);
-  const [error, setError] = useState<string | undefined>();
   const [loading, setLoading] = useState(false);
   const [signupToken, setSignupToken] = useState("");
   const [resendInterval, setResendInterval] = useState(60);
   const [countdown, setCountdown] = useState(0);
 
-  async function handleEmail(e: FormEvent) {
+  const { values, getFieldProps, setErrors, setFieldTouched, setFieldValue } = useForm({
+    initialValues: {
+      email: "",
+      otpCode: "",
+      firstName: "",
+      lastName: "",
+      password: "",
+      confirmPassword: "",
+      agree: true
+    },
+    schema: {
+      email: v.string().email().required("Email is required"),
+      otpCode: v.string().min(6, "Must be 6 digits").required("Code is required"),
+      firstName: v.string().name("Invalid characters").required("First name is required"),
+      lastName: v.string().name("Invalid characters").required("Last name is required"),
+      password: v.string().min(8, "Minimum 8 characters").required("Password is required"),
+      confirmPassword: v.string().matches("password", "Passwords do not match").required("Confirmation is required")
+    },
+    onSubmit: () => {} // Handled manually per step to control transitions
+  });
+
+  async function handleEmail(e: React.FormEvent) {
     e.preventDefault();
-    setError(undefined);
+    
+    // Manual validate step 1 using DSL build
+    const rules = v.string().email().required("Email is required").build();
+    for(const rule of rules) {
+      const err = rule(values.email);
+      if (err) {
+        setErrors({ email: err });
+        setFieldTouched("email");
+        return;
+      }
+    }
+
     setLoading(true);
     try {
-      const data = await runSignUpFlow({ email });
+      const emailToRequest: string = values.email;
+      const data = await runSignUpFlow({ email: emailToRequest });
       setResendInterval(data.resend_interval);
       setStep("OTP");
     } catch (err) {
-      setError(readApiMessage(err, "Sign up failed."));
+      setErrors({ email: readApiMessage(err, "Sign up failed.") });
     } finally {
       setLoading(false);
     }
@@ -43,12 +70,12 @@ export function SignUpPage() {
 
   async function handleResend() {
     if (countdown > 0) return;
-    setError(undefined);
     try {
-      await signUpResend({ email });
+      const emailToResend: string = values.email;
+      await signUpResend({ email: emailToResend });
       setCountdown(resendInterval);
     } catch (err) {
-      setError(readApiMessage(err, "Resend failed."));
+      setErrors({ otpCode: readApiMessage(err, "Resend failed.") });
     }
   }
 
@@ -59,36 +86,68 @@ export function SignUpPage() {
     }
   }, [countdown]);
 
-  async function handleVerify(e: FormEvent) {
+  async function handleVerify(e: React.FormEvent) {
     e.preventDefault();
-    setError(undefined);
+    
+    // Manual validate step 2
+    const rules = v.string().min(6).required().build();
+    for(const rule of rules) {
+      const err = rule(values.otpCode);
+      if (err) {
+        setErrors({ otpCode: err || "Invalid code" });
+        setFieldTouched("otpCode");
+        return;
+      }
+    }
+
     setLoading(true);
     try {
-      const data = await signUpVerify({ email, otp_code: otpCode });
+      const emailToVerify: string = values.email;
+      const data = await signUpVerify({ email: emailToVerify, otp_code: values.otpCode });
       setSignupToken(data.signup_token);
       setStep("DETAILS");
     } catch (err: any) {
       if (err?.response?.status === 409) {
-        setError("This account already exists. Please login instead.");
+        setErrors({ otpCode: "This account already exists. Please login instead." });
         return;
       }
-      setError(readApiMessage(err, "Verification failed."));
+      setErrors({ otpCode: readApiMessage(err, "Verification failed.") });
     } finally {
       setLoading(false);
     }
   }
 
-  async function handleFinalize(e: FormEvent) {
+  async function handleFinalize(e: React.FormEvent) {
     e.preventDefault();
-    setError(undefined);
 
-    if (password !== confirmPassword) {
-      setError("Passwords do not match.");
+    // Validate all details using DSL
+    const detailSchema: Record<string, any> = {
+      firstName: v.string().name().required(),
+      lastName: v.string().name().required(),
+      password: v.string().min(8).required(),
+      confirmPassword: v.string().matches("password").required()
+    };
+
+    const detailErrors: any = {};
+    Object.keys(detailSchema).forEach(key => {
+      const rules = detailSchema[key].build();
+      for(const rule of rules) {
+        const err = rule((values as any)[key], values);
+        if (err) {
+          detailErrors[key] = err;
+          setFieldTouched(key as any);
+          break;
+        }
+      }
+    });
+
+    if (Object.keys(detailErrors).length > 0) {
+      setErrors(detailErrors);
       return;
     }
 
-    if (!agree) {
-      setError("You must agree to the Terms & Conditions.");
+    if (!values.agree) {
+      setErrors({ confirmPassword: "You must agree to the Terms & Conditions." });
       return;
     }
 
@@ -96,14 +155,14 @@ export function SignUpPage() {
     try {
       const result = await runSignUpFinalizeFlow({
         signup_token: signupToken,
-        full_name: `${firstName} ${lastName}`.trim(),
-        password,
-        confirm_password: confirmPassword,
+        full_name: `${values.firstName} ${values.lastName}`.trim(),
+        password: values.password,
+        confirm_password: values.confirmPassword,
       });
 
       navigate(result.is_restricted ? "/auth/active-sessions" : "/settings/profile");
     } catch (err) {
-      setError(readApiMessage(err, "Failed to complete sign up."));
+      setErrors({ confirmPassword: readApiMessage(err, "Failed to complete sign up.") });
     } finally {
       setLoading(false);
     }
@@ -112,7 +171,7 @@ export function SignUpPage() {
   const loginFooter = (
     <span className="flex flex-wrap items-center gap-2 text-sm">
       <span className="text-slate-600">Already have a ChitChat account?</span>
-      <Link to="/auth/login" className="font-bold text-slate-900 transition-colors hover:text-slate-800">
+      <Link to="/auth/login" className="font-bold text-slate-950 transition-colors hover:underline">
         Log in
       </Link>
     </span>
@@ -131,39 +190,29 @@ export function SignUpPage() {
       footer={step === "EMAIL" ? loginFooter : undefined}
     >
       {step === "EMAIL" && (
-        <form onSubmit={handleEmail} className="space-y-8">
+        <form onSubmit={handleEmail} noValidate className="space-y-8">
           <Input
             type="email"
             label="Email Address"
             placeholder="name@company.com"
             icon={<Mail size={20} />}
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
+            {...getFieldProps("email")}
             disabled={loading}
-            error={error}
           />
 
           <div className="flex flex-col gap-6">
-            <Button type="submit" className="w-full py-4" isLoading={loading}>
+            <Button type="submit" className="w-full py-4 text-sm font-black" isLoading={loading}>
               Create Account
             </Button>
-
-            {/* Social signup section intentionally commented out until provider auth is implemented.
-            <div className="grid grid-cols-2 gap-4">
-              <Button variant="social">Google</Button>
-              <Button variant="social">Github</Button>
-            </div>
-            */}
           </div>
         </form>
       )}
 
       {step === "OTP" && (
-        <form onSubmit={handleVerify} className="space-y-8">
-          <div className="flex flex-col items-center gap-1 rounded-[24px] border border-slate-200 bg-slate-50 p-6 text-center">
-            <span className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">Sent to</span>
-            <span className="font-semibold text-slate-950">{email}</span>
+        <form onSubmit={handleVerify} noValidate className="space-y-8">
+          <div className="flex flex-col items-center gap-1 rounded-[24px] border border-slate-200 bg-white/50 p-6 text-center backdrop-blur-sm">
+            <span className="text-[11px] font-bold uppercase tracking-[0.25em] text-slate-400">Sent to</span>
+            <span className="font-bold text-slate-950">{values.email}</span>
           </div>
 
           <Input
@@ -171,26 +220,23 @@ export function SignUpPage() {
             label="Verification Code"
             placeholder="6-digit code"
             icon={<CheckCircle size={20} />}
-            value={otpCode}
-            onChange={(e) => setOtpCode(e.target.value)}
-            required
+            {...getFieldProps("otpCode")}
             maxLength={6}
             disabled={loading}
-            error={error}
           />
 
           <div className="flex flex-col gap-4">
-            <Button type="submit" className="py-4" isLoading={loading}>
+            <Button type="submit" className="py-4 text-sm font-black" isLoading={loading}>
               Verify Code
             </Button>
             <Button
               type="button"
               variant="outline"
-              className="py-4"
+              className="py-4 text-sm font-black"
               onClick={() => {
                 setStep("EMAIL");
-                setOtpCode("");
-                setError(undefined);
+                setFieldValue("otpCode", "");
+                setErrors({});
               }}
               disabled={loading}
             >
@@ -200,11 +246,11 @@ export function SignUpPage() {
               <Button
                 type="button"
                 variant="link"
-                className="text-sm"
+                className="text-xs font-bold uppercase tracking-widest text-slate-400 hover:text-slate-950"
                 onClick={handleResend}
                 disabled={countdown > 0}
               >
-                {countdown > 0 ? `Resend in ${countdown}s` : "Resend Verification Code"}
+                {countdown > 0 ? `Resend in ${countdown}s` : "Resend Code"}
               </Button>
             </div>
           </div>
@@ -212,16 +258,14 @@ export function SignUpPage() {
       )}
 
       {step === "DETAILS" && (
-        <form onSubmit={handleFinalize} className="space-y-6">
+        <form onSubmit={handleFinalize} noValidate className="space-y-6">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Input
               type="text"
               label="First Name"
               placeholder="John"
               icon={<User size={18} />}
-              value={firstName}
-              onChange={(e) => setFirstName(e.target.value)}
-              required
+              {...getFieldProps("firstName")}
               disabled={loading}
             />
             <Input
@@ -229,9 +273,7 @@ export function SignUpPage() {
               label="Last Name"
               placeholder="Doe"
               icon={<User size={18} />}
-              value={lastName}
-              onChange={(e) => setLastName(e.target.value)}
-              required
+              {...getFieldProps("lastName")}
               disabled={loading}
             />
           </div>
@@ -241,9 +283,7 @@ export function SignUpPage() {
             label="New Password"
             icon={<Lock size={18} />}
             placeholder="Create a strong password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
+            {...getFieldProps("password")}
             disabled={loading}
           />
           <Input
@@ -251,30 +291,27 @@ export function SignUpPage() {
             label="Confirm Password"
             icon={<Lock size={18} />}
             placeholder="Repeat your password"
-            value={confirmPassword}
-            onChange={(e) => setConfirmPassword(e.target.value)}
-            required
+            {...getFieldProps("confirmPassword")}
             disabled={loading}
-            error={error}
           />
 
-          <div className="flex items-center gap-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+          <div className="flex items-center gap-4 rounded-2xl border border-slate-100 bg-white/50 px-5 py-4 backdrop-blur-sm">
             <input
               id="terms"
               type="checkbox"
-              checked={agree}
-              onChange={(e) => setAgree(e.target.checked)}
-              className="h-5 w-5 cursor-pointer rounded border-slate-300 text-slate-950 focus:ring-sky-200"
+              checked={values.agree}
+              onChange={(e) => setFieldValue("agree", e.target.checked)}
+              className="h-5 w-5 cursor-pointer rounded border-slate-200 text-slate-950 focus:ring-slate-900/5 transition-all"
             />
-            <label htmlFor="terms" className="cursor-pointer select-none text-sm leading-6 text-slate-600">
+            <label htmlFor="terms" className="cursor-pointer select-none text-[13px] font-medium leading-6 text-slate-500">
               I agree to the{" "}
-              <a href="#" className="font-medium text-slate-950 underline transition-colors hover:text-sky-700">
+              <Link to="/terms" className="font-bold text-slate-950 underline decoration-slate-200 underline-offset-4 transition-colors hover:decoration-slate-950">
                 Terms & Conditions
-              </a>
+              </Link>
             </label>
           </div>
 
-          <Button type="submit" className="w-full py-4" isLoading={loading}>
+          <Button type="submit" className="w-full py-4 text-sm font-black" isLoading={loading}>
             Complete Setup
           </Button>
         </form>

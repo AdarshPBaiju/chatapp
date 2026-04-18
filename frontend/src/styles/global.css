@@ -62,7 +62,6 @@
 
   .btn-premium:hover {
     box-shadow: 0 15px 35px -10px rgba(15, 23, 42, 0.4);
-    @apply -translate-y-0.5;
   }
 
   .form-input-premium {

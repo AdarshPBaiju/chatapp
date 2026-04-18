@@ -1,20 +1,70 @@
 import { useState, useEffect } from "react";
-import { User, Mail, Phone, Camera, Check, Info } from "lucide-react";
+import { User, Mail, Phone, Camera, Check, Info, AlertCircle } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 import { Button, Input } from "@/shared/ui/FormControls";
 import { fetchProfile, updateProfile } from "../api";
 import { UserProfile } from "../types";
 import { cn } from "@/shared/lib/utils";
+import { useForm } from "@/shared/hooks/useForm";
+import { v } from "@/shared/lib/validation";
 
 export function ProfileSection() {
-  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [initialProfile, setInitialProfile] = useState<UserProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [errorVisible, setErrorVisible] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+
+  const { values, setFieldValue, getFieldProps, handleSubmit, setValues, errors, touched } = useForm({
+    initialValues: {
+      full_name: "",
+      phone_number: "",
+      bio: "",
+      gender: "" as "male" | "female" | "other" | "",
+      profile_picture: null as File | null
+    },
+    schema: {
+      full_name: v.string().name("Invalid characters in name").required("Legal name is required"),
+      phone_number: v.string().min(5, "Invalid phone number"),
+      bio: v.string().max(500, "Bio is too long"),
+      profile_picture: v.file({ maxMb: 2, exts: ["jpg", "jpeg", "png", "webp"] }, "Image must be under 2MB (JPG/PNG)")
+    },
+    onSubmit: async (formValues) => {
+      try {
+        setIsSaving(true);
+        setErrorVisible(null);
+        setSuccess(false);
+
+        const formData = new FormData();
+        formData.append("full_name", formValues.full_name);
+        formData.append("bio", formValues.bio || "");
+        formData.append("gender", formValues.gender || "");
+        formData.append("phone_number", formValues.phone_number || "");
+        
+        if (formValues.profile_picture) {
+          formData.append("profile_picture", formValues.profile_picture);
+        }
+
+        const data = await updateProfile(formData);
+        if (data.success && data.data) {
+          setSuccess(true);
+          setInitialProfile(data.data);
+          // Only clear the file, keep the other values as updated
+          setFieldValue("profile_picture", null);
+        } else if (data.success && !data.data) {
+          setErrorVisible("Update successful but no profile data returned.");
+        } else {
+          setErrorVisible(data.message || "Failed to update profile.");
+        }
+      } catch (err: any) {
+        setErrorVisible("Server error during identity update.");
+      } finally {
+        setIsSaving(false);
+      }
+    }
+  });
 
   useEffect(() => {
     loadProfile();
@@ -31,11 +81,20 @@ export function ProfileSection() {
     try {
       setIsLoading(true);
       const data = await fetchProfile();
-      if (data.success) {
-        setProfile(data.data);
+      if (data.success && data.data) {
+        setInitialProfile(data.data);
+        setValues({
+          full_name: data.data.full_name || "",
+          phone_number: data.data.phone_number || "",
+          bio: data.data.bio || "",
+          gender: data.data.gender || "",
+          profile_picture: null
+        });
+      } else if (data.success && !data.data) {
+        setErrorVisible("Initial profile data is missing.");
       }
     } catch (err: any) {
-      setError("Failed to load profile.");
+      setErrorVisible("Failed to load identity profile.");
     } finally {
       setIsLoading(false);
     }
@@ -44,47 +103,10 @@ export function ProfileSection() {
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (file) {
-      if (file.size > 2 * 1024 * 1024) {
-        setError("Image size must be less than 2MB");
-        return;
-      }
-      setSelectedFile(file);
+      // DSL handles validation on submit/blur, but we set it here for preview
+      setFieldValue("profile_picture", file);
       const url = URL.createObjectURL(file);
       setPreviewUrl(url);
-    }
-  }
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!profile) return;
-
-    try {
-      setIsSaving(true);
-      setError(null);
-      setSuccess(false);
-
-      const formData = new FormData();
-      formData.append("full_name", profile.full_name);
-      formData.append("bio", profile.bio || "");
-      formData.append("gender", profile.gender || "");
-      formData.append("phone_number", profile.phone_number || "");
-      
-      if (selectedFile) {
-        formData.append("profile_picture", selectedFile);
-      }
-
-      const data = await updateProfile(formData);
-      if (data.success) {
-        setSuccess(true);
-        setSelectedFile(null);
-        setProfile(data.data);
-      } else {
-        setError(data.message);
-      }
-    } catch (err: any) {
-      setError("Failed to update profile.");
-    } finally {
-      setIsSaving(false);
     }
   }
 
@@ -95,7 +117,7 @@ export function ProfileSection() {
     </div>
   );
 
-  if (!profile) return (
+  if (!initialProfile) return (
     <div className="p-8 text-center text-rose-500 font-bold">
       Critical error loading identity data.
     </div>
@@ -112,12 +134,15 @@ export function ProfileSection() {
         <div className="relative group">
           <motion.div 
             whileHover={{ scale: 1.05 }}
-            className="h-32 w-32 rounded-[32px] bg-slate-50 border-4 border-white shadow-2xl flex items-center justify-center overflow-hidden transition-all duration-500 group-hover:shadow-slate-200"
+            className={cn(
+              "h-32 w-32 rounded-[32px] bg-slate-50 border-4 border-white shadow-2xl flex items-center justify-center overflow-hidden transition-all duration-500",
+              touched.profile_picture && errors.profile_picture ? "border-rose-400 ring-4 ring-rose-500/10" : "group-hover:shadow-slate-200"
+            )}
           >
-            {previewUrl || profile.profile_picture ? (
+            {previewUrl || initialProfile.profile_picture ? (
               <img 
-                src={previewUrl || profile.profile_picture || ""} 
-                alt={profile.full_name} 
+                src={previewUrl || initialProfile.profile_picture || ""} 
+                alt={values.full_name} 
                 className="h-full w-full object-cover" 
               />
             ) : (
@@ -144,10 +169,10 @@ export function ProfileSection() {
         </div>
         
         <div className="space-y-2">
-          <h2 className="text-4xl font-bold tracking-tight text-slate-900">{profile.full_name || "Guest Identity"}</h2>
+          <h2 className="text-4xl font-bold tracking-tight text-slate-900">{initialProfile.full_name || "Guest Identity"}</h2>
           <div className="flex items-center gap-2 text-slate-500">
             <Mail size={16} />
-            <span className="text-sm font-medium tracking-wide">{profile.email}</span>
+            <span className="text-sm font-medium tracking-wide">{initialProfile.email}</span>
             <div className="h-4 w-px bg-slate-200 mx-2" />
             <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-emerald-600">
               <Check size={10} /> Verified
@@ -156,39 +181,65 @@ export function ProfileSection() {
         </div>
       </div>
 
+      {touched.profile_picture && errors.profile_picture && (
+        <motion.div 
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="flex items-center gap-3 rounded-2xl bg-rose-50 px-5 py-3 text-rose-600 text-xs font-bold uppercase tracking-widest border border-rose-100 w-fit"
+        >
+          <AlertCircle size={16} />
+          {errors.profile_picture}
+        </motion.div>
+      )}
+
       {/* Profile Form */}
-      <form onSubmit={handleSubmit} className="space-y-10">
+      <form onSubmit={handleSubmit} noValidate className="space-y-10">
         <div className="grid md:grid-cols-2 gap-8">
           <Input
             label="Legal Full Name"
             icon={<User size={18} />}
-            value={profile.full_name}
-            onChange={(e) => setProfile({ ...profile, full_name: e.target.value })}
             placeholder="Johnathan Doe"
-            required
+            {...getFieldProps("full_name")}
+            disabled={isSaving}
           />
           <Input
             label="Mobile Identity"
             icon={<Phone size={18} />}
-            value={profile.phone_number || ""}
-            onChange={(e) => setProfile({ ...profile, phone_number: e.target.value })}
             placeholder="+1 (555) 000-0000"
+            {...getFieldProps("phone_number")}
+            disabled={isSaving}
           />
         </div>
 
         <div className="space-y-3">
-          <label className="pl-1 text-[11px] font-bold uppercase tracking-[0.2em] text-slate-400">Account Bio</label>
+          <label className={cn(
+            "pl-1 text-[11px] font-bold uppercase tracking-[0.2em] transition-colors",
+            touched.bio && errors.bio ? "text-rose-500" : "text-slate-400"
+          )}>
+            Account Bio
+          </label>
           <div className="relative group">
             <textarea
-              value={profile.bio}
-              onChange={(e) => setProfile({ ...profile, bio: e.target.value })}
               placeholder="Who are you in the digital world?"
-              className="w-full min-h-[140px] p-5 bg-white border border-slate-100 rounded-[24px] focus:border-slate-900 focus:ring-4 focus:ring-slate-900/5 transition-all outline-none resize-none text-slate-950 placeholder:text-slate-400 text-sm leading-relaxed"
+              className={cn(
+                "w-full min-h-[140px] p-5 bg-white border transition-all outline-none resize-none text-slate-950 placeholder:text-slate-400 text-sm leading-relaxed rounded-[24px]",
+                touched.bio && errors.bio 
+                  ? "border-rose-400 ring-4 ring-rose-500/5" 
+                  : "border-slate-100 focus:border-slate-900 focus:ring-4 focus:ring-slate-900/5 shadow-sm"
+              )}
+              {...getFieldProps("bio")}
+              disabled={isSaving}
             />
-            <div className="absolute top-5 right-5 text-slate-300 group-focus-within:text-slate-900 transition-colors">
-              <Info size={18} />
+            <div className={cn(
+              "absolute top-5 right-5 transition-colors",
+              touched.bio && errors.bio ? "text-rose-400" : "text-slate-300 group-focus-within:text-slate-900"
+            )}>
+              {touched.bio && errors.bio ? <AlertCircle size={18} /> : <Info size={18} />}
             </div>
           </div>
+          {touched.bio && errors.bio && (
+            <p className="pl-1 text-[10px] font-bold text-rose-500 uppercase tracking-widest">{errors.bio}</p>
+          )}
         </div>
 
         <div className="space-y-3">
@@ -198,13 +249,14 @@ export function ProfileSection() {
                 <button
                   key={g}
                   type="button"
-                  onClick={() => setProfile({ ...profile, gender: g })}
+                  onClick={() => setFieldValue("gender", g)}
                   className={cn(
                     "rounded-2xl border-2 py-4 text-xs font-bold uppercase tracking-widest transition-all",
-                    profile.gender === g 
+                    values.gender === g 
                       ? "border-slate-900 bg-slate-900 text-white shadow-xl shadow-slate-900/20" 
                       : "border-slate-50 bg-slate-50 text-slate-400 hover:border-slate-200 hover:bg-white hover:text-slate-900"
                   )}
+                  disabled={isSaving}
                 >
                   {g}
                 </button>
@@ -226,14 +278,14 @@ export function ProfileSection() {
                    Changes deployed successfully.
                  </motion.p>
                )}
-               {error && (
+               {errorVisible && (
                  <motion.p 
                    initial={{ opacity: 0, x: -20 }}
                    animate={{ opacity: 1, x: 0 }}
                    exit={{ opacity: 0, x: -20 }}
                    className="text-sm font-bold text-rose-500"
                  >
-                   {error}
+                   {errorVisible}
                  </motion.p>
                )}
              </AnimatePresence>

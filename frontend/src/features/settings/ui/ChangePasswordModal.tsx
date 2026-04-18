@@ -1,10 +1,12 @@
-import { FormEvent, useState } from "react";
+import { useState } from "react";
 import { Lock, CheckCircle, ShieldAlert } from "lucide-react";
 
 import { changePassword } from "@/features/auth/api";
 import { readApiMessage } from "@/shared/lib/apiResponse";
 import { Modal } from "@/shared/ui/Modal";
 import { Button, Input } from "@/shared/ui/FormControls";
+import { useForm } from "@/shared/hooks/useForm";
+import { v } from "@/shared/lib/validation";
 
 interface ChangePasswordModalProps {
   isOpen: boolean;
@@ -12,43 +14,43 @@ interface ChangePasswordModalProps {
 }
 
 export function ChangePasswordModal({ isOpen, onClose }: ChangePasswordModalProps) {
-  const [oldPassword, setOldPassword] = useState("");
-  const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [error, setError] = useState<string | undefined>();
   const [success, setSuccess] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  async function onSubmit(e: FormEvent) {
-    e.preventDefault();
-    setError(undefined);
-
-    if (password !== confirmPassword) {
-      setError("New passwords do not match.");
-      return;
+  const { getFieldProps, handleSubmit, setErrors, setFieldValue } = useForm({
+    initialValues: {
+      oldPassword: "",
+      password: "",
+      confirmPassword: "",
+    },
+    schema: {
+      oldPassword: v.string().required("Current password is required"),
+      password: v.string().min(8, "Minimum 8 characters").required("New password is required"),
+      confirmPassword: v.string().matches("password", "New passwords do not match").required("Please confirm your new password")
+    },
+    onSubmit: async (formValues) => {
+      setLoading(true);
+      try {
+        await changePassword({
+          old_password: formValues.oldPassword,
+          password: formValues.password,
+          confirm_password: formValues.confirmPassword,
+        });
+        setSuccess(true);
+      } catch (err) {
+        setErrors({ confirmPassword: readApiMessage(err, "Failed to change password.") });
+      } finally {
+        setLoading(false);
+      }
     }
-
-    setLoading(true);
-    try {
-      await changePassword({
-        old_password: oldPassword,
-        password,
-        confirm_password: confirmPassword,
-      });
-      setSuccess(true);
-    } catch (err) {
-      setError(readApiMessage(err, "Failed to change password."));
-    } finally {
-      setLoading(false);
-    }
-  }
+  });
 
   function handleClose() {
     // Reset state before closing
     if (success) {
-        setOldPassword("");
-        setPassword("");
-        setConfirmPassword("");
+        setFieldValue("oldPassword", "");
+        setFieldValue("password", "");
+        setFieldValue("confirmPassword", "");
         setSuccess(false);
     }
     onClose();
@@ -72,7 +74,7 @@ export function ChangePasswordModal({ isOpen, onClose }: ChangePasswordModalProp
           </Button>
         </div>
       ) : (
-        <form onSubmit={onSubmit} className="space-y-8 py-2">
+        <form onSubmit={handleSubmit} noValidate className="space-y-8 py-2">
           <div className="flex items-start gap-4 rounded-2xl border-2 border-sky-100 bg-sky-50/50 p-4">
             <ShieldAlert className="shrink-0 text-sky-700 mt-0.5" size={24} />
             <p className="text-sm leading-relaxed text-slate-600">
@@ -85,9 +87,7 @@ export function ChangePasswordModal({ isOpen, onClose }: ChangePasswordModalProp
             label="Current Password"
             placeholder="Enter current password"
             icon={<Lock size={20} />}
-            value={oldPassword}
-            onChange={(e) => setOldPassword(e.target.value)}
-            required
+            {...getFieldProps("oldPassword")}
             disabled={loading}
           />
 
@@ -97,9 +97,7 @@ export function ChangePasswordModal({ isOpen, onClose }: ChangePasswordModalProp
               label="New Password"
               placeholder="Minimum 8 characters"
               icon={<Lock size={20} />}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
+              {...getFieldProps("password")}
               disabled={loading}
             />
 
@@ -108,11 +106,8 @@ export function ChangePasswordModal({ isOpen, onClose }: ChangePasswordModalProp
               label="Confirm New Password"
               placeholder="Repeat new password"
               icon={<Lock size={20} />}
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              required
+              {...getFieldProps("confirmPassword")}
               disabled={loading}
-              error={error}
             />
           </div>
 
