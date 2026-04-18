@@ -6,5 +6,6 @@ class UsersConfig(AppConfig):
     name = "users"
     label = "users"
 
-    def ready(self):
-        import users.signals  # noqa: F401
+    @staticmethod
+    def ready():
+        import users.signals  # noqa: PLC0415, F401

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from django.db import models
+from django.core.cache import cache
 from .base import UUIDModel
 
 
@@ -25,7 +26,6 @@ class GlobalConfiguration(UUIDModel):
             return default
 
     def save(self, *args, **kwargs):
-        from django.core.cache import cache
         super().save(*args, **kwargs)
         # Invalidate the cache for this key
         cache_key = f"auth:config:{self.key}"

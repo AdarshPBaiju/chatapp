@@ -28,11 +28,7 @@ def api_exception_handler(exc, context):
 
     if response is not None:
         message = response.data.get("detail", "An error occurred.")
-        errors = (
-            response.data
-            if isinstance(response.data, dict) and "detail" not in response.data
-            else response.data
-        )
+        errors = response.data
 
         standard_response = ResponseFactory.error(
             message=message, errors=errors, code=response.status_code

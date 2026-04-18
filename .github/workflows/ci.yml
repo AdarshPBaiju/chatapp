@@ -22,7 +22,7 @@ permissions:
   contents: read
 
 env:
-  DJANGO_SETTINGS_MODULE: chatapp.settings.ci
+  DJANGO_SETTINGS_MODULE: config.settings.ci
 
 jobs:
   check:

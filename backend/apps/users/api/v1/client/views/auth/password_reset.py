@@ -16,6 +16,7 @@ from users.api.v1.client.serializers.auth import (
 )
 from users.services.auth_engine import AuthEngine
 from users.services.user_services import UserService
+from users.models import CustomUser
 
 
 class ClientPasswordResetRequestAPIView(APIView):
@@ -68,7 +69,6 @@ class ClientPasswordResetVerifyAPIView(APIView):
                 code=status.HTTP_400_BAD_REQUEST,
             )
 
-        from users.models import CustomUser
 
         user = CustomUser.objects.filter(email__iexact=email, is_active=True).first()
         if not user:
