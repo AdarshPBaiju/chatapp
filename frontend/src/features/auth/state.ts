@@ -2,7 +2,25 @@ import { create } from "zustand";
 
 import { authStorage } from "@/shared/lib/storage";
 import { tokenManager } from "@/shared/auth/tokenManager";
+import { sessionEngine } from "@/shared/auth/sessionEngine";
 import { AuthStatus, PendingVerification, SessionInfo, UserInfo } from "@/features/auth/types";
+
+type SetFullParams = {
+  access: string;
+  refresh: string;
+  access_exp: number;
+  refresh_exp: number;
+  user?: UserInfo;
+};
+
+type SetRestrictedParams = {
+  access: string;
+  refresh: string;
+  access_exp: number;
+  refresh_exp: number;
+  sessions: SessionInfo[];
+  user?: UserInfo;
+};
 
 type AuthState = {
   status: AuthStatus;
@@ -11,8 +29,8 @@ type AuthState = {
   restrictedSessions: SessionInfo[];
   setAnonymous: () => void;
   setPendingVerification: (payload: PendingVerification) => void;
-  setRestricted: (access: string, refresh: string, sessions: SessionInfo[], user?: UserInfo) => void;
-  setFull: (params: { access: string; refresh: string; user?: UserInfo }) => void;
+  setRestricted: (params: SetRestrictedParams) => void;
+  setFull: (params: SetFullParams) => void;
   hydrateUser: () => void;
 };
 
@@ -21,9 +39,12 @@ export const useAuthStore = create<AuthState>((set) => ({
   user: null,
   pendingVerification: null,
   restrictedSessions: [],
+
   setAnonymous: () => {
-    tokenManager.clearAccess();
+    sessionEngine.broadcastLogout();
+    sessionEngine.stop();
     authStorage.clearRefresh();
+    authStorage.clearRefreshExp();
     authStorage.clearRestrictedAccess();
     authStorage.clearRestrictedSessions();
     authStorage.clearUser();
@@ -35,22 +56,21 @@ export const useAuthStore = create<AuthState>((set) => ({
       restrictedSessions: [],
     });
   },
+
   setPendingVerification: (payload) =>
     set({
       status: "pending_verification",
       pendingVerification: payload,
       restrictedSessions: [],
     }),
-  setRestricted: (access, refresh, sessions, user) => {
-    tokenManager.setAccess(access);
-    authStorage.setRefresh(refresh);
+
+  setRestricted: ({ access, refresh, access_exp, refresh_exp, sessions, user }) => {
+    sessionEngine.startSession({ access, refresh, access_exp, refresh_exp });
     authStorage.setRestrictedAccess(access);
     authStorage.setRestrictedSessions(sessions);
     authStorage.setIsRestricted(true);
     const resolvedUser = user ?? authStorage.getUser() ?? null;
-    if (resolvedUser) {
-      authStorage.setUser(resolvedUser);
-    }
+    if (resolvedUser) authStorage.setUser(resolvedUser);
     set({
       status: "restricted",
       user: resolvedUser,
@@ -58,16 +78,14 @@ export const useAuthStore = create<AuthState>((set) => ({
       restrictedSessions: sessions ?? [],
     });
   },
-  setFull: ({ access, refresh, user }) => {
-    tokenManager.setAccess(access);
-    authStorage.setRefresh(refresh);
+
+  setFull: ({ access, refresh, access_exp, refresh_exp, user }) => {
+    sessionEngine.startSession({ access, refresh, access_exp, refresh_exp });
     authStorage.clearRestrictedAccess();
     authStorage.clearRestrictedSessions();
     authStorage.setIsRestricted(false);
     const resolvedUser = user ?? authStorage.getUser() ?? null;
-    if (resolvedUser) {
-      authStorage.setUser(resolvedUser);
-    }
+    if (resolvedUser) authStorage.setUser(resolvedUser);
     set({
       status: "full",
       user: resolvedUser,
@@ -75,6 +93,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       restrictedSessions: [],
     });
   },
+
   hydrateUser: () => {
     const user = authStorage.getUser();
     const isRestricted = authStorage.getIsRestricted();

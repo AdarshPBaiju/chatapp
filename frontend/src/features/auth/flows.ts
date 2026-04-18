@@ -3,13 +3,14 @@ import { useAuthStore } from "@/features/auth/state";
 import { useIdentityMachine } from "@/features/auth/machine";
 import { authStorage } from "@/shared/lib/storage";
 import { readApiMessage, readApiErrorCode } from "@/shared/lib/apiResponse";
+import { sessionEngine } from "@/shared/auth/sessionEngine";
+import { refreshToken as apiRefreshToken } from "@/features/auth/api";
 import {
   login,
-  refreshToken,
   signUpRequest,
   validateOtp,
   identityInit,
-  identityChallenge
+  identityChallenge,
 } from "@/features/auth/api";
 
 function isLikelyJweCompact(token: string): boolean {
@@ -17,12 +18,14 @@ function isLikelyJweCompact(token: string): boolean {
 }
 
 function applyRestrictedAuth(payload: RestrictedAuthPayload): void {
-  useAuthStore.getState().setRestricted(
-    payload.access,
-    payload.refresh,
-    payload.active_sessions,
-    payload.user,
-  );
+  useAuthStore.getState().setRestricted({
+    access: payload.access,
+    refresh: payload.refresh,
+    access_exp: payload.access_exp,
+    refresh_exp: payload.refresh_exp,
+    sessions: payload.active_sessions,
+    user: payload.user,
+  });
 }
 
 export async function runSignUpFlow(payload: { email: string }): Promise<void> {
@@ -55,6 +58,8 @@ export async function runLoginFlow(payload: LoginRequest): Promise<void> {
     useAuthStore.getState().setFull({
       access: data.access,
       refresh: data.refresh,
+      access_exp: data.access_exp,
+      refresh_exp: data.refresh_exp,
       user: data.user,
     });
   }
@@ -92,7 +97,7 @@ export async function runIdentityChallenge(params: {
       method: params.method,
       expected_step: machine.expectedStep,
       password: params.password,
-      code: params.code
+      code: params.code,
     });
 
     if ("status" in data && data.status === "challenge_required") {
@@ -102,7 +107,9 @@ export async function runIdentityChallenge(params: {
       authStore.setFull({
         access: payload.access,
         refresh: payload.refresh,
-        user: payload.user
+        access_exp: payload.access_exp,
+        refresh_exp: payload.refresh_exp,
+        user: payload.user,
       });
       machine.reset();
     }
@@ -127,11 +134,64 @@ export async function runOtpValidationFlow(userId: string, otpCode: string): Pro
   useAuthStore.getState().setFull({
     access: data.access,
     refresh: data.refresh,
+    access_exp: data.access_exp,
+    refresh_exp: data.refresh_exp,
     user: data.user,
   });
 }
 
+/**
+ * The refresh callback given to sessionEngine.
+ * Called by the engine's internal scheduler — never called directly by components.
+ */
+async function doSessionRefresh() {
+  const refresh = authStorage.getRefresh();
+  if (!refresh) throw new Error("No refresh token stored.");
+
+  const result = await apiRefreshToken({ refresh });
+
+  if (result.is_restricted) {
+    // Restricted session: still give the engine valid tokens so it can schedule
+    // the next refresh, but also update the store to show the restricted UI.
+    useAuthStore.getState().setRestricted({
+      access: result.access,
+      refresh: result.refresh,
+      access_exp: result.access_exp,
+      refresh_exp: result.refresh_exp,
+      sessions: result.active_sessions,
+    });
+    return {
+      access: result.access,
+      refresh: result.refresh,
+      access_exp: result.access_exp,
+      refresh_exp: result.refresh_exp,
+    };
+  }
+
+  // Full session rotation — state.ts will call sessionEngine.startSession internally
+  useAuthStore.getState().setFull({
+    access: result.access,
+    refresh: result.refresh,
+    access_exp: result.access_exp,
+    refresh_exp: result.refresh_exp,
+  });
+
+  return {
+    access: result.access,
+    refresh: result.refresh,
+    access_exp: result.access_exp,
+    refresh_exp: result.refresh_exp,
+  };
+}
+
+function onSessionExpired() {
+  useAuthStore.getState().setAnonymous();
+}
+
 export async function runBootstrapRefresh(): Promise<void> {
+  // Wire the engine callbacks once at boot.
+  sessionEngine.init(doSessionRefresh, onSessionExpired);
+
   const isRestricted = authStorage.getIsRestricted();
   const restrictedAccess = authStorage.getRestrictedAccess();
 
@@ -140,29 +200,27 @@ export async function runBootstrapRefresh(): Promise<void> {
       useAuthStore.getState().setAnonymous();
       return;
     }
-
-    useAuthStore.getState().setRestricted(
-      restrictedAccess,
-      authStorage.getRefresh() ?? "",
-      authStorage.getRestrictedSessions(),
-      authStorage.getUser() ?? undefined,
-    );
+    // Restricted sessions don't get a proactive scheduler — they need the user
+    // to take action (revoke a session) to become full.
+    useAuthStore.getState().setRestricted({
+      access: restrictedAccess,
+      refresh: authStorage.getRefresh() ?? "",
+      access_exp: authStorage.getRefreshExp() ?? 0,
+      refresh_exp: authStorage.getRefreshExp() ?? 0,
+      sessions: authStorage.getRestrictedSessions(),
+      user: authStorage.getUser() ?? undefined,
+    });
     return;
   }
 
   const refresh = authStorage.getRefresh();
-  if (!refresh) {
-    useAuthStore.getState().setAnonymous();
-    return;
-  }
-
-  if (!isLikelyJweCompact(refresh)) {
+  if (!refresh || !isLikelyJweCompact(refresh)) {
     useAuthStore.getState().setAnonymous();
     return;
   }
 
   try {
-    const result = await refreshToken({ refresh });
+    const result = await apiRefreshToken({ refresh });
     if (result.is_restricted) {
       applyRestrictedAuth(result);
       return;
@@ -171,8 +229,35 @@ export async function runBootstrapRefresh(): Promise<void> {
     useAuthStore.getState().setFull({
       access: result.access,
       refresh: result.refresh,
+      access_exp: result.access_exp,
+      refresh_exp: result.refresh_exp,
     });
   } catch {
     useAuthStore.getState().setAnonymous();
   }
+}
+
+export async function runSignUpFinalizeFlow(params: {
+  signup_token: string;
+  full_name: string;
+  password: string;
+  confirm_password: string;
+}): Promise<{ is_restricted: boolean }> {
+  const { signUpFinalize } = await import("@/features/auth/api");
+  const data = await signUpFinalize(params);
+
+  if (data.is_restricted) {
+    applyRestrictedAuth(data);
+    return { is_restricted: true };
+  }
+
+  useAuthStore.getState().setFull({
+    access: data.access,
+    refresh: data.refresh,
+    access_exp: data.access_exp,
+    refresh_exp: data.refresh_exp,
+    user: data.user,
+  });
+
+  return { is_restricted: false };
 }

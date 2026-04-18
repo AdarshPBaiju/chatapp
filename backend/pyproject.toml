@@ -100,7 +100,9 @@ ignore = [
     "BLE001", # blind exception catch
     "PLR6301", # method could be a function/static (DRF views)
     "PLR0911", # too many return statements
-    "PLR0917", # too many return statements
+    "PLR0917", # too many positional arguments
+    "PLR0916", # too many boolean expressions
+    "PLR0914", # too many local variables
 ]
 
 [tool.ruff.lint.per-file-ignores]

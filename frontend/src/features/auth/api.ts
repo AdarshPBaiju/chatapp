@@ -20,6 +20,8 @@ export type OTPValidationResponse = RestrictedAuthPayload | {
   is_restricted: false;
   access: string;
   refresh: string;
+  access_exp: number;
+  refresh_exp: number;
   user: UserInfo;
 };
 
@@ -29,6 +31,8 @@ export type RefreshResponse =
       is_restricted: false;
       access: string;
       refresh: string;
+      access_exp: number;
+      refresh_exp: number;
     };
 
 export async function signUpRequest(payload: { email: string }): Promise<{ email: string; resend_interval: number }> {

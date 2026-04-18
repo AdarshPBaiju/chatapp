@@ -20,6 +20,8 @@ export type RestrictedAuthPayload = {
   is_restricted: true;
   access: string;
   refresh: string;
+  access_exp: number;
+  refresh_exp: number;
   active_sessions: SessionInfo[];
   user?: UserInfo;
 };
@@ -28,6 +30,8 @@ export type FullAuthPayload = {
   is_restricted: false;
   access: string;
   refresh: string;
+  access_exp: number;
+  refresh_exp: number;
   user: UserInfo;
 };
 
