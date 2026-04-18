@@ -231,11 +231,13 @@ CHANNEL_LAYERS = {
     },
 }
 
+MINIO_INTERNAL_URL = config("MINIO_INTERNAL_URL", default="http://minio:9000")
+MINIO_EXTERNAL_URL = config("MINIO_EXTERNAL_URL", default="http://localhost:9000")
+
 AWS_ACCESS_KEY_ID = config("MINIO_ACCESS_KEY", default="minioadmin")
 AWS_SECRET_ACCESS_KEY = config("MINIO_SECRET_KEY", default="minioadmin")
 AWS_STORAGE_BUCKET_NAME = config("MINIO_BUCKET_NAME", default="chatapp")
-AWS_S3_ENDPOINT_URL = config("MINIO_ENDPOINT", default="http://minio:9000")
-AWS_S3_CUSTOM_DOMAIN = config("MINIO_CUSTOM_DOMAIN", default=None)
+AWS_S3_ENDPOINT_URL = MINIO_INTERNAL_URL
 AWS_DEFAULT_ACL = None
 AWS_S3_OBJECT_PARAMETERS = {
     "CacheControl": "max-age=86400",
@@ -243,8 +245,11 @@ AWS_S3_OBJECT_PARAMETERS = {
 AWS_LOCATION = "media"
 AWS_S3_REGION_NAME = "us-east-1"
 AWS_S3_SIGNATURE_VERSION = "s3v4"
+AWS_S3_URL_PROTOCOL = "http"
+AWS_S3_FILE_OVERWRITE = False
+AWS_QUERYSTRING_AUTH = False
 
-DEFAULT_FILE_STORAGE = "storages.backends.s3boto3.S3Boto3Storage"
+DEFAULT_FILE_STORAGE = "core.storages.PublicMinioStorage"
 
 KAFKA_BOOTSTRAP_SERVERS = config("KAFKA_BOOTSTRAP_SERVERS", default="localhost:9092")
 KAFKA_CONSUMER_CONFIG = {
