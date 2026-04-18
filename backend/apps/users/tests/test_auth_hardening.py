@@ -12,7 +12,11 @@ from django.test.client import RequestFactory
 from django.utils import timezone
 
 from core.auth.crypto import AuthCryptoEngine
-from core.auth.request_context import build_auth_request_context, build_fingerprint
+from core.auth.request_context import (
+    build_auth_request_context,
+    build_fingerprint,
+    parse_device_info,
+)
 from users.models import AuthSession, Client, CustomUser, TokenBlacklist
 from users.services.auth_engine import AuthEngine
 from users.services.user_services import UserService
@@ -72,6 +76,33 @@ class AuthHardeningTests(TestCase):
         fpt_without_entropy = build_fingerprint(req, device_entropy="")
         fpt_with_entropy = build_fingerprint(req, device_entropy="entropy-token")
         self.assertNotEqual(fpt_without_entropy, fpt_with_entropy)
+
+    def test_brave_client_hint_overrides_chrome_browser_family(self):
+        req = self.factory.get(
+            "/",
+            HTTP_USER_AGENT=(
+                "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+                "(KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36"
+            ),
+            HTTP_SEC_CH_UA='"Brave";v="147", "Not.A/Brand";v="8", "Chromium";v="147"',
+            HTTP_ACCEPT_LANGUAGE="en-US,en;q=0.8",
+            HTTP_X_TIMEZONE_OFFSET="-330",
+        )
+
+        device_label = parse_device_info(req)
+        context = build_auth_request_context(req)
+
+        self.assertEqual(device_label, "Brave on Linux")
+        self.assertEqual(context.device_label, "Brave on Linux")
+        self.assertNotEqual(build_fingerprint(req, ""), build_fingerprint(self.factory.get(
+            "/",
+            HTTP_USER_AGENT=(
+                "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+                "(KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36"
+            ),
+            HTTP_ACCEPT_LANGUAGE="en-US,en;q=0.8",
+            HTTP_X_TIMEZONE_OFFSET="-330",
+        ), ""))
 
     def test_crypto_round_trip_preserves_sid(self):
         token = AuthCryptoEngine.encrypt_and_sign(

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import re
 import secrets
 from dataclasses import dataclass
 from typing import Any, TYPE_CHECKING
@@ -22,9 +23,31 @@ class AuthRequestContext:
     timezone_offset: str
 
 
-def _normalize_user_agent(user_agent: str) -> str:
+CLIENT_HINT_BRAND_PATTERN = re.compile(r'"([^"]+)"\s*;\s*v="[^"]+"')
+
+
+def _resolve_browser_family(request: Any, user_agent: str) -> str:
     ua = parse(user_agent or "")
-    return f"{ua.browser.family}|{ua.os.family}|{ua.device.family}"
+    client_hints = request.headers.get("Sec-CH-UA", "")
+    if client_hints:
+        brands = {
+            brand.strip()
+            for brand in CLIENT_HINT_BRAND_PATTERN.findall(client_hints)
+            if brand.strip() and brand not in {"Not.A/Brand", "Chromium"}
+        }
+        for preferred_brand in ("Brave", "Microsoft Edge", "Opera", "Vivaldi"):
+            if preferred_brand in brands:
+                return preferred_brand
+        if brands:
+            return sorted(brands)[0]
+    return ua.browser.family
+
+
+def _normalize_user_agent(request: Any) -> str:
+    user_agent = request.META.get("HTTP_USER_AGENT", "")
+    ua = parse(user_agent or "")
+    browser_family = _resolve_browser_family(request, user_agent)
+    return f"{browser_family}|{ua.os.family}|{ua.device.family}"
 
 
 def get_request_ip(request: Any) -> str:
@@ -47,7 +70,7 @@ def generate_device_entropy() -> str:
 
 
 def build_fingerprint(request: Any, device_entropy: str = "") -> str:
-    ua_norm = _normalize_user_agent(request.META.get("HTTP_USER_AGENT", ""))
+    ua_norm = _normalize_user_agent(request)
     lang = request.META.get("HTTP_ACCEPT_LANGUAGE", "")[:50]
     timezone_offset = request.headers.get("X-Timezone-Offset", "0")
     payload = f"{ua_norm}:{lang}:{timezone_offset}:{device_entropy}"
@@ -70,7 +93,7 @@ def build_auth_request_context(request: Any) -> AuthRequestContext:
 def parse_device_info(request: Any) -> str:
     ua_string = request.META.get("HTTP_USER_AGENT", "")
     user_agent = parse(ua_string)
-    browser = user_agent.browser.family
+    browser = _resolve_browser_family(request, ua_string)
     os_family = user_agent.os.family
     device = user_agent.device.family
 
