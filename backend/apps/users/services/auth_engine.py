@@ -461,6 +461,7 @@ class AuthEngine:
         access_ttl = settings.AUTH_ENGINE_SETTINGS["ACCESS_TOKEN_LIFETIME"]
         access_exp = now_ts + access_ttl
         return {
+            "status": "full",
             "access": cls._create_token(
                 user_id=user_id,
                 jti=next_access_jti,
@@ -481,6 +482,7 @@ class AuthEngine:
             ),
             "access_exp": access_exp,
             "refresh_exp": refresh_expiry_ts,
+            "user": cls._serialize_user(user),
         }
 
     @staticmethod
@@ -1141,8 +1143,27 @@ class AuthEngine:
                 current_fingerprint=context.fingerprint,
                 current_device_entropy=context.device_entropy,
             ),
+            "user": cls._serialize_user(CustomUser.objects.get(id=user_id)),
             "message": "Maximum device limit reached. Please revoke an existing session to continue.",
         }
+
+    @classmethod
+    def _serialize_user(cls, user: CustomUser) -> dict[str, Any]:
+        """
+        Serializes user information for the frontend, ensuring compatibility
+        with both Client and Staff user types.
+        """
+        data = {
+            "id": str(user.id),
+            "email": user.email,
+            "full_name": "",
+        }
+
+        client = getattr(user, "client", None)
+        if client:
+            data["full_name"] = client.full_name
+
+        return data
 
     @classmethod
     def _count_active_sessions(cls, user_id: str) -> int:
