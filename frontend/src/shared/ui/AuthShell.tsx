@@ -43,50 +43,49 @@ export function AuthShell() {
   return (
     <div className="h-screen overflow-hidden bg-slate-50 text-slate-950 font-sans selection:bg-slate-900 selection:text-white">
       <div className="grid h-full w-full md:grid-cols-[1fr_480px] lg:grid-cols-[1fr_540px] xl:grid-cols-[1fr_600px]">
-        {/* Cinematic Side Panel */}
-        <aside className="hidden md:block relative h-full overflow-hidden bg-slate-900 border-r border-slate-800 shadow-[20px_0_40px_rgba(0,0,0,0.1)]">
+        {/* Cinematic Side Panel - Light Transition */}
+        <aside className="hidden md:block relative h-full overflow-hidden bg-white border-r border-slate-100 shadow-[20px_0_60px_rgba(0,0,0,0.02)]">
           <div className="pointer-events-none absolute inset-0 overflow-hidden">
-            <motion.div 
-              animate={{ 
+            <motion.div
+              animate={{
                 scale: [1, 1.2, 1],
                 rotate: [0, 45, 0],
                 x: [-100, 50, -100]
               }}
               transition={{ duration: 20, repeat: Infinity, ease: "easeInOut" }}
-              className="absolute -left-40 -top-40 h-[600px] w-[600px] rounded-full bg-violet-600/20 blur-[120px]" 
+              className="absolute -left-40 -top-40 h-[600px] w-[600px] rounded-full bg-sky-200/40 blur-[130px]"
             />
-            <motion.div 
-              animate={{ 
+            <motion.div
+              animate={{
                 scale: [1, 1.3, 1],
                 rotate: [0, -30, 0],
                 y: [-50, 100, -50]
               }}
               transition={{ duration: 25, repeat: Infinity, ease: "easeInOut" }}
-              className="absolute -right-40 top-1/2 h-[500px] w-[500px] rounded-full bg-emerald-500/20 blur-[110px]" 
+              className="absolute -right-40 top-1/2 h-[500px] w-[500px] rounded-full bg-emerald-100/40 blur-[110px]"
             />
-            <motion.div 
-              animate={{ 
-                opacity: [0.1, 0.3, 0.1],
+            <motion.div
+              animate={{
+                opacity: [0.3, 0.6, 0.3],
                 scale: [1, 1.1, 1]
               }}
               transition={{ duration: 12, repeat: Infinity, ease: "easeInOut" }}
-              className="absolute bottom-[-10%] left-[20%] h-[400px] w-[400px] rounded-full bg-indigo-600/20 blur-[100px]" 
+              className="absolute bottom-[-10%] left-[20%] h-[400px] w-[400px] rounded-full bg-violet-100/30 blur-[120px]"
             />
-            
-            {/* Mesh Overlay */}
-            <div className="absolute inset-0 bg-slate-950/40" />
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,_rgba(255,255,255,0.03)_0%,_transparent_50%)]" />
+
+            {/* Soft Ambient Overlay */}
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,_rgba(15,23,42,0.02)_0%,_transparent_50%)]" />
           </div>
 
           <div className="relative flex h-full flex-col p-12 lg:p-16 xl:p-20">
             <Link to="/" className="flex items-center gap-3 w-fit group">
-              <motion.div 
+              <motion.div
                 whileHover={{ rotate: -10, scale: 1.1 }}
-                className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-slate-950 shadow-2xl shadow-white/10"
+                className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-900 text-white shadow-2xl shadow-slate-900/20"
               >
                 <MessageSquare size={22} />
               </motion.div>
-              <span className="text-xl font-bold tracking-tight text-white">ChitChat</span>
+              <span className="text-xl font-bold tracking-tight text-slate-950">ChitChat</span>
             </Link>
 
             <div className="mt-auto max-w-xl">
@@ -99,16 +98,16 @@ export function AuthShell() {
                   transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
                   className="space-y-10"
                 >
-                  <div className="inline-flex items-center gap-2 rounded-full bg-white/10 backdrop-blur-md border border-white/10 px-4 py-1.5 text-[11px] font-black uppercase tracking-[0.3em] text-white/80">
-                    <Icon size={14} className="text-emerald-400" />
+                  <div className="inline-flex items-center gap-2 rounded-full bg-slate-900/5 px-4 py-1.5 text-[11px] font-black uppercase tracking-[0.3em] text-slate-500">
+                    <Icon size={14} className="text-slate-900" />
                     {copy.kicker}
                   </div>
 
-                  <h1 className="text-6xl lg:text-7xl xl:text-8xl font-black leading-[0.9] tracking-tighter text-white">
+                  <h1 className="text-6xl lg:text-7xl xl:text-8xl font-black leading-[0.9] tracking-tighter text-slate-950">
                     {copy.title}
                   </h1>
 
-                  <p className="text-xl leading-relaxed text-slate-400 max-w-md font-medium">
+                  <p className="text-xl leading-relaxed text-slate-500 max-w-md font-medium">
                     {copy.body}
                   </p>
                 </motion.div>
