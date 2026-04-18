@@ -1,18 +1,24 @@
 from __future__ import annotations
-
 from rest_framework import serializers
+from core.validators import v, auto_configure_fields
 
+
+@auto_configure_fields
 class IdentityInitSerializer(serializers.Serializer):
     """
     Validation for the initial identity discovery phase.
     """
-    email = serializers.EmailField(required=True)
 
+    email = v.email().label("Email Address")
+
+
+@auto_configure_fields
 class IdentityChallengeSerializer(serializers.Serializer):
     """
     Validation for the credential submission phases.
     Encapsulates the HIT (Hardened Identity Token) and the selected verification method.
     """
+
     METHOD_CHOICES = [
         ("password", "Password"),
         ("email_otp", "Email OTP"),
@@ -20,23 +26,23 @@ class IdentityChallengeSerializer(serializers.Serializer):
         ("backup_code", "Backup Recovery"),
     ]
 
-    hit = serializers.CharField(required=True)
-    method = serializers.ChoiceField(choices=METHOD_CHOICES, required=True)
-    expected_step = serializers.IntegerField(required=True)
-    
-    # Credential payloads (Conditional based on method)
-    password = serializers.CharField(required=False, allow_blank=True)
-    code = serializers.CharField(required=False, max_length=6, min_length=6)
+    hit = v.string().label("Identity Token")
+    method = v.choice(METHOD_CHOICES).label("Verification Method")
+    expected_step = v.integer().label("Expected Step")
+
+    password = v.string().optional().label("Password")
+    code = v.string().optional().min(6).max(6).label("Verification Code")
 
     def validate(self, attrs):
         method = attrs.get("method")
-        
+
         if method == "password" and not attrs.get("password"):
-            raise serializers.ValidationError({"password": "Password is required for this method."})
-            
-        if method in ["email_otp", "totp"] and not attrs.get("code"):
-            # Note: For email_otp, code might be missing on the first 'init' call 
-            # to trigger the send, which the view handles.
+            raise serializers.ValidationError({
+                "password": "Password is required for this method."
+            })
+
+        if method in {"email_otp", "totp"} and not attrs.get("code"):
+
             pass
-            
+
         return attrs

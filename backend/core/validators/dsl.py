@@ -38,28 +38,28 @@ class RuleBuilder:
     def optional(self) -> RuleBuilder:
         """Marks the field as optional and allows null/blank values."""
         self._required = False
-        self._allow_null = True
-        self._allow_blank = True
         self._drf_kwargs["required"] = False
-        self._drf_kwargs["allow_null"] = True
-        self._drf_kwargs["allow_blank"] = True
+        return self.nullable(True, True)
+
+    def nullable(self, null: bool = True, blank: bool = True) -> RuleBuilder:
+        """Configures null and blank value acceptance for the field."""
+        self._allow_null = null
+        self._allow_blank = blank
+        self._drf_kwargs["allow_null"] = null
+        self._drf_kwargs["allow_blank"] = blank
         return self
 
-    def allow_null(self, value: bool = True) -> RuleBuilder:
-        """Explicitly allow or disallow null values for this field."""
-        self._allow_null = value
-        self._drf_kwargs["allow_null"] = value
+    def access(self, read: bool | None = None, write: bool | None = None) -> RuleBuilder:
+        """Configures the read_only and write_only status of the field."""
+        if read is not None:
+            self._drf_kwargs["read_only"] = read
+        if write is not None:
+            self._drf_kwargs["write_only"] = write
         return self
 
-    def allow_blank(self, value: bool = True) -> RuleBuilder:
-        """Explicitly allow or disallow blank strings (CharField only)."""
-        self._allow_blank = value
-        self._drf_kwargs["allow_blank"] = value
-        return self
-
-    def write_only(self) -> RuleBuilder:
-        """Ensures the field is only used for input (deserialization)."""
-        self._drf_kwargs["write_only"] = True
+    def source(self, field_path: str) -> RuleBuilder:
+        """Configures the source mapping for the DRF field (e.g., 'user.email')."""
+        self._drf_kwargs["source"] = field_path
         return self
 
     def label(self, text: str) -> RuleBuilder:
@@ -149,8 +149,12 @@ class RuleBuilder:
     def to_drf_field(self) -> serializers.Field:
         """Compiles builder state into a standard Django REST Framework field."""
         kwargs = self._drf_kwargs.copy()
-        if "required" not in kwargs:
+
+        if kwargs.get("read_only"):
+            kwargs["required"] = False
+        elif "required" not in kwargs:
             kwargs["required"] = self._required
+
         if "allow_blank" in kwargs and not issubclass(
             self._field_type, serializers.CharField
         ):
@@ -173,70 +177,58 @@ class V:
     Provides a factory for creating chainable RuleBuilders.
     """
 
-    @property
-    def email(self) -> RuleBuilder:
+    def email(self, message: str | None = None) -> RuleBuilder:
         """Factory for Email fields."""
-        return RuleBuilder(serializers.EmailField).required().email()
+        return RuleBuilder(serializers.EmailField).required().email(message=message)
 
-    @property
-    def url(self) -> RuleBuilder:
+    def url(self, message: str | None = None) -> RuleBuilder:
         """Factory for URL fields."""
-        return RuleBuilder(serializers.URLField).required().url()
+        return RuleBuilder(serializers.URLField).required().url(message=message)
 
-    @property
     def string(self) -> RuleBuilder:
         """Factory for basic String fields."""
         return RuleBuilder(serializers.CharField).required()
 
-    @property
     def integer(self) -> RuleBuilder:
         """Factory for Integer fields."""
         return RuleBuilder(serializers.IntegerField).required()
 
-    @property
     def decimal(self) -> RuleBuilder:
         """Factory for Decimal fields."""
         return RuleBuilder(serializers.DecimalField).required()
 
-    @property
     def boolean(self) -> RuleBuilder:
         """Factory for Boolean fields."""
         return RuleBuilder(serializers.BooleanField).required()
 
-    @property
     def date(self) -> RuleBuilder:
         """Factory for Date fields."""
         return RuleBuilder(serializers.DateField).required()
 
-    @property
     def datetime(self) -> RuleBuilder:
         """Factory for DateTime fields."""
         return RuleBuilder(serializers.DateTimeField).required()
 
-    @property
     def uuid(self) -> RuleBuilder:
         """Factory for UUID fields."""
         return RuleBuilder(serializers.UUIDField).required()
 
-    @property
     def password(self) -> RuleBuilder:
         """Factory for secure, write-only Password fields."""
-        return RuleBuilder(serializers.CharField).required().write_only()
+        return RuleBuilder(serializers.CharField).required().access(write=True)
 
-    @property
-    def file(self) -> RuleBuilder:
+    def file(self, max_mb: float = 5, exts: list[str] | None = None) -> RuleBuilder:
         """Factory for File upload fields."""
-        return RuleBuilder(serializers.FileField).required()
+        return RuleBuilder(serializers.FileField).required().file(max_mb=max_mb, exts=exts)
 
     def confirm_password(self, target: str = "password") -> RuleBuilder:
         """Shorthand for creating a password confirmation field."""
-        return self.password.matches(target).label("Confirm Password")
+        return self.password().matches(target).label("Confirm Password")
 
     def choice(self, choices: list[tuple[str, str]]) -> RuleBuilder:
         """Factory for Choice (dropdown) fields."""
         return RuleBuilder().required().choices(choices)
 
-    @property
     def required(self) -> RuleBuilder:
         """Basic mandatory RuleBuilder."""
         return RuleBuilder().required()

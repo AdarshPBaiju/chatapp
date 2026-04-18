@@ -11,7 +11,7 @@ class ClientTokenVerifySerializer(serializers.Serializer):
     Checks signature, decryption, and hardware binding.
     """
 
-    token = v.string.label("Token")
+    token = v.string().label("Token")
 
 
 @auto_configure_fields
@@ -21,4 +21,4 @@ class ClientTokenRefreshSerializer(serializers.Serializer):
     Requires a valid, non-blacklisted refresh token.
     """
 
-    refresh = v.string.label("Refresh Token")
+    refresh = v.string().label("Refresh Token")
