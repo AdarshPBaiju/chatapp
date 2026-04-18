@@ -5,6 +5,7 @@ import { useAuthBootstrap } from "@/app/bootstrap";
 import { PropsWithChildren, createContext, useContext } from "react";
 import { useAuthStore } from "@/features/auth/state";
 import { ThemeProvider } from "@/shared/ui/ThemeProvider";
+import { ThemeSwitcher } from "@/shared/ui/ThemeSwitcher";
 
 import { LoadingScreen } from "@/shared/ui/LoadingScreen";
 
@@ -36,6 +37,7 @@ export function AppProviders({ children }: PropsWithChildren) {
       <AuthContext.Provider value={value}>
         <div className="app-root min-h-screen">
           {children}
+          <ThemeSwitcher />
         </div>
       </AuthContext.Provider>
     </ThemeProvider>
