@@ -24,7 +24,7 @@ export function useAuth() {
 
 export function AppProviders({ children }: PropsWithChildren) {
   const auth = useAuthStore();
-  
+
   const value: AuthContextValue = {
     status: auth.status,
     user: auth.user,
@@ -32,7 +32,7 @@ export function AppProviders({ children }: PropsWithChildren) {
   };
 
   return (
-    <ThemeProvider defaultTheme="dark" storageKey="chatapp-theme">
+    <ThemeProvider defaultTheme="light" storageKey="chatapp-theme">
       <AuthContext.Provider value={value}>
         <div className="app-root min-h-screen">
           {children}

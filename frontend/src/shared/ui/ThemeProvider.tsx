@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
+import { themeConfig } from "@/shared/config/theme";
 
 type Theme = "light" | "dark" | "system";
 
@@ -35,17 +36,32 @@ export function ThemeProvider({
 
     root.classList.remove("light", "dark");
 
+    let activeTheme = theme;
     if (theme === "system") {
-      const systemTheme = window.matchMedia("(prefers-color-scheme: dark)")
-        .matches
+      activeTheme = window.matchMedia("(prefers-color-scheme: dark)").matches
         ? "dark"
         : "light";
-
-      root.classList.add(systemTheme);
-      return;
     }
 
-    root.classList.add(theme);
+    root.classList.add(activeTheme);
+
+    // Dynamic injection from themeConfig
+    const c = themeConfig.colors;
+    const t = activeTheme as "light" | "dark";
+    
+    root.style.setProperty("--background", c.background[t]);
+    root.style.setProperty("--foreground", c.text.main[t]);
+    root.style.setProperty("--muted", c.background.subtle[t]);
+    root.style.setProperty("--muted-foreground", c.text.muted[t]);
+    root.style.setProperty("--card", c.card[t]);
+    root.style.setProperty("--card-foreground", c.text.main[t]);
+    root.style.setProperty("--border", c.card.border[t]);
+    root.style.setProperty("--input", c.input.bg[t]);
+    root.style.setProperty("--primary", c.primary[t]);
+    root.style.setProperty("--primary-foreground", c.primary.foreground[t]);
+    root.style.setProperty("--accent", c.text.accent[t]);
+    root.style.setProperty("--accent-foreground", c.primary.foreground[t]); // Fallback mapping
+
   }, [theme]);
 
   const value = {
