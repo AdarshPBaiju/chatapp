@@ -81,8 +81,8 @@ export function ActiveSessionsSection() {
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center py-20 space-y-4">
-        <div className="h-10 w-10 border-4 border-slate-100 border-t-slate-900 rounded-full animate-spin" />
-        <p className="text-sm font-bold tracking-widest text-slate-400 uppercase">Verifying devices...</p>
+        <div className="h-10 w-10 border-4 border-muted border-t-primary rounded-full animate-spin" />
+        <p className="text-sm font-bold tracking-widest text-muted-foreground uppercase">Verifying devices...</p>
       </div>
     );
   }
@@ -95,15 +95,15 @@ export function ActiveSessionsSection() {
       animate={{ opacity: 1, y: 0 }}
       className="space-y-10"
     >
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 border-b border-slate-50 pb-8">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 border-b border-border pb-8">
         <div className="space-y-2">
-          <h2 className="text-3xl font-bold tracking-tight text-slate-900">Active Devices</h2>
-          <p className="text-slate-500 text-sm font-medium tracking-wide">Monitor and manage the hardware currently signed into your account.</p>
+          <h2 className="text-3xl font-bold tracking-tight text-foreground">Active Devices</h2>
+          <p className="text-muted-foreground text-sm font-medium tracking-wide">Monitor and manage the hardware currently signed into your account.</p>
         </div>
         {otherSessions.length > 0 && (
           <Button 
             variant="outline" 
-            className="text-rose-600 hover:bg-rose-50 hover:border-rose-100 border-rose-100 text-[10px] font-black uppercase tracking-[0.2em] px-6"
+            className="text-destructive hover:bg-destructive/10 hover:border-destructive/20 border-destructive/20 text-[10px] font-black uppercase tracking-[0.2em] px-6"
             onClick={handleRevokeOthers}
             isLoading={revokingOthers}
           >
@@ -126,35 +126,35 @@ export function ActiveSessionsSection() {
                 className={cn(
                   "group relative flex flex-col md:flex-row md:items-center justify-between gap-6 p-6 lg:p-8 rounded-[32px] border transition-all",
                   session.is_current 
-                    ? "bg-slate-900 border-slate-900 text-white shadow-2xl shadow-slate-900/20" 
-                    : "bg-white border-slate-50 hover:border-slate-200 shadow-sm hover:shadow-xl hover:shadow-slate-200/50"
+                    ? "bg-primary border-primary text-primary-foreground shadow-2xl shadow-primary/20" 
+                    : "bg-card border-border hover:border-primary/20 shadow-sm hover:shadow-xl hover:shadow-primary/5"
                 )}
               >
                 <div className="flex items-center gap-6">
                   <div className={cn(
                     "h-16 w-16 rounded-[20px] flex items-center justify-center transition-all duration-500",
-                    session.is_current ? "bg-white/10 text-white" : "bg-slate-50 text-slate-400 group-hover:bg-slate-900 group-hover:text-white"
+                    session.is_current ? "bg-primary-foreground/10 text-primary-foreground" : "bg-muted text-muted-foreground group-hover:bg-foreground group-hover:text-background"
                   )}>
                     <Icon size={32} />
                   </div>
                   <div className="space-y-1.5">
                     <div className="flex items-center gap-3">
-                      <p className={cn("text-lg font-bold tracking-tight", session.is_current ? "text-white" : "text-slate-900")}>
+                      <p className={cn("text-lg font-bold tracking-tight", session.is_current ? "text-primary-foreground" : "text-foreground")}>
                         {session.device || "Secured Device"}
                       </p>
                       {session.is_current && (
-                        <span className="flex items-center gap-1.5 bg-emerald-500 text-white text-[9px] font-black uppercase tracking-[0.25em] px-2.5 py-1 rounded-full">
+                        <span className="flex items-center gap-1.5 bg-success text-success-foreground text-[9px] font-black uppercase tracking-[0.25em] px-2.5 py-1 rounded-full">
                           <Check size={10} strokeWidth={4} /> Current
                         </span>
                       )}
                     </div>
-                    <div className="flex flex-wrap items-center gap-x-6 gap-y-1 text-xs">
-                      <span className={cn("flex items-center gap-2", session.is_current ? "text-slate-400" : "text-slate-500")}>
-                        <MapPin size={14} className={session.is_current ? "text-slate-600" : "text-slate-300"} />
+                    <div className="flex wrap items-center gap-x-6 gap-y-1 text-xs">
+                      <span className={cn("flex items-center gap-2", session.is_current ? "text-primary-foreground/60" : "text-muted-foreground")}>
+                        <MapPin size={14} className={session.is_current ? "text-primary-foreground/40" : "text-muted-foreground/30"} />
                         {session.city ? `${session.city}, ${session.country_code}` : "Private Location"}
                       </span>
-                      <span className={cn("flex items-center gap-2", session.is_current ? "text-slate-400" : "text-slate-500")}>
-                        <Clock size={14} className={session.is_current ? "text-slate-600" : "text-slate-300"} />
+                      <span className={cn("flex items-center gap-2", session.is_current ? "text-primary-foreground/60" : "text-muted-foreground")}>
+                        <Clock size={14} className={session.is_current ? "text-primary-foreground/40" : "text-muted-foreground/30"} />
                         {session.is_current ? "Active now" : `Seen ${formatTime(session.last_seen_at)}`}
                       </span>
                     </div>
@@ -165,10 +165,10 @@ export function ActiveSessionsSection() {
                   <button 
                     onClick={() => handleRevoke(session.session_id)}
                     disabled={revokingId === session.session_id}
-                    className="flex h-12 w-full animate-fade-in-up md:w-auto items-center justify-center gap-2 px-8 rounded-2xl bg-slate-50 text-slate-600 hover:bg-rose-50 hover:text-rose-600 font-bold text-[11px] uppercase tracking-widest transition-all disabled:opacity-50"
+                    className="flex h-12 w-full animate-fade-in-up md:w-auto items-center justify-center gap-2 px-8 rounded-2xl bg-muted text-foreground hover:bg-destructive/10 hover:text-destructive font-bold text-[11px] uppercase tracking-widest transition-all disabled:opacity-50"
                   >
                     {revokingId === session.session_id ? (
-                      <div className="h-4 w-4 border-2 border-rose-500/20 border-t-rose-500 rounded-full animate-spin" />
+                      <div className="h-4 w-4 border-2 border-destructive/20 border-t-destructive rounded-full animate-spin" />
                     ) : (
                       <>
                         <Trash2 size={16} />

@@ -32,11 +32,11 @@ export function SettingsPage() {
   const activeTab = tabs.find(t => location.pathname.startsWith(t.path)) || tabs[0];
 
   return (
-    <div className="flex min-h-screen bg-white font-sans text-slate-950 selection:bg-slate-900 selection:text-white">
+    <div className="flex min-h-screen bg-background font-sans text-foreground selection:bg-primary selection:text-primary-foreground">
       {/* Sidebar - Desktop (Integrated) & Mobile (List) */}
       <aside 
         className={cn(
-          "fixed inset-y-0 left-0 z-40 w-full border-r border-slate-100 bg-white transition-all duration-500 lg:static lg:w-[380px] lg:translate-x-0",
+          "fixed inset-y-0 left-0 z-40 w-full border-r border-border bg-background transition-all duration-500 lg:static lg:w-[380px] lg:translate-x-0",
           !isMobileMenu && "-translate-x-full lg:translate-x-0"
         )}
       >
@@ -46,14 +46,14 @@ export function SettingsPage() {
             <div className="mb-10 flex items-center justify-between">
                <button 
                  onClick={() => navigate("/settings/profile")}
-                 className="group flex h-10 w-10 items-center justify-center rounded-xl bg-slate-50 transition-colors hover:bg-slate-900 hover:text-white"
+                 className="group flex h-10 w-10 items-center justify-center rounded-xl bg-muted transition-colors hover:bg-foreground hover:text-background"
                >
                  <ArrowLeft size={20} />
                </button>
-               <span className="text-[11px] font-bold uppercase tracking-[0.3em] text-slate-400">Account Control</span>
+               <span className="text-[11px] font-bold uppercase tracking-[0.3em] text-muted-foreground">Account Control</span>
             </div>
-            <h1 className="text-4xl font-bold tracking-tight text-slate-950">Settings</h1>
-            <p className="mt-2 text-sm font-medium text-slate-500">Manage your digital presence & safety.</p>
+            <h1 className="text-4xl font-bold tracking-tight text-foreground">Settings</h1>
+            <p className="mt-2 text-sm font-medium text-muted-foreground">Manage your digital presence & safety.</p>
           </div>
 
           {/* Navigation Tabs */}
@@ -69,14 +69,14 @@ export function SettingsPage() {
                   className={({ isActive: linkActive }) => cn(
                     "group flex items-center justify-between rounded-2xl p-4 transition-all duration-300",
                     linkActive 
-                      ? "bg-slate-900 text-white shadow-2xl shadow-slate-900/20" 
-                      : "text-slate-500 hover:bg-slate-50 hover:text-slate-900"
+                      ? "bg-primary text-primary-foreground shadow-2xl shadow-primary/20" 
+                      : "text-muted-foreground hover:bg-muted hover:text-foreground"
                   )}
                 >
                   <div className="flex items-center gap-4">
                     <div className={cn(
                       "flex h-12 w-12 items-center justify-center rounded-xl transition-colors",
-                      isActive ? "bg-white/10 text-white" : "bg-slate-100 text-slate-500 group-hover:bg-white group-hover:shadow-sm"
+                      isActive ? "bg-primary-foreground/10 text-primary-foreground" : "bg-muted text-muted-foreground group-hover:bg-background group-hover:shadow-sm"
                     )}>
                       <Icon size={22} />
                     </div>
@@ -84,7 +84,7 @@ export function SettingsPage() {
                       <p className="text-sm font-bold tracking-tight">{tab.label}</p>
                       <p className={cn(
                         "text-[10px] font-medium tracking-wide",
-                        isActive ? "text-slate-400" : "text-slate-400 group-hover:text-slate-500"
+                        isActive ? "text-primary-foreground/60" : "text-muted-foreground group-hover:text-foreground/80"
                       )}>
                         {tab.desc}
                       </p>
@@ -97,15 +97,15 @@ export function SettingsPage() {
           </nav>
 
           {/* Logout Section */}
-          <div className="mt-auto p-4 lg:p-6 border-t border-slate-50">
+          <div className="mt-auto p-4 lg:p-6 border-t border-border/50">
             <button 
               onClick={handleLogout}
-              className="group flex w-full items-center gap-4 rounded-2xl p-4 text-rose-500 transition-all hover:bg-rose-50"
+              className="group flex w-full items-center gap-4 rounded-2xl p-4 text-destructive transition-all hover:bg-destructive/5"
             >
-              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-rose-50 text-rose-600 transition-colors group-hover:bg-rose-100">
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-destructive/5 text-destructive transition-colors group-hover:bg-destructive/10">
                 <LogOut size={22} />
               </div>
-              <span className="text-sm font-bold tracking-tight text-rose-600">Secure Logout</span>
+              <span className="text-sm font-bold tracking-tight">Secure Logout</span>
             </button>
           </div>
         </div>
@@ -114,15 +114,15 @@ export function SettingsPage() {
       {/* Main Content Area */}
       <main 
         className={cn(
-          "fixed inset-0 z-50 flex h-full w-full flex-col bg-slate-50 transition-all duration-500 lg:static lg:z-auto lg:flex-1 lg:translate-x-0",
+          "fixed inset-0 z-50 flex h-full w-full flex-col bg-muted transition-all duration-500 lg:static lg:z-auto lg:flex-1 lg:translate-x-0",
           isMobileMenu && "translate-x-full lg:translate-x-0"
         )}
       >
         {/* Sub-page Header (Mobile only) */}
-        <div className="flex items-center gap-4 border-b border-white bg-white/80 p-6 backdrop-blur-xl lg:hidden">
+        <div className="flex items-center gap-4 border-b border-border bg-background/80 p-6 backdrop-blur-xl lg:hidden">
           <button 
             onClick={() => navigate("/settings")}
-            className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-50"
+            className="flex h-10 w-10 items-center justify-center rounded-xl bg-muted"
           >
             <ArrowLeft size={20} />
           </button>
@@ -141,7 +141,7 @@ export function SettingsPage() {
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.98 }}
                 transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
-                className="w-full rounded-[40px] border border-white bg-white p-8 shadow-2xl shadow-slate-200/50 lg:p-14"
+                className="w-full rounded-[40px] border border-border bg-background p-8 shadow-2xl shadow-primary/5 lg:p-14"
               >
                  <Outlet />
               </motion.div>

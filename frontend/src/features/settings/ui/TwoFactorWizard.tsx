@@ -72,17 +72,17 @@ export function TwoFactorWizard({ onClose, onSuccess }: TwoFactorWizardProps) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-300">
-      <div className="w-full max-w-lg bg-white rounded-3xl shadow-2xl shadow-slate-900/20 overflow-hidden outline-none">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm animate-in fade-in duration-300">
+      <div className="w-full max-w-lg bg-card rounded-3xl shadow-2xl shadow-primary/20 overflow-hidden outline-none border border-border">
         <div className="p-8">
           {step === 1 && (
             <div className="space-y-6 text-center py-4">
-              <div className="h-20 w-20 bg-sky-50 text-sky-600 rounded-3xl flex items-center justify-center mx-auto">
+              <div className="h-20 w-20 bg-primary/10 text-primary rounded-3xl flex items-center justify-center mx-auto">
                 <Shield size={40} />
               </div>
               <div className="space-y-2">
-                <h3 className="text-2xl font-bold text-slate-900">Secure Your Account</h3>
-                <p className="text-slate-500 leading-relaxed">
+                <h3 className="text-2xl font-bold text-foreground">Secure Your Account</h3>
+                <p className="text-muted-foreground leading-relaxed">
                   Two-factor authentication adds an extra layer of security by requiring a code from your phone when you log in.
                 </p>
               </div>
@@ -96,21 +96,23 @@ export function TwoFactorWizard({ onClose, onSuccess }: TwoFactorWizardProps) {
           {step === 2 && setupData && (
             <div className="space-y-6">
               <div className="text-center space-y-2">
-                <h3 className="text-xl font-bold text-slate-900">Scan QR Code</h3>
-                <p className="text-sm text-slate-500">Open your authenticator app and scan this code.</p>
+                <h3 className="text-xl font-bold text-foreground">Scan QR Code</h3>
+                <p className="text-sm text-muted-foreground">Open your authenticator app and scan this code.</p>
               </div>
               
-              <div className="bg-slate-50 p-6 rounded-2xl flex items-center justify-center border-2 border-slate-100 border-dashed">
-                <img 
-                  src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(setupData.provisioning_uri)}`}
-                  alt="QR Code"
-                  className="rounded-lg shadow-sm bg-white p-2"
-                />
+              <div className="bg-muted p-6 rounded-2xl flex items-center justify-center border-2 border-border border-dashed">
+                <div className="rounded-lg shadow-sm bg-white p-2">
+                  <img 
+                    src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(setupData.provisioning_uri)}`}
+                    alt="QR Code"
+                    className="block"
+                  />
+                </div>
               </div>
 
-              <div className="p-4 bg-sky-50 rounded-xl space-y-1">
-                <p className="text-[10px] font-bold text-sky-700 uppercase tracking-wider">Manual Entry Code</p>
-                <p className="font-mono text-lg font-bold text-sky-800 tracking-widest">{setupData.secret}</p>
+              <div className="p-4 bg-primary/10 rounded-xl space-y-1">
+                <p className="text-[10px] font-bold text-primary uppercase tracking-wider">Manual Entry Code</p>
+                <p className="font-mono text-lg font-bold text-foreground tracking-widest">{setupData.secret}</p>
               </div>
 
               <div className="pt-4 flex gap-3">
@@ -123,8 +125,8 @@ export function TwoFactorWizard({ onClose, onSuccess }: TwoFactorWizardProps) {
           {step === 3 && (
             <div className="space-y-6">
               <div className="text-center space-y-2">
-                <h3 className="text-xl font-bold text-slate-900">Verify Setup</h3>
-                <p className="text-sm text-slate-500">Enter the 6-digit code currently shown in your app.</p>
+                <h3 className="text-xl font-bold text-foreground">Verify Setup</h3>
+                <p className="text-sm text-muted-foreground">Enter the 6-digit code currently shown in your app.</p>
               </div>
 
               <div className="py-4">
@@ -141,7 +143,7 @@ export function TwoFactorWizard({ onClose, onSuccess }: TwoFactorWizardProps) {
                 />
               </div>
 
-              {error && <p className="text-sm font-medium text-red-500 text-center">{error}</p>}
+              {error && <p className="text-sm font-bold text-destructive text-center">{error}</p>}
 
               <div className="pt-4 flex gap-3">
                 <Button variant="outline" onClick={() => setStep(2)} className="flex-1">Back</Button>
@@ -160,18 +162,18 @@ export function TwoFactorWizard({ onClose, onSuccess }: TwoFactorWizardProps) {
           {step === 4 && (
             <div className="space-y-6">
               <div className="text-center space-y-2">
-                <div className="h-16 w-16 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                <div className="h-16 w-16 bg-success/10 text-success rounded-2xl flex items-center justify-center mx-auto mb-4">
                   <Check size={32} />
                 </div>
-                <h3 className="text-xl font-bold text-slate-900">Backup Codes</h3>
-                <p className="text-sm text-slate-500">Keep these codes in a safe place. They are your only way back if you lose your phone.</p>
+                <h3 className="text-xl font-bold text-foreground">Backup Codes</h3>
+                <p className="text-sm text-muted-foreground">Keep these codes in a safe place. They are your only way back if you lose your phone.</p>
               </div>
 
-              <div className="grid grid-cols-2 gap-3 p-6 bg-slate-50 rounded-2xl border-2 border-slate-100 font-mono text-sm leading-relaxed">
+              <div className="grid grid-cols-2 gap-3 p-6 bg-muted rounded-2xl border-2 border-border font-mono text-sm leading-relaxed">
                 {backupCodes.map((code, idx) => (
                   <div key={idx} className="flex items-center gap-2">
-                    <span className="text-slate-300 pointer-events-none">{String(idx + 1).padStart(2, '0')}.</span>
-                    <span className="text-slate-700 font-bold">{code}</span>
+                    <span className="text-muted-foreground/30 pointer-events-none font-bold">{String(idx + 1).padStart(2, '0')}.</span>
+                    <span className="text-foreground font-bold">{code}</span>
                   </div>
                 ))}
               </div>
@@ -186,7 +188,7 @@ export function TwoFactorWizard({ onClose, onSuccess }: TwoFactorWizardProps) {
               </div>
 
               <div className="pt-4">
-                <Button onClick={onSuccess} className="w-full bg-emerald-600 hover:bg-emerald-700 shadow-lg shadow-emerald-500/10">
+                <Button onClick={onSuccess} className="w-full bg-success text-success-foreground hover:bg-success/90 shadow-lg shadow-success/10">
                   Finish Setup
                 </Button>
               </div>

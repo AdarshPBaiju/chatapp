@@ -154,13 +154,13 @@ export function PasswordResetPage() {
     return (
       <AuthLayout heading="Password reset complete" subheading="Your account is ready for sign-in again.">
         <div className="space-y-8 py-8 animate-fade-in-up">
-          <div className="flex flex-col items-center gap-6 rounded-[28px] border border-slate-200 bg-slate-50 p-8 text-center">
-            <div className="flex h-20 w-20 items-center justify-center rounded-full bg-sky-100">
-              <CheckCircle className="text-sky-700" size={40} />
+          <div className="flex flex-col items-center gap-6 rounded-[28px] border border-border bg-muted p-8 text-center">
+            <div className="flex h-20 w-20 items-center justify-center rounded-full bg-success/10">
+              <CheckCircle className="text-success" size={40} />
             </div>
             <div className="space-y-1">
-              <p className="text-lg font-semibold leading-tight text-slate-950">Password Reset Complete</p>
-              <p className="text-sm text-slate-600">Your account is now secure again.</p>
+              <p className="text-lg font-bold leading-tight text-foreground">Password Reset Complete</p>
+              <p className="text-sm text-muted-foreground">Your account is now secure again.</p>
             </div>
           </div>
           <Button onClick={() => navigate("/auth/login")} className="w-full py-4">
@@ -203,7 +203,7 @@ export function PasswordResetPage() {
               <button
                 type="button"
                 onClick={() => navigate("/auth/login")}
-                className="flex items-center justify-center gap-2 text-sm font-medium text-slate-500 transition-colors hover:text-slate-800"
+                className="flex items-center justify-center gap-2 text-sm font-bold text-muted-foreground transition-colors hover:text-foreground"
               >
                 <ArrowLeft size={14} /> Back to Sign In
               </button>
@@ -213,9 +213,9 @@ export function PasswordResetPage() {
 
         {step === "VERIFY" && (
           <form onSubmit={handleVerify} noValidate className="space-y-8 animate-fade-in-up">
-            <div className="flex flex-col items-center gap-1 rounded-[24px] border border-slate-200 bg-slate-50 p-6 text-center">
-              <span className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">Sent to</span>
-              <span className="font-semibold text-slate-950">{values.email}</span>
+            <div className="flex flex-col items-center gap-1 rounded-[24px] border border-border bg-muted p-6 text-center">
+              <span className="text-[11px] font-bold uppercase tracking-[0.22em] text-muted-foreground">Sent to</span>
+              <span className="font-bold text-foreground">{values.email}</span>
             </div>
 
             <Input
@@ -252,7 +252,7 @@ export function PasswordResetPage() {
                 <Button
                   type="button"
                   variant="link"
-                  className="text-sm font-bold uppercase tracking-widest text-slate-400 hover:text-slate-950"
+                  className="text-sm font-bold uppercase tracking-widest text-muted-foreground hover:text-foreground"
                   onClick={handleResend}
                   disabled={countdown > 0}
                 >
@@ -281,7 +281,7 @@ export function PasswordResetPage() {
               {...getFieldProps("confirmPassword")}
               disabled={loading}
             />
-            <Button type="submit" className="w-full py-4 shadow-xl shadow-sky-500/10" isLoading={loading}>
+            <Button type="submit" className="w-full py-4 shadow-xl shadow-primary/10" isLoading={loading}>
               Update Password
             </Button>
           </form>

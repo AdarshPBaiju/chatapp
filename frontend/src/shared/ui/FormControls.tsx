@@ -18,7 +18,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
     return (
       <div className="w-full space-y-2">
         {label && (
-          <label className="pl-1 text-[11px] font-bold uppercase tracking-[0.2em] text-slate-400 group-focus-within:text-slate-900 transition-colors">
+          <label className="pl-1 text-[11px] font-bold uppercase tracking-[0.2em] text-muted-foreground group-focus-within:text-foreground transition-colors">
             {label}
           </label>
         )}
@@ -26,7 +26,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
           {icon && (
             <div className={cn(
               "absolute left-5 top-1/2 -translate-y-1/2 transition-all duration-300",
-              isFocused ? "text-slate-900" : "text-slate-400"
+              isFocused ? "text-foreground" : "text-muted-foreground"
             )}>
               {icon}
             </div>
@@ -44,13 +44,13 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
             }}
             type={isPassword ? (showPassword ? "text" : "password") : type}
             className={cn(
-              "w-full rounded-2xl border bg-white px-5 py-4 text-slate-950 outline-none transition-all duration-300",
-              "placeholder:text-slate-300 font-medium",
+              "w-full rounded-2xl border bg-background px-5 py-4 text-foreground outline-none transition-all duration-300",
+              "placeholder:text-muted-foreground/40 font-medium",
               isFocused 
-                ? "border-slate-900 shadow-[0_0_0_4px_rgba(15,23,42,0.03),0_20px_25px_-5px_rgba(15,23,42,0.05)]" 
-                : "border-slate-100 shadow-sm",
+                ? "border-primary shadow-[0_0_0_4px_var(--primary)/2%] shadow-xl" 
+                : "border-border shadow-sm",
               icon ? "pl-14 pr-14" : "px-6 pr-14",
-              error && "border-rose-200 focus:border-rose-400 focus:ring-rose-500/5",
+              error && "border-destructive/30 focus:border-destructive/50 focus:ring-destructive/5",
               className,
             )}
           />
@@ -58,7 +58,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
             <button
               type="button"
               onClick={() => setShowPassword(!showPassword)}
-              className="absolute right-5 top-1/2 -translate-y-1/2 text-slate-400 transition-all duration-300 hover:text-slate-900"
+              className="absolute right-5 top-1/2 -translate-y-1/2 text-muted-foreground transition-all duration-300 hover:text-foreground"
             >
               {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
             </button>
@@ -70,7 +70,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
-              className="pl-1 text-[11px] font-bold text-rose-500 uppercase tracking-wider"
+              className="pl-1 text-[11px] font-bold text-destructive uppercase tracking-wider"
             >
               {error}
             </motion.p>
@@ -137,8 +137,8 @@ export function OtpInput({ value, onChange, isLoading }: OtpInputProps) {
           className={cn(
             "h-16 w-full rounded-2xl border transition-all duration-300 text-center text-2xl font-bold",
             values[i] 
-              ? "border-slate-900 bg-slate-950 text-white shadow-xl shadow-slate-900/10" 
-              : "border-slate-100 bg-white text-slate-950 focus:border-slate-900 focus:shadow-[0_0_0_4px_rgba(15,23,42,0.03)] shadow-sm"
+              ? "border-primary bg-primary text-primary-foreground shadow-xl shadow-primary/10" 
+              : "border-border bg-background text-foreground focus:border-primary focus:shadow-[0_0_0_4px_var(--primary)/3%] shadow-sm"
           )}
         />
       ))}
@@ -147,11 +147,11 @@ export function OtpInput({ value, onChange, isLoading }: OtpInputProps) {
 }
 
 const variants = {
-  primary: "btn-premium text-white",
-  outline: "border-2 border-slate-100 bg-white text-slate-700 hover:border-slate-900 hover:text-slate-900 shadow-sm",
-  ghost: "border-none bg-transparent text-slate-500 hover:bg-slate-50 hover:text-slate-900",
-  link: "h-auto border-none bg-transparent px-0 py-0 text-slate-600 hover:text-slate-900 underline-offset-4 hover:underline",
-  social: "border border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50 shadow-sm",
+  primary: "btn-premium",
+  outline: "border-2 border-border bg-background text-muted-foreground hover:border-foreground hover:text-foreground shadow-sm",
+  ghost: "border-none bg-transparent text-muted-foreground hover:bg-muted hover:text-foreground",
+  link: "h-auto border-none bg-transparent px-0 py-0 text-muted-foreground hover:text-foreground underline-offset-4 hover:underline",
+  social: "border border-border bg-background text-muted-foreground hover:border-foreground/20 hover:bg-muted shadow-sm",
 };
 
 interface ButtonProps extends HTMLMotionProps<"button"> {
@@ -188,7 +188,7 @@ export function Button({
             initial={{ opacity: 0, scale: 0.5 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.5 }}
-            className="h-5 w-5 animate-spin rounded-full border-2 border-white/30 border-t-white" 
+            className="h-5 w-5 animate-spin rounded-full border-2 border-current/30 border-t-current" 
           />
         ) : (
           <motion.div 
@@ -204,7 +204,7 @@ export function Button({
       </AnimatePresence>
       
       {/* Premium shine effect on hover */}
-      <div className="absolute inset-0 z-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:animate-shimmer" />
+      <div className="absolute inset-0 z-0 bg-gradient-to-r from-transparent via-foreground/5 to-transparent -translate-x-full group-hover:animate-shimmer" />
     </motion.button>
   );
 }
