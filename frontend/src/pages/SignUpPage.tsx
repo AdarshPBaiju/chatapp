@@ -1,5 +1,6 @@
 import { FormEvent, useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { Mail, Lock, User, CheckCircle } from "lucide-react";
 
 import { signUpFinalize, signUpRequest, signUpResend, signUpVerify } from "@/features/auth/api";
 import { useAuthStore } from "@/features/auth/state";
@@ -103,11 +104,11 @@ export function SignUpPage() {
 
       if (result.is_restricted) {
         useAuthStore.getState().setRestricted(result.access, result.refresh, result.active_sessions || [], result.user);
-      } else if ('refresh' in result) {
+      } else if ("refresh" in result) {
         useAuthStore.getState().setFull({
           access: result.access,
           refresh: result.refresh,
-          user: result.user
+          user: result.user,
         });
       }
 
@@ -119,42 +120,68 @@ export function SignUpPage() {
     }
   }
 
-  const subheading = (
-    <span>
-      Already have an account?{" "}
-      <Link to="/login" className="text-[var(--color-primary)] hover:underline">
+  const loginFooter = (
+    <span className="flex flex-wrap items-center gap-2 text-sm">
+      <span className="text-slate-600">Already have a ChitChat account?</span>
+      <Link to="/login" className="font-medium text-sky-700 transition-colors hover:text-sky-800">
         Log in
       </Link>
     </span>
   );
 
   return (
-    <AuthLayout heading="Create an account" subheading={subheading}>
+    <AuthLayout
+      heading={step === "EMAIL" ? "Create account" : step === "OTP" ? "Verify email" : "Profile details"}
+      subheading={
+        step === "EMAIL"
+          ? "Start with your email address to create a new ChitChat account."
+          : step === "OTP"
+            ? "Enter the verification code we sent to continue securely."
+            : "Finish the last step before entering the app."
+      }
+      footer={step === "EMAIL" ? loginFooter : undefined}
+    >
       {step === "EMAIL" && (
-        <form onSubmit={handleEmail} className="space-y-6">
+        <form onSubmit={handleEmail} className="space-y-8">
           <Input
             type="email"
-            placeholder="Email"
+            label="Email Address"
+            placeholder="name@company.com"
+            icon={<Mail size={20} />}
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
             disabled={loading}
             error={error}
           />
-          <Button type="submit" className="w-full" isLoading={loading}>
-            Continue
-          </Button>
+
+          <div className="flex flex-col gap-6">
+            <Button type="submit" className="w-full py-4" isLoading={loading}>
+              Create Account
+            </Button>
+
+            {/* Social signup section intentionally commented out until provider auth is implemented.
+            <div className="grid grid-cols-2 gap-4">
+              <Button variant="social">Google</Button>
+              <Button variant="social">Github</Button>
+            </div>
+            */}
+          </div>
         </form>
       )}
 
       {step === "OTP" && (
-        <form onSubmit={handleVerify} className="space-y-6">
-          <p className="text-[var(--muted)]">
-            Verification code sent to <strong className="text-white">{email}</strong>.
-          </p>
+        <form onSubmit={handleVerify} className="space-y-8">
+          <div className="flex flex-col items-center gap-1 rounded-[24px] border border-slate-200 bg-slate-50 p-6 text-center">
+            <span className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">Sent to</span>
+            <span className="font-semibold text-slate-950">{email}</span>
+          </div>
+
           <Input
             type="text"
+            label="Verification Code"
             placeholder="6-digit code"
+            icon={<CheckCircle size={20} />}
             value={otpCode}
             onChange={(e) => setOtpCode(e.target.value)}
             required
@@ -162,13 +189,15 @@ export function SignUpPage() {
             disabled={loading}
             error={error}
           />
+
           <div className="flex flex-col gap-4">
-            <Button type="submit" isLoading={loading}>
+            <Button type="submit" className="py-4" isLoading={loading}>
               Verify Code
             </Button>
             <Button
               type="button"
               variant="outline"
+              className="py-4"
               onClick={() => {
                 setStep("EMAIL");
                 setOtpCode("");
@@ -178,15 +207,15 @@ export function SignUpPage() {
             >
               Change Email
             </Button>
-            <div className="text-center">
+            <div className="text-center pt-2">
               <Button
                 type="button"
                 variant="link"
-                className="text-sm font-bold tracking-normal uppercase-none"
+                className="text-sm"
                 onClick={handleResend}
                 disabled={countdown > 0}
               >
-                {countdown > 0 ? `Resend code in ${countdown}s` : "Resend Verification Code"}
+                {countdown > 0 ? `Resend in ${countdown}s` : "Resend Verification Code"}
               </Button>
             </div>
           </div>
@@ -195,10 +224,12 @@ export function SignUpPage() {
 
       {step === "DETAILS" && (
         <form onSubmit={handleFinalize} className="space-y-6">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Input
               type="text"
-              placeholder="First name"
+              label="First Name"
+              placeholder="John"
+              icon={<User size={18} />}
               value={firstName}
               onChange={(e) => setFirstName(e.target.value)}
               required
@@ -206,23 +237,21 @@ export function SignUpPage() {
             />
             <Input
               type="text"
-              placeholder="Last name"
+              label="Last Name"
+              placeholder="Doe"
+              icon={<User size={18} />}
               value={lastName}
               onChange={(e) => setLastName(e.target.value)}
               required
               disabled={loading}
             />
           </div>
-          <Input
-            type="email"
-            placeholder="Email"
-            value={email}
-            disabled
-            className="opacity-50 cursor-not-allowed"
-          />
+
           <Input
             type="password"
-            placeholder="Password"
+            label="New Password"
+            icon={<Lock size={18} />}
+            placeholder="Create a strong password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
@@ -230,7 +259,9 @@ export function SignUpPage() {
           />
           <Input
             type="password"
-            placeholder="Confirm Password"
+            label="Confirm Password"
+            icon={<Lock size={18} />}
+            placeholder="Repeat your password"
             value={confirmPassword}
             onChange={(e) => setConfirmPassword(e.target.value)}
             required
@@ -238,24 +269,24 @@ export function SignUpPage() {
             error={error}
           />
 
-          <div className="flex items-center gap-3 py-2">
+          <div className="flex items-center gap-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
             <input
               id="terms"
               type="checkbox"
               checked={agree}
               onChange={(e) => setAgree(e.target.checked)}
-              className="w-5 h-5 rounded border-[#37334a] bg-[#1e1b29] text-[var(--color-primary)] focus:ring-[var(--color-primary)] transition-all cursor-pointer"
+              className="h-5 w-5 cursor-pointer rounded border-slate-300 text-slate-950 focus:ring-sky-200"
             />
-            <label htmlFor="terms" className="text-[var(--muted)] text-sm cursor-pointer select-none">
+            <label htmlFor="terms" className="cursor-pointer select-none text-sm leading-6 text-slate-600">
               I agree to the{" "}
-              <a href="#" className="text-white hover:underline">
+              <a href="#" className="font-medium text-slate-950 underline transition-colors hover:text-sky-700">
                 Terms & Conditions
               </a>
             </label>
           </div>
 
-          <Button type="submit" className="w-full" isLoading={loading}>
-            Create account
+          <Button type="submit" className="w-full py-4" isLoading={loading}>
+            Complete Setup
           </Button>
         </form>
       )}

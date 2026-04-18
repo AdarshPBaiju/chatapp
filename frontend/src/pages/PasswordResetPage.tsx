@@ -1,5 +1,6 @@
 import { FormEvent, useState, useEffect } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
+import { Mail, ShieldCheck, Lock, CheckCircle, ArrowLeft } from "lucide-react";
 
 import {
   confirmPasswordReset,
@@ -98,128 +99,150 @@ export function PasswordResetPage() {
     }
   }
 
-  const subheading = (
-    <span>
-      Remember your password?{" "}
-      <Link to="/login" className="text-[var(--color-primary)] hover:underline font-medium">
-        Back to Login
-      </Link>
-    </span>
-  );
-
   if (step === "SUCCESS") {
     return (
-      <AuthLayout heading="Password Reset">
-        <div className="space-y-6 text-center">
-          <div className="w-20 h-20 bg-green-500/10 rounded-full flex items-center justify-center mx-auto">
-            <svg className="w-10 h-10 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
-            </svg>
+      <AuthLayout heading="Password reset complete" subheading="Your account is ready for sign-in again.">
+        <div className="space-y-8 py-8 animate-fade-in-up">
+          <div className="flex flex-col items-center gap-6 rounded-[28px] border border-slate-200 bg-slate-50 p-8 text-center">
+            <div className="flex h-20 w-20 items-center justify-center rounded-full bg-sky-100">
+              <CheckCircle className="text-sky-700" size={40} />
+            </div>
+            <div className="space-y-1">
+              <p className="text-lg font-semibold leading-tight text-slate-950">Password Reset Complete</p>
+              <p className="text-sm text-slate-600">Your account is now secure again.</p>
+            </div>
           </div>
-          <p className="text-xl text-white">Your password has been reset successfully.</p>
-          <Button onClick={() => navigate("/login")} className="w-full">
-            Go to Login
+          <Button onClick={() => navigate("/login")} className="w-full py-4">
+            Sign In Now
           </Button>
         </div>
       </AuthLayout>
     );
   }
 
+  const getHeading = () => {
+    if (step === "REQUEST") return "Recover account";
+    if (step === "VERIFY") return "Verify email";
+    return "Set new password";
+  };
+
+  const getSubheading = () => {
+    if (step === "REQUEST") return "Request a recovery code using your account email address.";
+    if (step === "VERIFY") return "Confirm the code before creating a new password.";
+    return "Choose a strong password and confirm it once.";
+  };
+
   return (
-    <AuthLayout heading="Reset Password" subheading={subheading}>
-      {step === "REQUEST" && (
-        <form onSubmit={handleRequest} className="space-y-6">
-          <p className="text-[var(--muted)]">
-            Enter your email address to receive a verification code.
-          </p>
-          <Input
-            type="email"
-            placeholder="Email address"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-            disabled={loading}
-            error={error}
-          />
-          <Button type="submit" className="w-full" isLoading={loading}>
-            Send Verification Code
-          </Button>
-        </form>
-      )}
-
-      {step === "VERIFY" && (
-        <form onSubmit={handleVerify} className="space-y-6">
-          <p className="text-[var(--muted)]">
-            We've sent a 6-digit code to <strong className="text-white">{email}</strong>.
-          </p>
-          <Input
-            type="text"
-            placeholder="6-digit code"
-            value={otpCode}
-            onChange={(e) => setOtpCode(e.target.value)}
-            required
-            maxLength={6}
-            disabled={loading}
-            error={error}
-          />
-          <div className="flex flex-col gap-4">
-            <Button type="submit" isLoading={loading}>
-              Verify Code
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => {
-                setStep("REQUEST");
-                setOtpCode("");
-                setError(undefined);
-              }}
+    <AuthLayout heading={getHeading()} subheading={getSubheading()}>
+      <div className="space-y-6">
+        {step === "REQUEST" && (
+          <form onSubmit={handleRequest} className="space-y-8 animate-fade-in-up">
+            <Input
+              type="email"
+              label="Email Address"
+              placeholder="name@company.com"
+              icon={<Mail size={20} />}
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
               disabled={loading}
-            >
-              Back
-            </Button>
-            <div className="text-center">
-              <Button
-                type="button"
-                variant="link"
-                className="text-sm font-bold tracking-normal uppercase-none"
-                onClick={handleResend}
-                disabled={countdown > 0}
-              >
-                {countdown > 0 ? `Resend code in ${countdown}s` : "Resend Reset Code"}
+              error={error}
+            />
+            <div className="flex flex-col gap-6">
+              <Button type="submit" className="w-full py-4" isLoading={loading}>
+                Send Recovery Code
               </Button>
+              <button
+                type="button"
+                onClick={() => navigate("/login")}
+                className="flex items-center justify-center gap-2 text-sm font-medium text-slate-500 transition-colors hover:text-slate-800"
+              >
+                <ArrowLeft size={14} /> Back to Sign In
+              </button>
             </div>
-          </div>
-        </form>
-      )}
+          </form>
+        )}
 
-      {step === "CONFIRM" && (
-        <form onSubmit={handleConfirm} className="space-y-6">
-          <p className="text-[var(--muted)]">
-            Verification successful. Choose a new secure password.
-          </p>
-          <Input
-            type="password"
-            placeholder="New password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-            disabled={loading}
-          />
-          <Input
-            type="password"
-            placeholder="Confirm new password"
-            value={confirmPassword}
-            onChange={(e) => setConfirmPassword(e.target.value)}
-            required
-            disabled={loading}
-            error={error}
-          />
-          <Button type="submit" className="w-full" isLoading={loading}>
-            Reset Password
-          </Button>
-        </form>
-      )}
+        {step === "VERIFY" && (
+          <form onSubmit={handleVerify} className="space-y-8 animate-fade-in-up">
+            <div className="flex flex-col items-center gap-1 rounded-[24px] border border-slate-200 bg-slate-50 p-6 text-center">
+              <span className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">Sent to</span>
+              <span className="font-semibold text-slate-950">{email}</span>
+            </div>
+
+            <Input
+              type="text"
+              label="Recovery Code"
+              placeholder="6-digit code"
+              icon={<ShieldCheck size={20} />}
+              value={otpCode}
+              onChange={(e) => setOtpCode(e.target.value)}
+              required
+              maxLength={6}
+              disabled={loading}
+              error={error}
+            />
+            <div className="flex flex-col gap-5">
+              <Button type="submit" className="py-4" isLoading={loading}>
+                Verify Code
+              </Button>
+
+              <div className="text-center pt-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full py-4"
+                  onClick={() => setStep("REQUEST")}
+                  disabled={loading}
+                >
+                  Change Email
+                </Button>
+              </div>
+
+              <div className="text-center pt-2">
+                <Button
+                  type="button"
+                  variant="link"
+                  className="text-sm"
+                  onClick={handleResend}
+                  disabled={countdown > 0}
+                >
+                  {countdown > 0 ? `Resend in ${countdown}s` : "Resend Recovery Code"}
+                </Button>
+              </div>
+            </div>
+          </form>
+        )}
+
+        {step === "CONFIRM" && (
+          <form onSubmit={handleConfirm} className="space-y-8 animate-fade-in-up">
+            <Input
+              type="password"
+              label="New Password"
+              placeholder="Enter new password"
+              icon={<Lock size={20} />}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              disabled={loading}
+            />
+            <Input
+              type="password"
+              label="Confirm Password"
+              placeholder="Repeat your password"
+              icon={<Lock size={20} />}
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              required
+              disabled={loading}
+              error={error}
+            />
+            <Button type="submit" className="w-full py-4" isLoading={loading}>
+              Update Password
+            </Button>
+          </form>
+        )}
+      </div>
     </AuthLayout>
   );
 }

@@ -8,6 +8,7 @@ import { PasswordChangePage } from "@/pages/PasswordChangePage";
 import { PasswordResetPage } from "@/pages/PasswordResetPage";
 import { SessionGatePage } from "@/pages/SessionGatePage";
 import { SignUpPage } from "@/pages/SignUpPage";
+import { AuthShell } from "@/shared/ui/AuthShell";
 
 function RootRedirect() {
   const status = useAuthStore((state) => state.status);
@@ -54,38 +55,43 @@ function PublicGuard({ children }: { children: JSX.Element }) {
 
 export const appRouter = createBrowserRouter([
   { path: "/", element: <RootRedirect /> },
-  { path: "/login", element: <PublicGuard><LoginPage /></PublicGuard> },
-  { path: "/signup", element: <PublicGuard><SignUpPage /></PublicGuard> },
-  { path: "/forgot-password", element: <PublicGuard><PasswordResetPage /></PublicGuard> },
   {
-    path: "/otp",
-    element: (
-      <OtpGuard>
-        <OtpPage />
-      </OtpGuard>
-    ),
-  },
-  {
-    path: "/session-gate",
-    element: (
-      <RestrictedGuard>
-        <SessionGatePage />
-      </RestrictedGuard>
-    ),
+    element: <AuthShell />,
+    children: [
+      { path: "/login", element: <PublicGuard><LoginPage /></PublicGuard> },
+      { path: "/signup", element: <PublicGuard><SignUpPage /></PublicGuard> },
+      { path: "/forgot-password", element: <PublicGuard><PasswordResetPage /></PublicGuard> },
+      {
+        path: "/otp",
+        element: (
+          <OtpGuard>
+            <OtpPage />
+          </OtpGuard>
+        ),
+      },
+      {
+        path: "/session-gate",
+        element: (
+          <RestrictedGuard>
+            <SessionGatePage />
+          </RestrictedGuard>
+        ),
+      },
+      {
+        path: "/change-password",
+        element: (
+          <FullAuthGuard>
+            <PasswordChangePage />
+          </FullAuthGuard>
+        ),
+      },
+    ],
   },
   {
     path: "/dashboard",
     element: (
       <FullAuthGuard>
         <DashboardPage />
-      </FullAuthGuard>
-    ),
-  },
-  {
-    path: "/change-password",
-    element: (
-      <FullAuthGuard>
-        <PasswordChangePage />
       </FullAuthGuard>
     ),
   },
