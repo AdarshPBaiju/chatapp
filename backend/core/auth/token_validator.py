@@ -101,6 +101,7 @@ def validate_token_for_request(
             session_id=session_id,
             jti=payload.get("jti", ""),
             partner_jti=payload.get("partner_jti", ""),
+            scope=payload.get("scope"),
         ):
             logger.warning(
                 "inactive_session_token_use",

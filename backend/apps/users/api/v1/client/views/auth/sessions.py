@@ -10,6 +10,24 @@ from users.api.v1.client.serializers.auth import ClientSessionRevokeSerializer
 from users.services.auth_engine import AuthEngine
 
 
+def _build_restricted_payload(*, user_id: str, request, context, session_id: str | None):
+    restricted_tokens = AuthEngine._build_restricted_response(
+        user_id=user_id,
+        context=context,
+        access_jti=request.auth["jti"],
+        refresh_jti=request.auth["partner_jti"],
+        session_id=str(session_id or request.auth.get("sid") or ""),
+    )
+    return {
+        "is_restricted": True,
+        "access": restricted_tokens["access"],
+        "refresh": restricted_tokens["refresh"],
+        "access_exp": restricted_tokens["access_exp"],
+        "refresh_exp": restricted_tokens["refresh_exp"],
+        "sessions": restricted_tokens["active_sessions"],
+    }
+
+
 class ClientSessionListAPIView(APIView):
     permission_classes = [AllowRevokeOnly]
 
@@ -32,9 +50,6 @@ class ClientSessionListAPIView(APIView):
             current_device_entropy=context.device_entropy,
         )
 
-        promotion_data = None
-        new_access_token = None
-
         if request.auth.get("scope") == "revoke_only":
             try:
                 res = AuthEngine.promote_restricted_session(
@@ -44,29 +59,34 @@ class ClientSessionListAPIView(APIView):
                     session_id=current_sid,
                     request=request,
                 )
-                promotion_data = {
-                    "is_promoted": True,
-                    "access": res["access"],
-                    "refresh": res["refresh"],
-                }
-            except ValueError:
-                restricted_tokens = AuthEngine._build_restricted_response(
-                    user_id=user_id,
-                    context=context,
-                    access_jti=request.auth["jti"],
-                    refresh_jti=request.auth["partner_jti"],
-                    session_id=current_sid,
+                return ResponseFactory.success(
+                    message="Active sessions retrieved successfully.",
+                    data={
+                        "sessions": sessions,
+                        "is_promoted": True,
+                        "access": res["access"],
+                        "refresh": res["refresh"],
+                        "access_exp": res["access_exp"],
+                        "refresh_exp": res["refresh_exp"],
+                    },
                 )
-                new_access_token = restricted_tokens["access"]
-                new_refresh_token = restricted_tokens["refresh"]
+            except ValueError:
+                return ResponseFactory.success(
+                    message="Active sessions retrieved successfully.",
+                    data=_build_restricted_payload(
+                        user_id=user_id,
+                        request=request,
+                        context=context,
+                        session_id=current_sid,
+                    ),
+                )
 
         return ResponseFactory.success(
             message="Active sessions retrieved successfully.",
             data={
                 "sessions": sessions,
-                "access": new_access_token,
-                "refresh": new_refresh_token if new_access_token else None,
-                **(promotion_data or {}),
+                "is_promoted": False,
+                "is_restricted": False,
             },
         )
 
@@ -144,14 +164,24 @@ class ClientSessionRevokeAPIView(APIView):
                     session_id=request.auth.get("sid"),
                     request=request,
                 )
-            except ValueError as e:
-                return ResponseFactory.error(message=str(e))
+            except ValueError:
+                return ResponseFactory.success(
+                    message="Session revoked. Device limit is still reached.",
+                    data=_build_restricted_payload(
+                        user_id=user_id,
+                        request=request,
+                        context=context,
+                        session_id=request.auth.get("sid"),
+                    ),
+                )
             return ResponseFactory.success(
                 message="Session revoked. You have been granted full access.",
                 data={
                     "is_promoted": True,
                     "access": res["access"],
                     "refresh": res["refresh"],
+                    "access_exp": res["access_exp"],
+                    "refresh_exp": res["refresh_exp"],
                 },
             )
 
@@ -183,14 +213,28 @@ class ClientSessionRevokeOthersAPIView(APIView):
                     session_id=request.auth.get("sid"),
                     request=request,
                 )
-            except ValueError as e:
-                return ResponseFactory.error(message=str(e))
+            except ValueError:
+                context = build_auth_request_context(request)
+                return ResponseFactory.success(
+                    message=f"Successfully revoked {count} other sessions. Device limit is still reached.",
+                    data={
+                        **_build_restricted_payload(
+                            user_id=user_id,
+                            request=request,
+                            context=context,
+                            session_id=request.auth.get("sid"),
+                        ),
+                        "revoked_count": count,
+                    },
+                )
             return ResponseFactory.success(
                 message=f"Successfully revoked {count} other sessions. You have been granted full access.",
                 data={
                     "is_promoted": True,
                     "access": res["access"],
                     "refresh": res["refresh"],
+                    "access_exp": res["access_exp"],
+                    "refresh_exp": res["refresh_exp"],
                 },
             )
 

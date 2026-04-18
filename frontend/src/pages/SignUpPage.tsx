@@ -23,7 +23,7 @@ export function SignUpPage() {
   const [error, setError] = useState<string | undefined>();
   const [loading, setLoading] = useState(false);
   const [signupToken, setSignupToken] = useState("");
-  const [resendInterval] = useState(60);
+  const [resendInterval, setResendInterval] = useState(60);
   const [countdown, setCountdown] = useState(0);
 
   async function handleEmail(e: FormEvent) {
@@ -31,7 +31,8 @@ export function SignUpPage() {
     setError(undefined);
     setLoading(true);
     try {
-      await runSignUpFlow({ email });
+      const data = await runSignUpFlow({ email });
+      setResendInterval(data.resend_interval);
       setStep("OTP");
     } catch (err) {
       setError(readApiMessage(err, "Sign up failed."));

@@ -124,6 +124,12 @@ class ClientTokenRefreshAPIView(APIView):
                 code=status.HTTP_401_UNAUTHORIZED,
                 error_code=e.error_code,
             )
+        except ValueError as e:
+            return ResponseFactory.error(
+                message=str(e),
+                code=status.HTTP_401_UNAUTHORIZED,
+                error_code="AUTH_SESSION_EXPIRED",
+            )
         else:
             if token_result["status"] == "restricted":
                 response = ResponseFactory.success(

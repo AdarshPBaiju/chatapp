@@ -35,6 +35,7 @@ def _auth_settings_override() -> dict:
 )
 class ClientLoginAPITests(APITestCase):
     endpoint = "/api/v1/client/login/"
+    identity_init_endpoint = "/api/v1/client/identity/init/"
 
     def setUp(self):
         self.inactive_user = CustomUser.objects.create_user(
@@ -81,6 +82,8 @@ class ClientLoginAPITests(APITestCase):
             "status": "full",
             "access": "access-token",
             "refresh": "refresh-token",
+            "access_exp": 111,
+            "refresh_exp": 222,
             "session_id": "session-id",
         }
 
@@ -101,6 +104,9 @@ class ClientLoginAPITests(APITestCase):
         issue_tokens_mock.return_value = {
             "status": "restricted",
             "access": "access-token",
+            "refresh": "refresh-token",
+            "access_exp": 111,
+            "refresh_exp": 222,
             "active_sessions": [{"session_id": "s1"}],
             "message": "Maximum device limit reached. Please revoke an existing session to continue.",
         }
@@ -115,3 +121,13 @@ class ClientLoginAPITests(APITestCase):
         self.assertTrue(response.data["success"])
         self.assertTrue(response.data["data"]["is_restricted"])
         self.assertEqual(response.data["data"]["active_sessions"], [{"session_id": "s1"}])
+
+    def test_identity_init_route_is_registered(self):
+        response = self.client.post(
+            self.identity_init_endpoint,
+            {"email": "missing@example.com"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(response.data["error_code"], "IDENTITY_USER_NOT_FOUND")

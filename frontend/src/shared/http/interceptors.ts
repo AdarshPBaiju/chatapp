@@ -10,9 +10,8 @@
  * Response interceptor: map error_code to deterministic local state transitions.
  */
 
-import axios, { AxiosError, InternalAxiosRequestConfig } from "axios";
+import { AxiosError, InternalAxiosRequestConfig } from "axios";
 
-import { env } from "@/shared/lib/env";
 import { getTimezoneOffsetHeaderValue } from "@/shared/lib/timezone";
 import { tokenManager } from "@/shared/auth/tokenManager";
 import { sessionEngine } from "@/shared/auth/sessionEngine";

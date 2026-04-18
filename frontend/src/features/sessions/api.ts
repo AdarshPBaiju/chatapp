@@ -4,16 +4,24 @@ import { ApiEnvelope } from "@/shared/types/api";
 import { SessionInfo } from "@/features/auth/types";
 
 export type RevokeResponse = {
+  is_restricted?: boolean;
   is_promoted?: boolean;
   access?: string;
   refresh?: string;
+  access_exp?: number;
+  refresh_exp?: number;
+  sessions?: SessionInfo[];
+  revoked_count?: number;
 };
 
 export type ListSessionsResponse = {
   sessions: SessionInfo[];
+  is_restricted?: boolean;
   is_promoted?: boolean;
   access?: string;
   refresh?: string;
+  access_exp?: number;
+  refresh_exp?: number;
 };
 
 export async function listSessions(): Promise<ListSessionsResponse> {

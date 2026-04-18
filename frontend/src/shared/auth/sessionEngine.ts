@@ -17,7 +17,7 @@ import { tokenManager } from "@/shared/auth/tokenManager";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
-export type SessionState = "IDLE" | "ACTIVE" | "REFRESHING" | "EXPIRED";
+export type SessionState = "IDLE" | "ACTIVE" | "RESTRICTED" | "REFRESHING" | "EXPIRED";
 
 export type SessionTokens = {
   access: string;
@@ -70,12 +70,11 @@ class SessionEngine {
    * Called after login, bootstrap refresh, or a successful proactive refresh.
    */
   startSession(tokens: SessionTokens) {
-    this.cancelTimer();
-    tokenManager.setTokens(tokens.access, tokens.access_exp, tokens.refresh_exp);
-    authStorage.setRefresh(tokens.refresh);
-    authStorage.setRefreshExp(tokens.refresh_exp);
-    this.state = "ACTIVE";
-    this.scheduleRefresh(tokens.access_exp);
+    this.applyNewTokens(tokens, true);
+  }
+
+  startRestrictedSession(tokens: SessionTokens) {
+    this.applyNewTokens(tokens, false);
   }
 
   /**
@@ -141,25 +140,27 @@ class SessionEngine {
         type: "SESSION_REFRESHED",
         tokens,
       });
-      this.applyNewTokens(tokens);
-    } catch (err: any) {
+      this.applyNewTokens(tokens, true);
+    } catch {
       localStorage.removeItem(REFRESH_LOCK_KEY);
       this.channel.postMessage({ type: "SESSION_REFRESH_FAILED" });
-      this.handleRefreshFailure(err);
+      this.handleRefreshFailure();
     }
   }
 
-  private applyNewTokens(tokens: SessionTokens) {
+  private applyNewTokens(tokens: SessionTokens, scheduleRefresh: boolean) {
     localStorage.removeItem(REFRESH_LOCK_KEY);
-    this.state = "ACTIVE";
+    this.state = scheduleRefresh ? "ACTIVE" : "RESTRICTED";
     this.cancelTimer();
     tokenManager.setTokens(tokens.access, tokens.access_exp, tokens.refresh_exp);
     authStorage.setRefresh(tokens.refresh);
     authStorage.setRefreshExp(tokens.refresh_exp);
-    this.scheduleRefresh(tokens.access_exp);
+    if (scheduleRefresh) {
+      this.scheduleRefresh(tokens.access_exp);
+    }
   }
 
-  private handleRefreshFailure(err: any) {
+  private handleRefreshFailure() {
     this.cancelTimer();
     this.state = "EXPIRED";
     tokenManager.clear();
@@ -174,7 +175,7 @@ class SessionEngine {
     if (type === "SESSION_REFRESHED" && tokens) {
       // Another tab refreshed — adopt its tokens and reschedule our clock.
       if (this.state === "ACTIVE" || this.state === "REFRESHING") {
-        this.applyNewTokens(tokens as SessionTokens);
+        this.applyNewTokens(tokens as SessionTokens, true);
       }
     }
 
