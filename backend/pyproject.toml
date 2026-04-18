@@ -98,6 +98,9 @@ ignore = [
     "ARG003", # unused class method argument
     "G004",   # logging statement uses f-string
     "BLE001", # blind exception catch
+    "PLR6301", # method could be a function/static (DRF views)
+    "PLR0911", # too many return statements
+    "PLR0917", # too many return statements
 ]
 
 [tool.ruff.lint.per-file-ignores]

@@ -16,6 +16,14 @@ from users.api.v1.client.views.auth import (
     ClientSessionRevokeOthersAPIView,
     ClientTokenVerifyAPIView,
     ClientTokenRefreshAPIView,
+    IdentityInitAPIView,
+    IdentityChallengeAPIView,
+)
+from users.api.v1.client.views.profile import ClientProfileAPIView
+from users.api.v1.client.views.security import (
+    TwoFactorSetupAPIView,
+    TwoFactorVerifyAPIView,
+    TwoFactorBackupCodesAPIView,
 )
 
 urlpatterns = [
@@ -23,6 +31,8 @@ urlpatterns = [
     path("signup/verify/", ClientSignUpVerifyAPIView.as_view(), name="client-signup-verify"),
     path("signup/finalize/", ClientSignUpFinalizeAPIView.as_view(), name="client-signup-finalize"),
     path("login/", ClientLoginAPIView.as_view(), name="client-login"),
+    path("identity/init/", IdentityInitAPIView.as_view(), name="client-identity-init"),
+    path("identity/challenge/", IdentityChallengeAPIView.as_view(), name="client-identity-challenge"),
     path(
         "password-reset/request/",
         ClientPasswordResetRequestAPIView.as_view(),
@@ -67,4 +77,9 @@ urlpatterns = [
         ClientSessionRevokeOthersAPIView.as_view(),
         name="client-session-revoke-others",
     ),
+    # Profile & Identity
+    path("profile/", ClientProfileAPIView.as_view(), name="client-profile"),
+    path("security/2fa/setup/", TwoFactorSetupAPIView.as_view(), name="client-2fa-setup"),
+    path("security/2fa/verify/", TwoFactorVerifyAPIView.as_view(), name="client-2fa-verify"),
+    path("security/2fa/backup-codes/", TwoFactorBackupCodesAPIView.as_view(), name="client-2fa-backup-codes"),
 ]

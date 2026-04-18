@@ -37,7 +37,24 @@ export type PendingVerification = {
   resend_interval: number;
 };
 
-export type AuthStatus = "anonymous" | "pending_verification" | "restricted" | "full";
+export type AuthStatus = "anonymous" | "pending_verification" | "restricted" | "full" | "identity_flow";
+
+export type AuthPhase = 
+  | "IDENTIFY" 
+  | "METHOD_SELECT" 
+  | "PASSWORD_CHECK" 
+  | "MFA_TOTP" 
+  | "MFA_EMAIL_OTP" 
+  | "MFA_BACKUP";
+
+export type IdentityChallengePayload = {
+  status: "challenge_required";
+  hit: string;
+  flow_id: string;
+  expected_step: number;
+  allowed_methods: string[];
+  challenge_type: "select" | "mfa" | "password";
+};
 
 export type LoginRequest = {
   email: string;

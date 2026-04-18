@@ -37,6 +37,7 @@ class ClientLoginAPIView(APIView):
             return ResponseFactory.error(
                 message="Invalid email or password.",
                 code=status.HTTP_401_UNAUTHORIZED,
+                error_code="AUTH_INVALID_CREDENTIALS",
             )
 
         if not user.is_active:

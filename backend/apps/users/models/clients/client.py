@@ -1,3 +1,4 @@
+
 from typing import ClassVar
 
 from django.conf import settings
@@ -39,6 +40,8 @@ class Client(UUIDModel):
     )
     phone_number = models.CharField(max_length=16, unique=True, blank=True, null=True)
     is_two_factor_enabled = models.BooleanField(default=False)
+    totp_secret = models.CharField(max_length=255, blank=True, default="")
+    backup_codes = models.JSONField(default=list, blank=True)
 
     class Meta:
         indexes: ClassVar[list[models.Index]] = [

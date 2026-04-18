@@ -19,6 +19,7 @@ class ResponseFactory:
         data: Any = None,
         errors: Any = None,
         code: int = status.HTTP_200_OK,
+        error_code: str | None = None,
         meta: dict[str, Any] | None = None,
     ) -> Response:
         """
@@ -28,6 +29,7 @@ class ResponseFactory:
             "success": success,
             "message": message,
             "code": code,
+            "error_code": error_code,
             "data": data,
             "errors": errors,
             "meta": {
@@ -43,13 +45,19 @@ class ResponseFactory:
         message: str = "Success",
         data: Any = None,
         code: int = status.HTTP_200_OK,
+        error_code: str | None = None,
         meta: dict[str, Any] | None = None,
     ) -> Response:
         """
         Constructs a standard success response.
         """
         return cls._base_response(
-            success=True, message=message, data=data, code=code, meta=meta
+            success=True,
+            message=message,
+            data=data,
+            code=code,
+            error_code=error_code,
+            meta=meta,
         )
 
     @classmethod
@@ -58,13 +66,19 @@ class ResponseFactory:
         message: str = "Error",
         errors: Any = None,
         code: int = status.HTTP_400_BAD_REQUEST,
+        error_code: str | None = None,
         meta: dict[str, Any] | None = None,
     ) -> Response:
         """
         Constructs a standard error response.
         """
         return cls._base_response(
-            success=False, message=message, errors=errors, code=code, meta=meta
+            success=False,
+            message=message,
+            errors=errors,
+            code=code,
+            error_code=error_code,
+            meta=meta,
         )
 
     @classmethod

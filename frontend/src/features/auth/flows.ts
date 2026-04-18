@@ -1,10 +1,18 @@
-import { authStorage } from "@/shared/lib/storage";
 import { LoginRequest, RestrictedAuthPayload } from "@/features/auth/types";
 import { useAuthStore } from "@/features/auth/state";
-import { login, refreshToken, signUpRequest, validateOtp } from "@/features/auth/api";
+import { useIdentityMachine } from "@/features/auth/machine";
+import { authStorage } from "@/shared/lib/storage";
+import { readApiMessage, readApiErrorCode } from "@/shared/lib/apiResponse";
+import {
+  login,
+  refreshToken,
+  signUpRequest,
+  validateOtp,
+  identityInit,
+  identityChallenge
+} from "@/features/auth/api";
 
 function isLikelyJweCompact(token: string): boolean {
-  // Current backend issues nested JWS-in-JWE compact tokens => 5 segments.
   return token.split(".").length === 5;
 }
 
@@ -49,6 +57,63 @@ export async function runLoginFlow(payload: LoginRequest): Promise<void> {
       refresh: data.refresh,
       user: data.user,
     });
+  }
+}
+
+export async function runIdentityInit(email: string): Promise<void> {
+  const machine = useIdentityMachine.getState();
+  machine.setLoading(true);
+  try {
+    const data = await identityInit({ email });
+    machine.setChallenge(data);
+    useAuthStore.getState().setAnonymous();
+  } catch (error: any) {
+    machine.setError(error.message || "Failed to initialize identity flow.");
+  }
+}
+
+export async function runIdentityChallenge(params: {
+  method: string;
+  password?: string;
+  code?: string;
+}): Promise<void> {
+  const machine = useIdentityMachine.getState();
+  const authStore = useAuthStore.getState();
+
+  if (!machine.hitToken) {
+    machine.setError("Session expired. Please restart login.");
+    return;
+  }
+
+  machine.setLoading(true);
+  try {
+    const data = await identityChallenge({
+      hit: machine.hitToken,
+      method: params.method,
+      expected_step: machine.expectedStep,
+      password: params.password,
+      code: params.code
+    });
+
+    if ("status" in data && data.status === "challenge_required") {
+      machine.setChallenge(data);
+    } else if ("access" in data) {
+      const payload = data as any;
+      authStore.setFull({
+        access: payload.access,
+        refresh: payload.refresh,
+        user: payload.user
+      });
+      machine.reset();
+    }
+  } catch (error: any) {
+    const message = readApiMessage(error);
+    const errorCode = readApiErrorCode(error);
+    machine.setError(message);
+
+    if (errorCode === "IDENTITY_FLOW_EXPIRED") {
+      setTimeout(() => machine.reset(), 1500);
+    }
   }
 }
 

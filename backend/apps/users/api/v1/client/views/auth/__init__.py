@@ -21,6 +21,7 @@ from .sessions import (
     ClientSessionRevokeOthersAPIView,
 )
 from .tokens import ClientTokenVerifyAPIView, ClientTokenRefreshAPIView
+from .identity import IdentityInitAPIView, IdentityChallengeAPIView
 
 __all__ = [
     "ClientSignUpRequestAPIView",
@@ -39,4 +40,6 @@ __all__ = [
     "ClientSessionRevokeOthersAPIView",
     "ClientTokenVerifyAPIView",
     "ClientTokenRefreshAPIView",
+    "IdentityInitAPIView",
+    "IdentityChallengeAPIView",
 ]

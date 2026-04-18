@@ -6,6 +6,7 @@ from users.services.auth_engine import AuthEngine
 
 User = get_user_model()
 
+
 @receiver(pre_save, sender=User)
 def handle_password_change(sender, instance, **kwargs):
     """
@@ -20,8 +21,7 @@ def handle_password_change(sender, instance, **kwargs):
             # Password has changed
             current_sid = get_current_session_id()
             AuthEngine.revoke_all_sessions(
-                user_id=str(instance.id),
-                exclude_session_id=current_sid
+                user_id=str(instance.id), exclude_session_id=current_sid
             )
     except User.DoesNotExist:
         pass
