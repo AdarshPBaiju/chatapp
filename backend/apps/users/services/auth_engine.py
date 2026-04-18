@@ -179,12 +179,37 @@ class AuthEngine:
                 allow_context_fallback=False,
                 require_all_identifiers=True,
             )
-            if not session:
-                raise ValueError("Session context not found or already revoked.")
 
             location = cls._normalize_location(
                 cls._get_location_from_ip(context.ip_address)
             )
+
+            if not session:
+                if old_payload.get("scope") == "revoke_only":
+                    cls.blacklist_tokens(
+                        [old_refresh_jti, old_access_jti] if old_access_jti else [old_refresh_jti],
+                        exp_timestamp=old_payload.get("exp"),
+                    )
+
+                    try:
+                        return cls.promote_restricted_session(
+                            user_id=user_id,
+                            access_jti=str(uuid.uuid4()),
+                            refresh_jti=str(uuid.uuid4()),
+                            request=request,
+                            session_id=session_id,
+                        )
+                    except ValueError:
+                        return cls._build_restricted_response(
+                            user_id=user_id,
+                            context=context,
+                            access_jti=str(uuid.uuid4()),
+                            refresh_jti=str(uuid.uuid4()),
+                            session_id=session_id,
+                            location=location,
+                        )
+                raise ValueError("Session context not found or already revoked.")
+
             is_anomaly = cls._check_impossible_travel(user_id, context, location)
 
             if is_anomaly or cls._count_active_sessions(user_id) > cls._device_limit():
