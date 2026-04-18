@@ -27,6 +27,9 @@ class AllowRevokeOnly(permissions.BasePermission):
     """
 
     def has_permission(self, request: Any, _view: Any) -> bool:
+        if request.method == "OPTIONS":
+            return True
+
         auth_data = getattr(request, "auth", {})
         if not auth_data:
             return False
