@@ -64,16 +64,10 @@ class AuthOtpEngine:
         cls, client_instance: Any, submitted_code: str
     ) -> bool:
         """
-        Checks if the submitted code is in the client's backup list.
+        Checks if the submitted code matches the client's hashed backup list.
         If found, it is PERMANENTLY removed (Single-use burn).
         """
         if not submitted_code or not client_instance.backup_codes:
             return False
 
-        if submitted_code in client_instance.backup_codes:
-            # Burn the code
-            client_instance.backup_codes.remove(submitted_code)
-            client_instance.save(update_fields=["backup_codes"])
-            return True
-
-        return False
+        return client_instance.verify_and_burn_backup_code(submitted_code)

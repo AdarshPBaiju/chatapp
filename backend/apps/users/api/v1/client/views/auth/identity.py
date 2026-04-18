@@ -1,6 +1,4 @@
 from __future__ import annotations
-
-from django.conf import settings
 from rest_framework import status
 from rest_framework.permissions import AllowAny
 from rest_framework.views import APIView
@@ -45,14 +43,14 @@ class IdentityInitAPIView(APIView):
             return ResponseFactory.error(
                 message="No account associated with this email address.",
                 code=status.HTTP_404_NOT_FOUND,
-                error_code="IDENTITY_USER_NOT_FOUND"
+                error_code="IDENTITY_USER_NOT_FOUND",
             )
 
         if not user.is_active:
             return ResponseFactory.error(
                 message="Account verification required. Please check your email.",
                 data={"status": "pending_verification", "email": user.email},
-                error_code="IDENTITY_USER_INACTIVE"
+                error_code="IDENTITY_USER_INACTIVE",
             )
 
         entropy = get_device_entropy(request)
@@ -112,9 +110,9 @@ class IdentityChallengeAPIView(APIView):
             )
         except ValueError as e:
             return ResponseFactory.error(
-                message=str(e), 
+                message=str(e),
                 code=status.HTTP_403_FORBIDDEN,
-                error_code="IDENTITY_FLOW_EXPIRED"
+                error_code="IDENTITY_FLOW_EXPIRED",
             )
 
         user_id = payload["sub"]
@@ -127,7 +125,7 @@ class IdentityChallengeAPIView(APIView):
                     HitEngine.increment_flow_failures(payload["flow_id"])
                     return ResponseFactory.error(
                         message="Invalid credentials.",
-                        error_code="IDENTITY_INVALID_CREDENTIALS"
+                        error_code="IDENTITY_INVALID_CREDENTIALS",
                     )
 
                 return self._resolve_or_step_up(
@@ -162,7 +160,7 @@ class IdentityChallengeAPIView(APIView):
                     HitEngine.increment_flow_failures(payload["flow_id"])
                     return ResponseFactory.error(
                         message="Invalid or expired verification code.",
-                        error_code="IDENTITY_INVALID_CODE"
+                        error_code="IDENTITY_INVALID_CODE",
                     )
 
                 return self._resolve_or_step_up(
@@ -175,22 +173,24 @@ class IdentityChallengeAPIView(APIView):
                     HitEngine.increment_flow_failures(payload["flow_id"])
                     return ResponseFactory.error(
                         message="Invalid authenticator code.",
-                        error_code="IDENTITY_INVALID_CODE"
+                        error_code="IDENTITY_INVALID_CODE",
                     )
-                
+
                 return self._resolve_or_step_up(
                     user, payload, request, "totp", acr_target=2
                 )
 
             elif method == "backup_code":
                 code = serializer.validated_data.get("code")
-                if not code or not AuthOtpEngine.verify_and_burn_backup_code(user.client, code):
+                if not code or not AuthOtpEngine.verify_and_burn_backup_code(
+                    user.client, code
+                ):
                     HitEngine.increment_flow_failures(payload["flow_id"])
                     return ResponseFactory.error(
                         message="Invalid or already used backup code.",
-                        error_code="IDENTITY_INVALID_CODE"
+                        error_code="IDENTITY_INVALID_CODE",
                     )
-                
+
                 return self._resolve_or_step_up(
                     user, payload, request, "backup", acr_target=2
                 )
@@ -198,14 +198,14 @@ class IdentityChallengeAPIView(APIView):
             else:
                 return ResponseFactory.error(
                     message="Unsupported verification method.",
-                    error_code="IDENTITY_METHOD_UNSUPPORTED"
+                    error_code="IDENTITY_METHOD_UNSUPPORTED",
                 )
 
         except ValueError as e:
             return ResponseFactory.error(
-                message=str(e), 
+                message=str(e),
                 code=status.HTTP_403_FORBIDDEN,
-                error_code="IDENTITY_FLOW_EXPIRED"
+                error_code="IDENTITY_FLOW_EXPIRED",
             )
 
     def _resolve_or_step_up(self, user, payload, request, amr_tag, acr_target):

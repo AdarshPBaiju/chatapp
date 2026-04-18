@@ -24,6 +24,7 @@ from users.api.v1.client.views.security import (
     TwoFactorSetupAPIView,
     TwoFactorVerifyAPIView,
     TwoFactorBackupCodesAPIView,
+    TwoFactorDisableAPIView,
 )
 
 urlpatterns = [
@@ -82,4 +83,5 @@ urlpatterns = [
     path("security/2fa/setup/", TwoFactorSetupAPIView.as_view(), name="client-2fa-setup"),
     path("security/2fa/verify/", TwoFactorVerifyAPIView.as_view(), name="client-2fa-verify"),
     path("security/2fa/backup-codes/", TwoFactorBackupCodesAPIView.as_view(), name="client-2fa-backup-codes"),
+    path("security/2fa/disable/", TwoFactorDisableAPIView.as_view(), name="client-2fa-disable"),
 ]

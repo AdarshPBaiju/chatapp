@@ -7,7 +7,9 @@ from django.utils import timezone
 
 from core.models.base import UUIDModel
 from core.utils import SmartUploadPath, UploadPathConfig
-
+from django.contrib.auth.hashers import make_password, check_password
+import secrets
+import string
 
 class Client(UUIDModel):
     class Gender(models.TextChoices):
@@ -68,3 +70,33 @@ class Client(UUIDModel):
         return self.ban_records.filter(
             is_active=True,
         ).exists()
+
+    def generate_and_set_backup_codes(self) -> list[str]:
+        """
+        Generates 10 new backup codes, hashes them with Argon2/default hasher,
+        saves the hashes to the DB, and returns the plaintext codes (for one-time display).
+        """
+        plain_codes = [
+            "".join(secrets.choice(string.digits) for _ in range(8))
+            for _ in range(10)
+        ]
+        self.backup_codes = [make_password(code) for code in plain_codes]
+        self.save(update_fields=["backup_codes"])
+        return plain_codes
+
+    def verify_and_burn_backup_code(self, code: str) -> bool:
+        """
+        Checks a provided plaintext code against the stored hashes.
+        If a match is found, the hash is atomically removed from the DB and the function returns True.
+        """
+        if not self.backup_codes:
+            return False
+
+        for i, hashed_code in enumerate(self.backup_codes):
+            if check_password(code, hashed_code):
+                # Burn the code to prevent reuse
+                self.backup_codes.pop(i)
+                self.save(update_fields=["backup_codes"])
+                return True
+
+        return False

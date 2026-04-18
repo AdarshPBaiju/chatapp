@@ -5,12 +5,14 @@ import { Button } from "@/shared/ui/FormControls";
 import { fetchProfile } from "../api";
 import { UserProfile } from "../types";
 import { TwoFactorWizard } from "@/features/settings/ui/TwoFactorWizard";
+import { TwoFactorManageModal } from "./TwoFactorManageModal";
 import { ChangePasswordModal } from "./ChangePasswordModal";
 
 export function SecuritySection() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [showWizard, setShowWizard] = useState(false);
+  const [showManage, setShowManage] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
 
   useEffect(() => {
@@ -80,7 +82,11 @@ export function SecuritySection() {
               </div>
             </div>
           </div>
-          <Button variant="outline" onClick={() => setShowWizard(true)} className="gap-2">
+          <Button 
+            variant="outline" 
+            onClick={() => profile?.is_two_factor_enabled ? setShowManage(true) : setShowWizard(true)} 
+            className="gap-2"
+          >
             {profile?.is_two_factor_enabled ? "Manage" : "Configure"} <ChevronRight size={16} />
           </Button>
         </div>
@@ -96,6 +102,16 @@ export function SecuritySection() {
           onClose={() => setShowWizard(false)}
           onSuccess={() => {
             setShowWizard(false);
+            loadProfile();
+          }}
+        />
+      )}
+
+      {showManage && (
+        <TwoFactorManageModal
+          onClose={() => setShowManage(false)}
+          onSuccess={() => {
+            setShowManage(false);
             loadProfile();
           }}
         />
