@@ -585,13 +585,11 @@ class AuthEngine:
             )
             return False
 
-        has_main_token = session.access_jti == jti or session.refresh_jti == jti
+        has_main_token = jti in {session.access_jti, session.refresh_jti}
         if has_main_token:
             return True
 
-        if partner_jti and (
-            session.access_jti == partner_jti or session.refresh_jti == partner_jti
-        ):
+        if partner_jti and partner_jti in {session.access_jti, session.refresh_jti}:
             return True
 
         logger.error(
