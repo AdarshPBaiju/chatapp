@@ -16,7 +16,7 @@ done
 echo "Redis started"
 
 echo "Waiting for MinIO..."
-while ! curl -f http://$MINIO_HOST:$MINIO_PORT/minio/health/live; do
+while ! curl -f $MINIO_INTERNAL_URL/minio/health/live; do
   sleep 0.1
 done
 echo "MinIO started"

@@ -8,7 +8,7 @@ PROJECT_NAME = chatapp
 DEV_CMD = $(COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml
 PROD_CMD = $(COMPOSE) -f docker-compose.yml -f docker-compose.prod.yml --env-file .env.prod
 
-.PHONY: help dev-build dev-up dev-down dev-logs dev-shell dev-migrate dev-makemigrations prod-build prod-up prod-down prod-logs teardown clean
+.PHONY: help dev-build dev-rebuild dev-up dev-down dev-restart dev-logs dev-shell dev-migrate dev-makemigrations prod-build prod-up prod-down prod-restart prod-logs teardown clean
 
 help:
 	@echo "ChatApp Development Control"
@@ -18,6 +18,7 @@ help:
 	@echo "  make dev-rebuild          - 🔨 Clean build (no cache)"
 	@echo "  make dev-up               - Start dev environment"
 	@echo "  make dev-down             - Stop dev containers"
+	@echo "  make dev-restart          - Restart dev containers"
 	@echo "  make dev-teardown         - Stop and remove dev volumes"
 	@echo "  make dev-clean            - ⚠️ Full wipe (volumes + images)"
 	@echo "  make dev-logs             - Follow all dev logs"
@@ -31,6 +32,7 @@ help:
 	@echo "  make prod-build           - Build prod images"
 	@echo "  make prod-up              - Start prod environment"
 	@echo "  make prod-down            - Stop prod containers"
+	@echo "  make prod-restart         - Restart prod containers"
 	@echo "  make prod-teardown        - Stop and remove prod volumes"
 	@echo "  make prod-logs            - Follow all prod logs"
 	@echo "  make prod-logs-<service>  - Follow logs for a specific prod service"
@@ -66,6 +68,9 @@ dev-up:
 dev-down:
 	$(DEV_CMD) down
 
+dev-restart:
+	$(DEV_CMD) restart
+
 dev-teardown:
 	$(DEV_CMD) down -v --remove-orphans
 
@@ -99,6 +104,9 @@ prod-up:
 
 prod-down:
 	$(PROD_CMD) down
+
+prod-restart:
+	$(PROD_CMD) restart
 
 prod-teardown:
 	$(PROD_CMD) down -v --remove-orphans

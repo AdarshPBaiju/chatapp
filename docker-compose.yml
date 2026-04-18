@@ -52,6 +52,21 @@ services:
     networks:
       - chatapp_network
 
+  minio-init:
+    image: minio/mc
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      /usr/bin/mc alias set myminio http://minio:9000 ${MINIO_ACCESS_KEY} ${MINIO_SECRET_KEY};
+      /usr/bin/mc mb myminio/${MINIO_BUCKET_NAME} || true;
+      /usr/bin/mc anonymous set download myminio/${MINIO_BUCKET_NAME};
+      exit 0;
+      "
+    networks:
+      - chatapp_network
+
   zookeeper:
     image: confluentinc/cp-zookeeper:7.6.0
     environment:
@@ -94,8 +109,9 @@ services:
       DB_PASSWORD: ${DB_PASSWORD}
       REDIS_HOST: redis
       REDIS_PORT: 6379
-      MINIO_HOST: minio
-      MINIO_PORT: 9000
+      MINIO_INTERNAL_URL: ${MINIO_INTERNAL_URL}
+      MINIO_EXTERNAL_URL: ${MINIO_EXTERNAL_URL}
+      MINIO_BUCKET_NAME: ${MINIO_BUCKET_NAME}
       MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY}
       MINIO_SECRET_KEY: ${MINIO_SECRET_KEY}
       SECRET_KEY: ${SECRET_KEY}
@@ -129,8 +145,9 @@ services:
       DB_PASSWORD: ${DB_PASSWORD}
       REDIS_HOST: redis
       REDIS_PORT: 6379
-      MINIO_HOST: minio
-      MINIO_PORT: 9000
+      MINIO_INTERNAL_URL: ${MINIO_INTERNAL_URL}
+      MINIO_EXTERNAL_URL: ${MINIO_EXTERNAL_URL}
+      MINIO_BUCKET_NAME: ${MINIO_BUCKET_NAME}
       MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY}
       MINIO_SECRET_KEY: ${MINIO_SECRET_KEY}
       SECRET_KEY: ${SECRET_KEY}
@@ -161,8 +178,9 @@ services:
       DB_PASSWORD: ${DB_PASSWORD}
       REDIS_HOST: redis
       REDIS_PORT: 6379
-      MINIO_HOST: minio
-      MINIO_PORT: 9000
+      MINIO_INTERNAL_URL: ${MINIO_INTERNAL_URL}
+      MINIO_EXTERNAL_URL: ${MINIO_EXTERNAL_URL}
+      MINIO_BUCKET_NAME: ${MINIO_BUCKET_NAME}
       MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY}
       MINIO_SECRET_KEY: ${MINIO_SECRET_KEY}
       SECRET_KEY: ${SECRET_KEY}
@@ -193,8 +211,9 @@ services:
       DB_PASSWORD: ${DB_PASSWORD}
       REDIS_HOST: redis
       REDIS_PORT: 6379
-      MINIO_HOST: minio
-      MINIO_PORT: 9000
+      MINIO_INTERNAL_URL: ${MINIO_INTERNAL_URL}
+      MINIO_EXTERNAL_URL: ${MINIO_EXTERNAL_URL}
+      MINIO_BUCKET_NAME: ${MINIO_BUCKET_NAME}
       MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY}
       MINIO_SECRET_KEY: ${MINIO_SECRET_KEY}
       SECRET_KEY: ${SECRET_KEY}
