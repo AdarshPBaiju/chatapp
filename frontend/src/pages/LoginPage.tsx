@@ -94,6 +94,6 @@ export function LoginPage() {
           */}
         </div>
       </form>
-    </AuthLayout>
+    </AuthLayout >
   );
 }

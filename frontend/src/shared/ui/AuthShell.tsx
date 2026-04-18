@@ -4,33 +4,33 @@ import { MessageSquare, Sparkles } from "lucide-react";
 const shellCopy: Record<string, { kicker: string; title: string; body: string }> = {
   "/login": {
     kicker: "Welcome back",
-    title: "Secure conversations start with a focused sign-in flow.",
-    body: "Fast access, clean hierarchy, and a polished authentication experience built for everyday use.",
+    title: "Reconnect with your team instantly.",
+    body: "Jump right back into your conversations. Simple, secure, and blazing fast authentication.",
   },
   "/signup": {
-    kicker: "Create account",
-    title: "A cleaner onboarding flow for new users.",
-    body: "Progressive signup steps, clear hierarchy, and a light visual system tuned for desktop and mobile.",
+    kicker: "Join ChitChat",
+    title: "Start chatting in seconds.",
+    body: "Create your account and experience a new standard in team communication.",
   },
   "/otp": {
     kicker: "Verification",
-    title: "Confirm identity without breaking visual continuity.",
-    body: "Verification stays clear and focused, with a consistent layout that avoids visual jumps between steps.",
+    title: "Keeping your chats secure.",
+    body: "Enter the code sent to your device to verify your identity and protect your conversations.",
   },
   "/forgot-password": {
-    kicker: "Recovery",
-    title: "Reset access with a calm, trustworthy interface.",
-    body: "Recovery states are designed for readability, clarity, and confident progression on every screen size.",
+    kicker: "Account Recovery",
+    title: "Get back to your messages.",
+    body: "We'll help you securely reset your password so you don't miss any important team updates.",
   },
   "/session-gate": {
-    kicker: "Session control",
-    title: "Resolve device limits with clear next actions.",
-    body: "Active session management stays clear, structured, and easy to understand without feeling crowded.",
+    kicker: "Session Limits",
+    title: "Manage your active devices.",
+    body: "You've reached your device limit. Sign out elsewhere to continue chatting here.",
   },
   "/change-password": {
-    kicker: "Security",
-    title: "Update credentials in the same consistent auth system.",
-    body: "Shared structure, lighter surfaces, and reusable controls keep the security flow coherent and professional.",
+    kicker: "Security Check",
+    title: "Update your access credentials.",
+    body: "Keep your workspace safe by maintaining a strong, unique password for your account.",
   },
 };
 
@@ -40,8 +40,8 @@ export function AuthShell() {
 
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(96,165,250,0.18),_transparent_28%),linear-gradient(180deg,_#f8fbff_0%,_#eef4ff_100%)] text-slate-950">
-      <div className="grid min-h-screen w-full lg:grid-cols-[minmax(0,1fr)_minmax(420px,560px)]">
-        <aside className="hidden lg:block relative overflow-hidden border-b border-white/70 bg-[linear-gradient(160deg,_rgba(255,255,255,0.94),_rgba(236,245,255,0.88))] px-4 py-6 sm:px-6 sm:py-8 lg:sticky lg:top-0 lg:h-screen lg:border-b-0 lg:border-r lg:px-10 lg:py-10 xl:px-14 xl:py-12">
+      <div className="grid min-h-screen w-full md:grid-cols-[minmax(0,1fr)_minmax(380px,500px)] lg:grid-cols-[minmax(0,1fr)_minmax(420px,560px)]">
+        <aside className="hidden md:block relative overflow-hidden border-b border-white/70 bg-[linear-gradient(160deg,_rgba(255,255,255,0.94),_rgba(236,245,255,0.88))] px-4 py-6 sm:px-6 sm:py-8 md:sticky md:top-0 md:h-[100dvh] md:border-b-0 md:border-r md:px-8 md:py-8 lg:px-10 lg:py-10 xl:px-14 xl:py-12">
           <div className="pointer-events-none absolute inset-0">
             <div className="absolute -left-24 top-[-8%] h-72 w-72 rounded-full bg-sky-300/45 blur-3xl sm:h-96 sm:w-96" />
             <div className="absolute right-[-12%] top-[18%] h-48 w-48 rounded-full bg-violet-200/60 blur-3xl sm:h-72 sm:w-72" />
@@ -57,21 +57,18 @@ export function AuthShell() {
                 </div>
                 <div>
                   <p className="text-lg font-semibold tracking-[-0.03em]">ChitChat</p>
-                  <p className="text-xs uppercase tracking-[0.28em] text-slate-500">Auth System</p>
                 </div>
               </div>
-
-              <div className="hidden rounded-full border border-slate-200/80 bg-white/80 px-3 py-1 text-[11px] font-medium text-slate-600 shadow-sm sm:block">Light UI</div>
             </div>
 
-            <div className="mt-8 flex-1 lg:mt-14">
+            <div className="mt-8 flex-1 flex flex-col justify-center pb-8 lg:mt-14 lg:pb-14">
               <div className="space-y-5 sm:max-w-xl">
                 <span className="inline-flex items-center gap-2 rounded-full border border-sky-200 bg-white/85 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.24em] text-sky-700 shadow-sm">
                   <Sparkles size={14} />
                   {copy.kicker}
                 </span>
 
-                <h1 className="max-w-none text-[clamp(2.9rem,14vw,4.4rem)] font-semibold leading-[0.9] tracking-[-0.07em] text-slate-950 sm:max-w-[11ch] sm:text-[clamp(3.6rem,9vw,5.2rem)] lg:text-[clamp(3.25rem,5vw,5.5rem)]">
+                <h1 className="max-w-none text-[clamp(2.9rem,14vw,4.4rem)] font-semibold leading-[0.9] tracking-[-0.07em] text-slate-950 sm:max-w-[11ch] sm:text-[clamp(3.6rem,9vw,5.2rem)] md:text-[clamp(2.8rem,5vw,5.5rem)] lg:text-[clamp(3.25rem,5vw,5.5rem)]">
                   {copy.title}
                 </h1>
 
@@ -80,28 +77,21 @@ export function AuthShell() {
                 </p>
               </div>
 
-              <div className="mt-8 overflow-hidden rounded-[24px] border border-white/70 bg-white/70 shadow-[0_30px_80px_-45px_rgba(15,23,42,0.25)] backdrop-blur sm:mt-10 sm:rounded-[28px]">
-                <div className="grid gap-0 sm:grid-cols-3">
-                  <div className="border-b border-slate-200/70 p-5 sm:border-b-0 sm:border-r">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">Fast access</p>
-                    <p className="mt-3 text-sm leading-6 text-slate-700">Reduced friction for returning users.</p>
-                  </div>
-                  <div className="border-b border-slate-200/70 p-5 sm:border-b-0 sm:border-r">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">Clear structure</p>
-                    <p className="mt-3 text-sm leading-6 text-slate-700">Consistent spacing and form hierarchy.</p>
-                  </div>
-                  <div className="p-5">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">Responsive</p>
-                    <p className="mt-3 text-sm leading-6 text-slate-700">Balanced for mobile, tablet, and desktop.</p>
-                  </div>
-                </div>
-              </div>
+
             </div>
           </div>
         </aside>
 
-        <main className="flex min-h-[calc(100vh-8rem)] items-start px-4 py-4 sm:px-6 sm:py-6 lg:min-h-screen lg:items-center lg:px-8 lg:py-8 xl:px-10">
+        <main className="flex min-h-[calc(100dvh-8rem)] items-start px-4 py-8 sm:px-6 sm:py-10 md:min-h-[100dvh] md:items-center md:px-8 md:py-8 xl:px-10">
           <div className="w-full">
+            <div className="mb-8 flex items-center justify-center gap-3 md:hidden">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-950 text-white shadow-[0_10px_20px_-10px_rgba(15,23,42,0.5)]">
+                <MessageSquare size={18} />
+              </div>
+              <div className="text-left">
+                <p className="text-base font-semibold tracking-[-0.03em]">ChitChat</p>
+              </div>
+            </div>
             <Outlet />
           </div>
         </main>
