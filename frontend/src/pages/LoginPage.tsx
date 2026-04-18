@@ -1,5 +1,6 @@
 import { FormEvent, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { Mail, Lock } from "lucide-react";
 
 import { runLoginFlow } from "@/features/auth/flows";
 import { useAuthStore } from "@/features/auth/state";
@@ -31,31 +32,39 @@ export function LoginPage() {
     }
   }
 
-  const subheading = (
-    <span>
-      Don't have an account?{" "}
-      <Link to="/signup" className="text-[var(--color-primary)] hover:underline font-medium">
-        Create one
+  const footer = (
+    <span className="flex flex-wrap items-center gap-2 text-sm">
+      <span className="text-slate-600">New to ChitChat?</span>
+      <Link to="/signup" className="font-medium text-sky-700 transition-colors hover:text-sky-800">
+        Create an account
       </Link>
     </span>
   );
 
   return (
-    <AuthLayout heading="Welcome back" subheading={subheading}>
+    <AuthLayout
+      heading="Sign in"
+      subheading="Use your email address and password to access your workspace."
+      footer={footer}
+    >
       <form onSubmit={onSubmit} className="space-y-6">
         <Input
           type="email"
-          placeholder="Email address"
+          label="Email Address"
+          placeholder="name@company.com"
+          icon={<Mail size={20} />}
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           required
           disabled={loading}
         />
 
-        <div className="space-y-1">
+        <div className="space-y-4">
           <Input
             type="password"
-            placeholder="Password"
+            label="Password"
+            placeholder="Enter your password"
+            icon={<Lock size={20} />}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
@@ -65,15 +74,25 @@ export function LoginPage() {
           <div className="text-right">
             <Link
               to="/forgot-password"
-              className="text-sm text-[var(--muted)] hover:text-white transition-colors"
+              className="text-sm font-medium text-sky-700 transition-colors hover:text-sky-800"
             >
               Forgot password?
             </Link>
           </div>
         </div>
-        <Button type="submit" className="w-full mt-2" isLoading={loading}>
-          Log in
-        </Button>
+
+        <div className="flex flex-col gap-6 pt-2">
+          <Button type="submit" className="w-full py-4" isLoading={loading}>
+            Sign in
+          </Button>
+
+          {/* Social login section intentionally commented out until provider authentication is implemented.
+          <div className="grid grid-cols-2 gap-4">
+            <Button variant="social">Google</Button>
+            <Button variant="social">Github</Button>
+          </div>
+          */}
+        </div>
       </form>
     </AuthLayout>
   );

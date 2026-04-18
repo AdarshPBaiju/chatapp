@@ -1,115 +1,103 @@
-import { InputHTMLAttributes, forwardRef, useState } from "react";
+import { InputHTMLAttributes, ButtonHTMLAttributes, forwardRef, useState, ReactNode } from "react";
 import { Eye, EyeOff } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
-
 
 interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
   label?: string;
   error?: string;
+  icon?: ReactNode;
 }
 
 export const Input = forwardRef<HTMLInputElement, InputProps>(
-  ({ className, type, label, error, ...props }, ref) => {
+  ({ className, type, label, error, icon, ...props }, ref) => {
     const [showPassword, setShowPassword] = useState(false);
     const isPassword = type === "password";
 
     return (
-      <div className="w-full space-y-1.5">
+      <div className="w-full space-y-2.5 animate-fade-in-up">
         {label && (
-          <label className="text-sm font-medium text-[var(--muted)]">
+          <label className="pl-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
             {label}
           </label>
         )}
-        <div className="relative group">
+        <div className="group relative">
+          {icon && (
+            <div className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400 transition-colors duration-300 group-focus-within:text-sky-600">
+              {icon}
+            </div>
+          )}
           <input
+            {...props}
+            ref={ref}
             type={isPassword ? (showPassword ? "text" : "password") : type}
             className={cn(
-              "w-full bg-[#2a263d] border border-white/5 rounded-2xl px-5 py-5 text-white placeholder:text-[#5e5a75] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]/50 focus:border-[var(--color-primary)]/50 transition-all duration-300",
-              error && "border-red-500/50 focus:ring-red-500/50",
-              className
+              "w-full rounded-2xl border border-slate-200 bg-white py-4 text-slate-950 outline-none transition-all duration-300 placeholder:text-slate-400",
+              "focus:border-sky-300 focus:bg-sky-50/40 focus:shadow-[0_0_0_4px_rgba(186,230,253,0.45)]",
+              icon ? "pl-14 pr-14" : "px-6 pr-14",
+              error && "border-rose-300 focus:border-rose-300 focus:shadow-[0_0_0_4px_rgba(254,205,211,0.45)]",
+              className,
             )}
-            ref={ref}
-            {...props}
           />
           {isPassword && (
             <button
               type="button"
               onClick={() => setShowPassword(!showPassword)}
-              className="absolute right-5 top-1/2 -translate-y-1/2 text-[#5e5a75] hover:text-white transition-all duration-300 hover:scale-110 active:scale-90"
+              className="absolute right-5 top-1/2 -translate-y-1/2 text-slate-400 transition-all duration-300 hover:text-slate-700"
             >
-              {showPassword ? <EyeOff size={20} className="animate-in fade-in zoom-in duration-300" /> : <Eye size={20} className="animate-in fade-in zoom-in duration-300" />}
+              {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
             </button>
           )}
         </div>
-        {error && <p className="text-xs text-red-500 font-medium pl-2">{error}</p>}
+        {error && <p className="animate-shake pl-1 text-[11px] font-medium text-rose-600">{error}</p>}
       </div>
     );
-  }
+  },
 );
-
 Input.displayName = "Input";
 
+const variants = {
+  primary:
+    "border border-slate-950 bg-slate-950 text-white shadow-[0_24px_50px_-25px_rgba(15,23,42,0.7)] hover:bg-slate-800 hover:shadow-[0_28px_60px_-25px_rgba(15,23,42,0.75)]",
+  outline: "border border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50",
+  ghost: "border-none bg-transparent text-slate-500 hover:bg-slate-100 hover:text-slate-700",
+  link: "h-auto border-none bg-transparent px-0 py-0 text-sky-700 hover:text-sky-800 hover:underline",
+  social: "border border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50",
+};
 
-interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: "primary" | "secondary" | "outline" | "link" | "danger";
+interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
+  variant?: keyof typeof variants;
   isLoading?: boolean;
-  leftIcon?: React.ReactNode;
-  rightIcon?: React.ReactNode;
+  leftIcon?: ReactNode;
+  rightIcon?: ReactNode;
 }
 
 export function Button({
+  children,
   className,
   variant = "primary",
   isLoading,
   leftIcon,
   rightIcon,
-  children,
   ...props
 }: ButtonProps) {
-  const variants = {
-    primary: "bg-gradient-to-tr from-[#7c5dfa] to-[#9277ff] hover:shadow-[0_0_25px_rgba(124,93,250,0.5)] text-white shadow-lg border border-white/10",
-    secondary: "bg-[#2a263d] hover:bg-[#342f4d] text-white border border-white/5 backdrop-blur-md shadow-xl",
-    outline: "border-2 border-white/10 hover:border-[var(--color-primary)] hover:bg-[var(--color-primary)]/5 text-white transition-all duration-500",
-    link: "bg-transparent text-[#7c5dfa] hover:text-[#9277ff] p-0 w-auto",
-    danger: "bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/20",
-  };
-
   return (
     <button
       className={cn(
-        "relative flex items-center justify-center gap-3 px-8 py-4 rounded-2xl font-black uppercase tracking-wider text-xs transition-all duration-500 hover:-translate-y-1 active:translate-y-0 active:scale-[0.98] disabled:opacity-50 disabled:hover:translate-y-0 disabled:cursor-not-allowed group whitespace-nowrap overflow-hidden",
+        "group relative flex items-center justify-center gap-3 overflow-hidden whitespace-nowrap rounded-2xl px-6 py-4 text-sm font-semibold transition-all duration-300 active:scale-[0.985] disabled:cursor-not-allowed disabled:opacity-50",
         variants[variant],
         isLoading && "cursor-wait",
-        className
+        className,
       )}
-      disabled={isLoading || props.disabled}
       {...props}
     >
-      {/* Premium Loader: Shimmer Overlay */}
-      {isLoading && (
-        <div className="absolute inset-0 rounded-2xl overflow-hidden pointer-events-none">
-          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full animate-shimmer" />
-        </div>
-      )}
-
-      {/* Content wrapper with transition */}
-      <div className={cn(
-        "flex flex-row items-center justify-center gap-3 transition-all duration-500",
-        isLoading ? "opacity-30 blur-[2px] scale-95" : "opacity-100 scale-100"
-      )}>
-        {leftIcon && <span className="flex-shrink-0 transition-transform duration-500 group-hover:scale-110">{leftIcon}</span>}
-        <span className="block">{children}</span>
-        {rightIcon && <span className="flex-shrink-0 transition-transform duration-500 group-hover:scale-110">{rightIcon}</span>}
-      </div>
-
-      {/* Loading Spinner (Subtle) */}
-      {isLoading && (
-        <div className="absolute inset-0 flex items-center justify-center">
-          <svg className="animate-spin h-6 w-6 text-white" viewBox="0 0 24 24">
-            <circle className="opacity-20" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" fill="none" />
-            <path className="opacity-90" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-          </svg>
-        </div>
+      {isLoading ? (
+        <div className="h-5 w-5 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+      ) : (
+        <>
+          {leftIcon && <span className="transition-transform group-hover:-translate-x-0.5">{leftIcon}</span>}
+          {children}
+          {rightIcon && <span className="transition-transform group-hover:translate-x-0.5">{rightIcon}</span>}
+        </>
       )}
     </button>
   );

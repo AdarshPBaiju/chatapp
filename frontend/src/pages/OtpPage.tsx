@@ -1,5 +1,6 @@
 import { FormEvent, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { CheckCircle, ArrowLeft } from "lucide-react";
 
 import { resendOtp } from "@/features/auth/api";
 import { runOtpValidationFlow } from "@/features/auth/flows";
@@ -61,14 +62,21 @@ export function OtpPage() {
   }
 
   return (
-    <AuthLayout heading="Verify Identity">
-      <form onSubmit={onSubmit} className="space-y-6">
-        <p className="text-[var(--muted)]">
-          Enter the 6-digit code sent to <strong className="text-white">{pending.email}</strong>
-        </p>
+    <AuthLayout
+      heading="Verify access"
+      subheading="Enter the 6-digit code sent to your email to continue."
+    >
+      <form onSubmit={onSubmit} className="space-y-8">
+        <div className="flex flex-col items-center gap-1 rounded-[24px] border border-slate-200 bg-slate-50 p-6 text-center">
+          <span className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">Sent to</span>
+          <span className="font-semibold text-slate-950">{pending.email}</span>
+        </div>
+
         <Input
           type="text"
-          placeholder="6-digit code"
+          label="Verification Code"
+          placeholder="123456"
+          icon={<CheckCircle size={22} />}
           value={otpCode}
           onChange={(e) => setOtpCode(e.target.value)}
           minLength={6}
@@ -77,22 +85,32 @@ export function OtpPage() {
           disabled={loading}
           error={error}
         />
-        <div className="flex flex-col gap-4">
-          <Button type="submit" className="w-full" isLoading={loading}>
-            Verify
+
+        <div className="flex flex-col gap-4 pt-2">
+          <Button type="submit" className="w-full py-4" isLoading={loading}>
+            Verify Code
           </Button>
-          <div className="text-center pt-2">
+
+          <div className="text-center pt-1">
             <Button
               type="button"
               variant="link"
-              className="text-sm font-bold tracking-normal uppercase-none"
+              className="text-sm"
               onClick={onResend}
               disabled={countdown > 0}
               isLoading={resendLoading}
             >
-              {countdown > 0 ? `Resend in ${countdown}s` : "Resend OTP"}
+              {countdown > 0 ? `Resend in ${countdown}s` : "Resend Verification Code"}
             </Button>
           </div>
+
+          <button
+            type="button"
+            onClick={() => navigate("/login")}
+            className="flex items-center justify-center gap-2 text-sm font-medium text-slate-500 transition-colors hover:text-slate-800"
+          >
+            <ArrowLeft size={14} /> Back to Sign In
+          </button>
         </div>
       </form>
     </AuthLayout>
