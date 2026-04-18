@@ -28,6 +28,7 @@ class ClientProfileSerializer(serializers.Serializer):
 
     gender = v.choice(Client.Gender.choices).optional().label("Gender")
     phone_number = v.string().optional().label("Phone Number")
+    is_two_factor_enabled = v.boolean().access(read=True).label("2FA Status")
 
     def update(self, instance: Client, validated_data: dict):
         """

@@ -31,8 +31,9 @@ export function LoginPage() {
 
   // Handle successful login resolution
   useEffect(() => {
-    if (authStatus === "full") navigate("/dashboard");
-    else if (authStatus === "restricted") navigate("/session-gate");
+    if (authStatus === "full") navigate("/settings/profile");
+    else if (authStatus === "restricted") navigate("/auth/active-sessions");
+    else if (authStatus === "pending_verification") navigate("/auth/verify");
   }, [authStatus, navigate]);
 
   const onInit = async (e: FormEvent) => {
@@ -56,7 +57,7 @@ export function LoginPage() {
   const footer = (
     <span className="flex flex-wrap items-center gap-2 text-sm">
       <span className="text-slate-600">New to ChitChat?</span>
-      <Link to="/signup" className="font-medium text-sky-700 transition-colors hover:text-sky-800">
+      <Link to="/auth/join" className="font-bold text-slate-900 transition-colors hover:text-slate-800">
         Create an account
       </Link>
     </span>

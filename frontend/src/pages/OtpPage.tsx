@@ -34,8 +34,8 @@ export function OtpPage() {
     try {
       await runOtpValidationFlow(pending.user_id, otpCode);
       const status = useAuthStore.getState().status;
-      if (status === "full") navigate("/dashboard");
-      if (status === "restricted") navigate("/session-gate");
+      if (status === "full") navigate("/settings/profile");
+      if (status === "restricted") navigate("/auth/active-sessions");
     } catch (e) {
       setError(readApiMessage(e, "OTP validation failed."));
     } finally {
@@ -106,7 +106,7 @@ export function OtpPage() {
 
           <button
             type="button"
-            onClick={() => navigate("/login")}
+            onClick={() => navigate("/auth/login")}
             className="flex items-center justify-center gap-2 text-sm font-medium text-slate-500 transition-colors hover:text-slate-800"
           >
             <ArrowLeft size={14} /> Back to Sign In

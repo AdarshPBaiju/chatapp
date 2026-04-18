@@ -29,7 +29,7 @@ export function SessionGatePage() {
 
   useEffect(() => {
     if (status === "full") {
-      navigate("/dashboard");
+      navigate("/settings/profile");
     }
   }, [status, navigate]);
 
@@ -62,7 +62,7 @@ export function SessionGatePage() {
 
   function handleLogout() {
     setAnonymous();
-    navigate("/login");
+    navigate("/auth/login");
   }
 
   function timeAgo(timestamp: number) {

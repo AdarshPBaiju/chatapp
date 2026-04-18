@@ -112,7 +112,7 @@ export function PasswordResetPage() {
               <p className="text-sm text-slate-600">Your account is now secure again.</p>
             </div>
           </div>
-          <Button onClick={() => navigate("/login")} className="w-full py-4">
+          <Button onClick={() => navigate("/auth/login")} className="w-full py-4">
             Sign In Now
           </Button>
         </div>
@@ -154,7 +154,7 @@ export function PasswordResetPage() {
               </Button>
               <button
                 type="button"
-                onClick={() => navigate("/login")}
+                onClick={() => navigate("/auth/login")}
                 className="flex items-center justify-center gap-2 text-sm font-medium text-slate-500 transition-colors hover:text-slate-800"
               >
                 <ArrowLeft size={14} /> Back to Sign In

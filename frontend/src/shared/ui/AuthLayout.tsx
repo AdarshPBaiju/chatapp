@@ -1,4 +1,5 @@
 import { ReactNode } from "react";
+import { motion } from "framer-motion";
 import { cn } from "@/shared/lib/utils";
 
 interface AuthLayoutProps {
@@ -17,19 +18,53 @@ export function AuthLayout({
   footer,
 }: AuthLayoutProps) {
   return (
-    <section className="animate-fade-in-up rounded-[32px] border border-white/70 bg-white/88 p-5 shadow-[0_30px_80px_-40px_rgba(15,23,42,0.35)] backdrop-blur sm:p-7 lg:p-9">
-      <div className={cn("mx-auto w-full", isWide ? "max-w-4xl" : "max-w-xl")}>
-        <div className="mb-8 space-y-3 sm:mb-10">
-          <h1 className="text-3xl font-semibold tracking-[-0.05em] text-slate-950 sm:text-4xl lg:text-5xl">
+    <div className={cn("mx-auto w-full", isWide ? "max-w-4xl" : "max-w-xl")}>
+      <motion.div 
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+        className="premium-glass overflow-hidden rounded-[32px] p-6 sm:p-8 lg:p-10"
+      >
+        <div className="mb-10 space-y-3">
+          <motion.h1 
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.1 }}
+            className="text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl"
+          >
             {heading}
-          </h1>
-          {subheading && <div className="text-sm leading-7 text-slate-600 sm:text-base">{subheading}</div>}
+          </motion.h1>
+          {subheading && (
+            <motion.div 
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.15 }}
+              className="text-sm font-medium leading-relaxed text-slate-500 sm:text-base"
+            >
+              {subheading}
+            </motion.div>
+          )}
         </div>
 
-        <div>{children}</div>
+        <motion.div
+           initial={{ opacity: 0, y: 15 }}
+           animate={{ opacity: 1, y: 0 }}
+           transition={{ delay: 0.2 }}
+        >
+          {children}
+        </motion.div>
 
-        {footer && <div className="mt-8 border-t border-slate-200 pt-6">{footer}</div>}
-      </div>
-    </section>
+        {footer && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.3 }}
+            className="mt-10 border-t border-slate-100 pt-8"
+          >
+            {footer}
+          </motion.div>
+        )}
+      </motion.div>
+    </div>
   );
 }
