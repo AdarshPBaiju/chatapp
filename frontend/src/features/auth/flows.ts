@@ -3,6 +3,7 @@ import { useAuthStore } from "@/features/auth/state";
 import { useIdentityMachine } from "@/features/auth/machine";
 import { authStorage } from "@/shared/lib/storage";
 import { readApiMessage, readApiErrorCode } from "@/shared/lib/apiResponse";
+import { tokenManager } from "@/shared/auth/tokenManager";
 import { sessionEngine } from "@/shared/auth/sessionEngine";
 import { refreshToken as apiRefreshToken } from "@/features/auth/api";
 import {
@@ -151,10 +152,6 @@ export async function runOtpValidationFlow(userId: string, otpCode: string): Pro
   });
 }
 
-/**
- * The refresh callback given to sessionEngine.
- * Called by the engine's internal scheduler — never called directly by components.
- */
 async function doSessionRefresh() {
   const refresh = authStorage.getRefresh();
   if (!refresh) throw new Error("No refresh token stored.");
@@ -162,8 +159,6 @@ async function doSessionRefresh() {
   const result = await apiRefreshToken({ refresh });
 
   if (result.is_restricted) {
-    // Restricted session: still give the engine valid tokens so it can schedule
-    // the next refresh, but also update the store to show the restricted UI.
     useAuthStore.getState().setRestricted({
       access: result.access,
       refresh: result.refresh,
@@ -247,7 +242,21 @@ export async function runBootstrapRefresh(): Promise<void> {
         access_exp: result.access_exp,
         refresh_exp: result.refresh_exp,
       });
-    } catch {
+    } catch (error: any) {
+      const isAxiosErr = error?.isAxiosError;
+      const status = error?.response?.status;
+      if (isAxiosErr && (!status || status >= 500 || status === 429)) {
+        if (!isRestricted && tokenManager.getAccess()) {
+          useAuthStore.getState().setFull({
+            access: tokenManager.getAccess()!,
+            refresh: authStorage.getRefresh()!,
+            access_exp: tokenManager.getAccessExp() ?? (Math.floor(Date.now() / 1000) + 3600),
+            refresh_exp: authStorage.getRefreshExp() ?? 0,
+            user: authStorage.getUser() ?? undefined,
+          });
+        }
+        return;
+      }
       useAuthStore.getState().setAnonymous();
     }
   })();

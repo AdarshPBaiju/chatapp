@@ -141,8 +141,20 @@ class SessionEngine {
         tokens,
       });
       this.applyNewTokens(tokens, true);
-    } catch {
+    } catch (error: any) {
       localStorage.removeItem(REFRESH_LOCK_KEY);
+
+      const isAxiosErr = error?.isAxiosError;
+      const status = error?.response?.status;
+
+      if (isAxiosErr && (!status || status >= 500 || status === 429)) {
+        this.state = "ACTIVE";
+        this.channel.postMessage({ type: "SESSION_REFRESH_NETWORK_ERROR" });
+        // Retry shortly
+        this.timerId = setTimeout(() => this.executeRefresh(), 15000);
+        return;
+      }
+
       this.channel.postMessage({ type: "SESSION_REFRESH_FAILED" });
       this.handleRefreshFailure();
     }
@@ -187,6 +199,12 @@ class SessionEngine {
         this.state = "EXPIRED";
         tokenManager.clear();
         this.onExpired?.();
+      }
+    }
+
+    if (type === "SESSION_REFRESH_NETWORK_ERROR") {
+      if (this.state === "REFRESHING") {
+         this.state = "ACTIVE";
       }
     }
 
