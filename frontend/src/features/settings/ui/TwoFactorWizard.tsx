@@ -113,8 +113,9 @@ export function TwoFactorWizard({ onClose, onSuccess }: TwoFactorWizardProps) {
                 <p className="font-mono text-lg font-bold text-sky-800 tracking-widest">{setupData.secret}</p>
               </div>
 
-              <div className="pt-4">
-                <Button onClick={() => setStep(3)} className="w-full">Already Scanned</Button>
+              <div className="pt-4 flex gap-3">
+                <Button variant="outline" onClick={onClose} className="flex-1">Cancel</Button>
+                <Button onClick={() => setStep(3)} className="flex-1">Already Scanned</Button>
               </div>
             </div>
           )}

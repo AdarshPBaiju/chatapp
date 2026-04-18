@@ -82,6 +82,7 @@ class AuthEngine:
                 access_jti=None,
                 fingerprint=context.fingerprint,
                 device_entropy=context.device_entropy,
+                for_update=True,
             )
 
             if current_session:
@@ -209,6 +210,7 @@ class AuthEngine:
                 user_id=user_id,
                 session_id=session_id,
                 refresh_jti=old_refresh_jti,
+                for_update=True,
             )
             if not session:
                 raise ValueError("Session context not found or already revoked.")
@@ -289,6 +291,7 @@ class AuthEngine:
                 access_jti=None,
                 fingerprint=context.fingerprint,
                 device_entropy=context.device_entropy,
+                for_update=True,
             )
             if current_session:
                 if cls._count_active_sessions(user_id) > cls._device_limit():
@@ -554,24 +557,47 @@ class AuthEngine:
         partner_jti: str | None = None,
     ) -> bool:
         if not session_id:
+            logger.error("is_session_active failed: session_id is empty")
             return False
+
+        now = dj_timezone.now()
         query = AuthSession.objects.filter(
             user_id=user_id,
             session_id=session_id,
-            is_active=True,
-            expires_at__gt=dj_timezone.now() - cls.ACTIVITY_GRACE_PERIOD,
         )
-        has_main_token = query.filter(access_jti=jti).exists() or query.filter(refresh_jti=jti).exists()
+
+        if not query.exists():
+            logger.error(
+                f"is_session_active failed: session {session_id} not found for user {user_id}"
+            )
+            return False
+
+        session = query.first()
+        if not session.is_active:
+            logger.error(
+                f"is_session_active failed: session {session_id} is_active=False"
+            )
+            return False
+
+        if session.expires_at <= now - cls.ACTIVITY_GRACE_PERIOD:
+            logger.error(
+                f"is_session_active failed: session {session_id} expired. exp={session.expires_at}, now={now}"
+            )
+            return False
+
+        has_main_token = session.access_jti == jti or session.refresh_jti == jti
         if has_main_token:
             return True
 
-        return bool(
-            partner_jti
-            and (
-                query.filter(access_jti=partner_jti).exists()
-                or query.filter(refresh_jti=partner_jti).exists()
-            )
+        if partner_jti and (
+            session.access_jti == partner_jti or session.refresh_jti == partner_jti
+        ):
+            return True
+
+        logger.error(
+            f"is_session_active failed: tokens mismatch. session_access={session.access_jti}, session_refresh={session.refresh_jti}, check_jti={jti}, check_partner={partner_jti}"
         )
+        return False
 
     @classmethod
     def touch_session(cls, _user_id: str, session_id: str) -> None:
@@ -711,8 +737,10 @@ class AuthEngine:
             is_current = any([
                 current_sid_str and str(session.session_id) == current_sid_str,
                 current_jti_str and session.access_jti == current_jti_str,
-                current_device_entropy_str and session.device_entropy == current_device_entropy_str,
-                current_fingerprint_str and session.fingerprint == current_fingerprint_str
+                current_device_entropy_str
+                and session.device_entropy == current_device_entropy_str,
+                current_fingerprint_str
+                and session.fingerprint == current_fingerprint_str,
             ])
 
             last_active = cls._get_last_active(
@@ -903,6 +931,7 @@ class AuthEngine:
         access_jti: str | None = None,
         fingerprint: str | None = None,
         device_entropy: str | None = None,
+        for_update: bool = False,
     ) -> AuthSession | None:
         return cls._get_active_session(
             user_id=user_id,
@@ -910,6 +939,7 @@ class AuthEngine:
             access_jti=access_jti,
             fingerprint=fingerprint,
             device_entropy=device_entropy,
+            for_update=for_update,
         )
 
     @classmethod
@@ -941,12 +971,16 @@ class AuthEngine:
         access_jti: str | None = None,
         fingerprint: str | None = None,
         device_entropy: str | None = None,
+        for_update: bool = False,
     ) -> AuthSession | None:
         base_query = AuthSession.objects.filter(
             user_id=user_id,
             is_active=True,
             expires_at__gt=dj_timezone.now() - cls.ACTIVITY_GRACE_PERIOD,
         )
+        if for_update:
+            base_query = base_query.select_for_update()
+
         # Use stable identifiers in priority order instead of requiring all provided
         # identifiers to match simultaneously. Token rotation and stale partner JTIs
         # should not prevent current-session logout from deactivating the DB session.

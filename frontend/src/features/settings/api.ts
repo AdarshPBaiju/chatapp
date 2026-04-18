@@ -27,6 +27,11 @@ export async function getBackupCodes(password: string): Promise<ApiEnvelope<TwoF
   return response.data;
 }
 
+export async function disableTwoFactor(password: string): Promise<ApiEnvelope<null>> {
+  const response = await httpClient.post("/security/2fa/disable/", { password });
+  return response.data;
+}
+
 export async function fetchSessions(): Promise<ApiEnvelope<{ sessions: AuthSession[] }>> {
   const response = await httpClient.get("/sessions/");
   return response.data;
