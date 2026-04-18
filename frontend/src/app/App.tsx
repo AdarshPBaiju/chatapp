@@ -6,6 +6,8 @@ import { PropsWithChildren, createContext, useContext } from "react";
 import { useAuthStore } from "@/features/auth/state";
 import { ThemeProvider } from "@/shared/ui/ThemeProvider";
 
+import { LoadingScreen } from "@/shared/ui/LoadingScreen";
+
 interface AuthContextValue {
   status: string;
   user: any;
@@ -44,11 +46,7 @@ export function App() {
   const ready = useAuthBootstrap();
 
   if (!ready) {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-[#1e1b29] text-white">
-        <p>Initializing encryption & sessions...</p>
-      </div>
-    );
+    return <LoadingScreen />;
   }
 
   return (
