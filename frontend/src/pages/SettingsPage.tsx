@@ -68,15 +68,17 @@ export function SettingsPage() {
                   to={tab.path}
                   className={({ isActive: linkActive }) => cn(
                     "group flex items-center justify-between rounded-2xl p-4 transition-all duration-300",
-                    linkActive
-                      ? "bg-primary text-primary-foreground shadow-2xl shadow-primary/20"
-                      : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                    linkActive 
+                      ? "bg-primary text-primary-foreground shadow-2xl shadow-primary/20 hover:bg-primary/95 hover:shadow-primary/40 hover:-translate-y-0.5 active:scale-[0.98]" 
+                      : "text-muted-foreground hover:bg-muted hover:text-foreground hover:-translate-y-0.5"
                   )}
                 >
                   <div className="flex items-center gap-4">
                     <div className={cn(
-                      "flex h-12 w-12 items-center justify-center rounded-xl transition-colors",
-                      isActive ? "bg-primary-foreground/10 text-primary-foreground" : "bg-muted text-muted-foreground group-hover:bg-background group-hover:shadow-sm"
+                      "flex h-12 w-12 items-center justify-center rounded-xl transition-all duration-300",
+                      isActive 
+                        ? "bg-primary-foreground/15 text-primary-foreground group-hover:bg-primary-foreground/25" 
+                        : "bg-muted text-muted-foreground group-hover:bg-background group-hover:shadow-sm"
                     )}>
                       <Icon size={22} />
                     </div>
