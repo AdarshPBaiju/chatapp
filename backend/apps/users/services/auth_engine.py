@@ -19,11 +19,12 @@ from core.models import GlobalConfiguration
 from users.models import AuthSession, ClientDevice, TokenBlacklist, CustomUser
 
 
-
 logger = logging.getLogger("core")
 
 
 class AuthEngine:
+    ACTIVITY_GRACE_PERIOD = timedelta(minutes=10)
+
     REGISTER_SESSION_LUA = """
     local sessions_key = KEYS[1]
     local hash_prefix = KEYS[2]
@@ -65,14 +66,16 @@ class AuthEngine:
     def issue_tokens(cls, user: CustomUser, request: Any) -> dict[str, Any]:
         with transaction.atomic():
             user_id = str(user.id)
-            now_ts = cls._now_ts()
-            refresh_ttl = settings.AUTH_ENGINE_SETTINGS["REFRESH_TOKEN_LIFETIME"]
-            refresh_expiry_ts = now_ts + refresh_ttl
-            refresh_expiry_dt = datetime.fromtimestamp(refresh_expiry_ts, tz=UTC)
             context = build_auth_request_context(request)
             location = cls._normalize_location(
                 cls._get_location_from_ip(context.ip_address)
             )
+
+            now_ts = cls._now_ts()
+            refresh_expiry_ts = (
+                now_ts + settings.AUTH_ENGINE_SETTINGS["REFRESH_TOKEN_LIFETIME"]
+            )
+
             current_session = cls.resolve_current_session(
                 user_id=user_id,
                 session_id=None,
@@ -84,7 +87,10 @@ class AuthEngine:
             if current_session:
                 is_anomaly = cls._check_impossible_travel(user_id, context, location)
 
-                if is_anomaly or cls._count_active_sessions(user_id) > cls._device_limit():
+                if (
+                    is_anomaly
+                    or cls._count_active_sessions(user_id) > cls._device_limit()
+                ):
                     return cls._build_restricted_response(
                         user_id=user_id,
                         context=context,
@@ -103,10 +109,10 @@ class AuthEngine:
                 )
                 return {"status": "full", **rotated}
 
-            # New Session Path
+            session_id = str(uuid.uuid4())
             access_jti = str(uuid.uuid4())
             refresh_jti = str(uuid.uuid4())
-            session_id = str(uuid.uuid4())
+
             session_meta = cls._session_meta(
                 session_id=session_id,
                 access_jti=access_jti,
@@ -161,7 +167,7 @@ class AuthEngine:
                 device_label=context.device_label,
                 device_entropy=context.device_entropy,
                 ip_address=context.ip_address,
-                expires_at=refresh_expiry_dt,
+                expires_at=datetime.fromtimestamp(refresh_expiry_ts, tz=UTC),
                 city=location.get("city") or "",
                 country_code=location.get("country_code") or "",
                 latitude=location.get("lat"),
@@ -252,7 +258,9 @@ class AuthEngine:
                     location=location,
                 )
 
-            cls.blacklist_tokens([old_refresh_jti], exp_timestamp=old_payload.get("exp"))
+            cls.blacklist_tokens(
+                [old_refresh_jti], exp_timestamp=old_payload.get("exp")
+            )
             rotated = cls._rotate_session_tokens(
                 user=user,
                 session=session,
@@ -273,7 +281,6 @@ class AuthEngine:
         with transaction.atomic():
             context = build_auth_request_context(request)
             location = cls._get_location_from_ip(context.ip_address)
-
 
             user = CustomUser.objects.get(id=user_id, is_active=True)
             current_session = cls.resolve_current_session(
@@ -552,19 +559,19 @@ class AuthEngine:
             user_id=user_id,
             session_id=session_id,
             is_active=True,
-            expires_at__gt=dj_timezone.now(),
+            expires_at__gt=dj_timezone.now() - cls.ACTIVITY_GRACE_PERIOD,
         )
-        if (
-            query.filter(access_jti=jti).exists()
-            or query.filter(refresh_jti=jti).exists()
-        ):
+        has_main_token = query.filter(access_jti=jti).exists() or query.filter(refresh_jti=jti).exists()
+        if has_main_token:
             return True
-        if partner_jti and (
-            query.filter(access_jti=partner_jti).exists()
-            or query.filter(refresh_jti=partner_jti).exists()
-        ):
-            return True
-        return False
+
+        return bool(
+            partner_jti
+            and (
+                query.filter(access_jti=partner_jti).exists()
+                or query.filter(refresh_jti=partner_jti).exists()
+            )
+        )
 
     @classmethod
     def touch_session(cls, _user_id: str, session_id: str) -> None:
@@ -689,7 +696,7 @@ class AuthEngine:
             AuthSession.objects.filter(
                 user_id=user_id,
                 is_active=True,
-                expires_at__gt=dj_timezone.now(),
+                expires_at__gt=dj_timezone.now() - cls.ACTIVITY_GRACE_PERIOD,
             )
             .order_by("-last_seen_at")
             .all()
@@ -700,32 +707,29 @@ class AuthEngine:
         current_fingerprint_str = str(current_fingerprint or "")
         current_device_entropy_str = str(current_device_entropy or "")
         for session in sessions:
-            is_current = False
-            if current_sid_str and str(session.session_id) == current_sid_str or current_jti_str and session.access_jti == current_jti_str or (current_device_entropy_str and (
-                session.device_entropy == current_device_entropy_str
-            ) or (
-                current_fingerprint_str
-                and session.fingerprint == current_fingerprint_str
-            )):
-                is_current = True
+            # Check for current session match via multiple high-integrity signals
+            is_current = any([
+                current_sid_str and str(session.session_id) == current_sid_str,
+                current_jti_str and session.access_jti == current_jti_str,
+                current_device_entropy_str and session.device_entropy == current_device_entropy_str,
+                current_fingerprint_str and session.fingerprint == current_fingerprint_str
+            ])
 
             last_active = cls._get_last_active(
                 str(session.session_id), session.last_seen_at
             )
 
-            result.append(
-                {
-                    "session_id": str(session.session_id),
-                    "access_jti": session.access_jti,
-                    "refresh_jti": session.refresh_jti,
-                    "device": session.device_label,
-                    "started_at": int(session.started_at.timestamp()),
-                    "last_seen_at": last_active,
-                    "is_current": is_current,
-                    "city": session.city or "",
-                    "country_code": session.country_code or "",
-                }
-            )
+            result.append({
+                "session_id": str(session.session_id),
+                "access_jti": session.access_jti,
+                "refresh_jti": session.refresh_jti,
+                "device": session.device_label,
+                "started_at": int(session.started_at.timestamp()),
+                "last_seen_at": last_active,
+                "is_current": is_current,
+                "city": session.city or "",
+                "country_code": session.country_code or "",
+            })
             cls._hydrate_session_to_redis(session)
         return result
 
@@ -864,14 +868,12 @@ class AuthEngine:
         longitude: float | None = None,
     ) -> None:
         now = dj_timezone.now()
-        location = cls._normalize_location(
-            {
-                "city": city,
-                "country_code": country_code,
-                "lat": latitude,
-                "lon": longitude,
-            }
-        )
+        location = cls._normalize_location({
+            "city": city,
+            "country_code": country_code,
+            "lat": latitude,
+            "lon": longitude,
+        })
         AuthSession.objects.update_or_create(
             user=user,
             session_id=session_id,
@@ -943,7 +945,7 @@ class AuthEngine:
         base_query = AuthSession.objects.filter(
             user_id=user_id,
             is_active=True,
-            expires_at__gt=dj_timezone.now(),
+            expires_at__gt=dj_timezone.now() - cls.ACTIVITY_GRACE_PERIOD,
         )
         # Use stable identifiers in priority order instead of requiring all provided
         # identifiers to match simultaneously. Token rotation and stale partner JTIs
@@ -1169,8 +1171,7 @@ class AuthEngine:
         if time_diff_seconds <= 0:
             return 0.0
 
-
-        radius_km = 6371.0  # Earth radius in KM
+        radius_km = 6371.0
 
         dlat = radians(lat2 - lat1)
         dlon = radians(lon2 - lon1)

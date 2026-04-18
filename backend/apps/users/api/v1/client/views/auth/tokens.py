@@ -47,7 +47,9 @@ class ClientTokenVerifyAPIView(APIView):
 
         except TokenValidationError as e:
             return ResponseFactory.error(
-                message=str(e), code=status.HTTP_401_UNAUTHORIZED
+                message=str(e),
+                code=status.HTTP_401_UNAUTHORIZED,
+                error_code="AUTH_TOKEN_INVALID",
             )
 
 
@@ -76,6 +78,7 @@ class ClientTokenRefreshAPIView(APIView):
                 refresh_token,
                 expected_type="refresh",
                 check_session=True,
+                grace_period_sec=int(AuthEngine.ACTIVITY_GRACE_PERIOD.total_seconds()),
             )
 
             user = CustomUser.objects.get(id=payload["user_id"], is_active=True)
@@ -87,8 +90,11 @@ class ClientTokenRefreshAPIView(APIView):
         except CustomUser.DoesNotExist:
             return ResponseFactory.error(message="Subject user no longer exists.")
         except TokenValidationError as e:
+            error_code = "AUTH_SESSION_EXPIRED" if "session" in str(e).lower() else "AUTH_TOKEN_INVALID"
             return ResponseFactory.error(
-                message=str(e), code=status.HTTP_401_UNAUTHORIZED
+                message=str(e),
+                code=status.HTTP_401_UNAUTHORIZED,
+                error_code=error_code,
             )
         else:
             if token_result["status"] == "restricted":
