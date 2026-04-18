@@ -275,3 +275,85 @@ class AuthHardeningTests(TestCase):
         self.assertEqual(session.access_jti, "new-access")
         self.assertEqual(session.refresh_jti, "new-refresh")
         self.assertEqual(AuthSession.objects.filter(user=self.user).count(), 1)
+
+    def test_issue_tokens_does_not_reuse_existing_session_from_context_fallback(self):
+        self.user.is_active = True
+        self.user.save(update_fields=["is_active"])
+        request = self.factory.post(
+            "/",
+            HTTP_USER_AGENT="Mozilla/5.0",
+            HTTP_ACCEPT_LANGUAGE="en-US,en;q=0.8",
+            HTTP_X_TIMEZONE_OFFSET="-330",
+            HTTP_X_DEVICE_ENTROPY="entropy-1",
+        )
+        fingerprint = build_fingerprint(request, device_entropy="entropy-1")
+        existing_session = AuthSession.objects.create(
+            user=self.user,
+            access_jti="access-existing",
+            refresh_jti="refresh-existing",
+            fingerprint=fingerprint,
+            device_label="Chrome on Linux",
+            device_entropy="entropy-1",
+            expires_at=timezone.now() + timedelta(hours=1),
+        )
+
+        with self.settings(
+            AUTH_ENGINE_SETTINGS={
+                **settings.AUTH_ENGINE_SETTINGS,
+                "MAX_DEVICES_PER_USER": 1,
+            }
+        ):
+            with (
+                patch.object(AuthEngine, "_get_location_from_ip", return_value={}),
+                patch.object(
+                    AuthEngine,
+                    "_register_session_in_redis",
+                    return_value=[str(existing_session.session_id)],
+                ),
+                patch.object(AuthEngine, "_prune_stale_redis_sessions"),
+            ):
+                result = AuthEngine.issue_tokens(self.user, request)
+
+        self.assertEqual(result["status"], "restricted")
+        self.assertEqual(AuthSession.objects.filter(user=self.user).count(), 1)
+        existing_session.refresh_from_db()
+        self.assertEqual(existing_session.access_jti, "access-existing")
+        self.assertEqual(existing_session.refresh_jti, "refresh-existing")
+
+    def test_refresh_tokens_requires_matching_session_id_and_refresh_jti(self):
+        self.user.is_active = True
+        self.user.save(update_fields=["is_active"])
+        request = self.factory.post(
+            "/",
+            HTTP_USER_AGENT="Mozilla/5.0",
+            HTTP_ACCEPT_LANGUAGE="en-US,en;q=0.8",
+            HTTP_X_TIMEZONE_OFFSET="-330",
+            HTTP_X_DEVICE_ENTROPY="entropy-1",
+        )
+        fingerprint = build_fingerprint(request, device_entropy="entropy-1")
+        session = AuthSession.objects.create(
+            user=self.user,
+            access_jti="access-1",
+            refresh_jti="refresh-1",
+            fingerprint=fingerprint,
+            device_label="Chrome on Linux",
+            device_entropy="entropy-1",
+            expires_at=timezone.now() + timedelta(hours=1),
+        )
+
+        with self.assertRaisesMessage(
+            ValueError, "Session context not found or already revoked."
+        ):
+            AuthEngine.refresh_tokens(
+                self.user,
+                {
+                    "jti": "refresh-1",
+                    "partner_jti": "access-1",
+                    "sid": str(uuid.uuid4()),
+                    "exp": int((timezone.now() + timedelta(hours=1)).timestamp()),
+                },
+                request,
+            )
+
+        session.refresh_from_db()
+        self.assertEqual(session.refresh_jti, "refresh-1")

@@ -13,6 +13,8 @@ import {
   identityChallenge,
 } from "@/features/auth/api";
 
+let bootstrapRefreshPromise: Promise<void> | null = null;
+
 function isLikelyJweCompact(token: string): boolean {
   return token.split(".").length === 5;
 }
@@ -28,13 +30,11 @@ function applyRestrictedAuth(payload: RestrictedAuthPayload): void {
   });
 }
 
-export async function runSignUpFlow(payload: { email: string }): Promise<void> {
-  const data = await signUpRequest(payload);
-  useAuthStore.getState().setPendingVerification({
-    user_id: "",
-    email: data.email,
-    resend_interval: data.resend_interval,
-  });
+export async function runSignUpFlow(payload: { email: string }): Promise<{
+  email: string;
+  resend_interval: number;
+}> {
+  return signUpRequest(payload);
 }
 
 export async function runLoginFlow(payload: LoginRequest): Promise<void> {
@@ -104,13 +104,24 @@ export async function runIdentityChallenge(params: {
       machine.setChallenge(data);
     } else if ("access" in data) {
       const payload = data as any;
-      authStore.setFull({
-        access: payload.access,
-        refresh: payload.refresh,
-        access_exp: payload.access_exp,
-        refresh_exp: payload.refresh_exp,
-        user: payload.user,
-      });
+      if (payload.is_restricted) {
+        authStore.setRestricted({
+          access: payload.access,
+          refresh: payload.refresh,
+          access_exp: payload.access_exp,
+          refresh_exp: payload.refresh_exp,
+          sessions: payload.active_sessions ?? [],
+          user: payload.user,
+        });
+      } else {
+        authStore.setFull({
+          access: payload.access,
+          refresh: payload.refresh,
+          access_exp: payload.access_exp,
+          refresh_exp: payload.refresh_exp,
+          user: payload.user,
+        });
+      }
       machine.reset();
     }
   } catch (error: any) {
@@ -189,51 +200,69 @@ function onSessionExpired() {
 }
 
 export async function runBootstrapRefresh(): Promise<void> {
+  if (bootstrapRefreshPromise) {
+    return bootstrapRefreshPromise;
+  }
+
+  bootstrapRefreshPromise = (async () => {
   // Wire the engine callbacks once at boot.
-  sessionEngine.init(doSessionRefresh, onSessionExpired);
+    sessionEngine.init(doSessionRefresh, onSessionExpired);
 
-  const isRestricted = authStorage.getIsRestricted();
-  const restrictedAccess = authStorage.getRestrictedAccess();
+    const isRestricted = authStorage.getIsRestricted();
+    const restrictedAccess = authStorage.getRestrictedAccess();
 
-  if (isRestricted && restrictedAccess) {
-    if (!isLikelyJweCompact(restrictedAccess)) {
+    if (isRestricted && restrictedAccess) {
+      const restrictedAccessExp = authStorage.getRestrictedAccessExp();
+      if (
+        !restrictedAccessExp ||
+        restrictedAccessExp <= Math.floor(Date.now() / 1000)
+      ) {
+        useAuthStore.getState().setAnonymous();
+        return;
+      }
+      if (!isLikelyJweCompact(restrictedAccess)) {
+        useAuthStore.getState().setAnonymous();
+        return;
+      }
+      useAuthStore.getState().setRestricted({
+        access: restrictedAccess,
+        refresh: authStorage.getRefresh() ?? "",
+        access_exp: restrictedAccessExp,
+        refresh_exp: authStorage.getRefreshExp() ?? 0,
+        sessions: authStorage.getRestrictedSessions(),
+        user: authStorage.getUser() ?? undefined,
+      });
+      return;
+    }
+
+    const refresh = authStorage.getRefresh();
+    if (!refresh || !isLikelyJweCompact(refresh)) {
       useAuthStore.getState().setAnonymous();
       return;
     }
-    // Restricted sessions don't get a proactive scheduler — they need the user
-    // to take action (revoke a session) to become full.
-    useAuthStore.getState().setRestricted({
-      access: restrictedAccess,
-      refresh: authStorage.getRefresh() ?? "",
-      access_exp: authStorage.getRefreshExp() ?? 0,
-      refresh_exp: authStorage.getRefreshExp() ?? 0,
-      sessions: authStorage.getRestrictedSessions(),
-      user: authStorage.getUser() ?? undefined,
-    });
-    return;
-  }
 
-  const refresh = authStorage.getRefresh();
-  if (!refresh || !isLikelyJweCompact(refresh)) {
-    useAuthStore.getState().setAnonymous();
-    return;
-  }
+    try {
+      const result = await apiRefreshToken({ refresh });
+      if (result.is_restricted) {
+        applyRestrictedAuth(result);
+        return;
+      }
+
+      useAuthStore.getState().setFull({
+        access: result.access,
+        refresh: result.refresh,
+        access_exp: result.access_exp,
+        refresh_exp: result.refresh_exp,
+      });
+    } catch {
+      useAuthStore.getState().setAnonymous();
+    }
+  })();
 
   try {
-    const result = await apiRefreshToken({ refresh });
-    if (result.is_restricted) {
-      applyRestrictedAuth(result);
-      return;
-    }
-
-    useAuthStore.getState().setFull({
-      access: result.access,
-      refresh: result.refresh,
-      access_exp: result.access_exp,
-      refresh_exp: result.refresh_exp,
-    });
-  } catch {
-    useAuthStore.getState().setAnonymous();
+    await bootstrapRefreshPromise;
+  } finally {
+    bootstrapRefreshPromise = null;
   }
 }
 

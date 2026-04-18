@@ -41,6 +41,7 @@ class AdvancedJWTAuthentication(authentication.BaseAuthentication):
                     session_id=str(session_id),
                     jti=payload.get("jti", ""),
                     partner_jti=payload.get("partner_jti", ""),
+                    scope=payload.get("scope"),
                 ):
                     raise TokenValidationError("Session is no longer active.")
 

@@ -231,18 +231,25 @@ class IdentityChallengeAPIView(APIView):
             )
 
         tokens = AuthEngine.issue_tokens(user, request)
-        return ResponseFactory.success(
-            message="Authentication successful.",
-            data={
-                "status": "full",
-                "access": tokens["access"],
-                "refresh": tokens["refresh"],
-                "access_exp": tokens["access_exp"],
-                "refresh_exp": tokens["refresh_exp"],
-                "user": {
-                    "id": str(user.id),
-                    "email": user.email,
-                    "full_name": getattr(user.client, "full_name", ""),
-                },
+        status_tag = tokens["status"]
+
+        response_data = {
+            "is_restricted": status_tag == "restricted",
+            "access": tokens["access"],
+            "refresh": tokens["refresh"],
+            "access_exp": tokens["access_exp"],
+            "refresh_exp": tokens["refresh_exp"],
+            "user": {
+                "id": str(user.id),
+                "email": user.email,
+                "full_name": getattr(user.client, "full_name", ""),
             },
+        }
+
+        if status_tag == "restricted":
+            response_data["active_sessions"] = tokens.get("active_sessions", [])
+
+        return ResponseFactory.success(
+            message="Authentication successful." if status_tag == "full" else "Maximum device limit reached. Please manage your sessions.",
+            data=response_data,
         )

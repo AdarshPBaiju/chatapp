@@ -76,38 +76,6 @@ class AuthEngine:
                 now_ts + settings.AUTH_ENGINE_SETTINGS["REFRESH_TOKEN_LIFETIME"]
             )
 
-            current_session = cls.resolve_current_session(
-                user_id=user_id,
-                session_id=None,
-                access_jti=None,
-                fingerprint=context.fingerprint,
-                device_entropy=context.device_entropy,
-                for_update=True,
-            )
-
-            if current_session:
-                if (
-                    cls._check_impossible_travel(user_id, context, location)
-                    or cls._count_active_sessions(user_id) > cls._device_limit()
-                ):
-                    return cls._build_restricted_response(
-                        user_id=user_id,
-                        context=context,
-                        access_jti=str(uuid.uuid4()),
-                        refresh_jti=str(uuid.uuid4()),
-                        session_id=str(current_session.session_id),
-                        location=location,
-                    )
-
-                rotated = cls._rotate_session_tokens(
-                    user=user,
-                    session=current_session,
-                    context=context,
-                    location=location,
-                    blacklist_previous=True,
-                )
-                return {"status": "full", **rotated}
-
             session_id = str(uuid.uuid4())
             access_jti = str(uuid.uuid4())
             refresh_jti = str(uuid.uuid4())
@@ -129,24 +97,16 @@ class AuthEngine:
             )
 
             if register_res != "SUCCESS":
-                active_db_count = AuthSession.objects.filter(
+                cls._prune_stale_redis_sessions(
                     user_id=user_id,
-                    is_active=True,
-                    expires_at__gt=dj_timezone.now(),
-                ).count()
-                if active_db_count == 0:
-                    cls._prune_stale_redis_sessions(
-                        user_id=user_id,
-                        session_ids=register_res
-                        if isinstance(register_res, list)
-                        else None,
-                    )
-                    register_res = cls._register_session_in_redis(
-                        user_id=user_id,
-                        session_id=session_id,
-                        session_meta=session_meta,
-                        refresh_expiry_ts=refresh_expiry_ts,
-                    )
+                    session_ids=register_res if isinstance(register_res, list) else None,
+                )
+                register_res = cls._register_session_in_redis(
+                    user_id=user_id,
+                    session_id=session_id,
+                    session_meta=session_meta,
+                    refresh_expiry_ts=refresh_expiry_ts,
+                )
                 if register_res != "SUCCESS":
                     return cls._build_restricted_response(
                         user_id=user_id,
@@ -214,6 +174,8 @@ class AuthEngine:
                 session_id=session_id,
                 refresh_jti=old_refresh_jti,
                 for_update=True,
+                allow_context_fallback=False,
+                require_all_identifiers=True,
             )
             if not session:
                 raise ValueError("Session context not found or already revoked.")
@@ -295,6 +257,7 @@ class AuthEngine:
                 fingerprint=context.fingerprint,
                 device_entropy=context.device_entropy,
                 for_update=True,
+                allow_context_fallback=False,
             )
             if current_session:
                 if cls._count_active_sessions(user_id) > cls._device_limit():
@@ -386,15 +349,15 @@ class AuthEngine:
     @classmethod
     def _rotate_session_tokens(
         cls,
-        *,
         user: CustomUser,
         session: AuthSession,
         context: Any,
         location: dict[str, Any] | None = None,
         access_jti: str | None = None,
         refresh_jti: str | None = None,
-        blacklist_previous: bool = False,
-    ) -> dict[str, str]:
+        blacklist_previous: bool = True,
+        scope: str | None = None,
+    ) -> dict[str, Any]:
         user_id = str(user.id)
         now_ts = cls._now_ts()
         refresh_ttl = settings.AUTH_ENGINE_SETTINGS["REFRESH_TOKEN_LIFETIME"]
@@ -474,6 +437,7 @@ class AuthEngine:
                 sid=str(session.session_id),
                 fpt=context.fingerprint,
                 t_type="access",
+                scope=scope,
             ),
             "refresh": cls._create_token(
                 user_id=user_id,
@@ -482,6 +446,7 @@ class AuthEngine:
                 sid=str(session.session_id),
                 fpt=context.fingerprint,
                 t_type="refresh",
+                scope=scope,
             ),
             "access_exp": access_exp,
             "refresh_exp": refresh_expiry_ts,
@@ -566,7 +531,15 @@ class AuthEngine:
         session_id: str,
         jti: str,
         partner_jti: str | None = None,
+        scope: str | None = None,
     ) -> bool:
+        """
+        Verifies if the session is still active and if the provided token (via JTI)
+        belongs to the current active session state.
+
+        Provides a validation leeway for 'revoke_only' tokens which are ephemeral
+        and not persisted to the DB record.
+        """
         if not session_id:
             logger.error("is_session_active failed: session_id is empty")
             return False
@@ -578,6 +551,10 @@ class AuthEngine:
         )
 
         if not query.exists():
+            if scope == "revoke_only":
+                # Ephemeral restricted tokens might not have a DB record yet
+                # but are still valid as temporaryManagement contexts.
+                return True
             logger.error(
                 f"is_session_active failed: session {session_id} not found for user {user_id}"
             )
@@ -595,6 +572,10 @@ class AuthEngine:
                 f"is_session_active failed: session {session_id} expired. exp={session.expires_at}, now={now}"
             )
             return False
+
+        if scope == "revoke_only":
+            # Restricted tokens are stateless aliases to the session; skip JTI check.
+            return True
 
         has_main_token = jti in {session.access_jti, session.refresh_jti}
         if has_main_token:
@@ -941,6 +922,7 @@ class AuthEngine:
         fingerprint: str | None = None,
         device_entropy: str | None = None,
         for_update: bool = False,
+        allow_context_fallback: bool = True,
     ) -> AuthSession | None:
         return cls._get_active_session(
             user_id=user_id,
@@ -949,6 +931,7 @@ class AuthEngine:
             fingerprint=fingerprint,
             device_entropy=device_entropy,
             for_update=for_update,
+            allow_context_fallback=allow_context_fallback,
         )
 
     @classmethod
@@ -981,6 +964,8 @@ class AuthEngine:
         fingerprint: str | None = None,
         device_entropy: str | None = None,
         for_update: bool = False,
+        allow_context_fallback: bool = True,
+        require_all_identifiers: bool = False,
     ) -> AuthSession | None:
         base_query = AuthSession.objects.filter(
             user_id=user_id,
@@ -989,6 +974,22 @@ class AuthEngine:
         )
         if for_update:
             base_query = base_query.select_for_update()
+
+        if require_all_identifiers:
+            query = base_query
+            has_identifier = False
+            if session_id:
+                query = query.filter(session_id=session_id)
+                has_identifier = True
+            if access_jti:
+                query = query.filter(access_jti=access_jti)
+                has_identifier = True
+            if refresh_jti:
+                query = query.filter(refresh_jti=refresh_jti)
+                has_identifier = True
+            if has_identifier:
+                return query.first()
+            return None
 
         # Use stable identifiers in priority order instead of requiring all provided
         # identifiers to match simultaneously. Token rotation and stale partner JTIs
@@ -1005,6 +1006,8 @@ class AuthEngine:
             session = base_query.filter(refresh_jti=refresh_jti).first()
             if session:
                 return session
+        if not allow_context_fallback:
+            return None
         if device_entropy:
             session = (
                 base_query.filter(device_entropy=device_entropy)
@@ -1045,8 +1048,8 @@ class AuthEngine:
             scope="revoke_only",
         )
         now_ts = cls._now_ts()
-        access_exp = now_ts + 120  # revoke_only tokens live for 120s
-        refresh_exp = now_ts + 120
+        access_exp = now_ts + 900  # revoke_only tokens live for 15 minutes (900s)
+        refresh_exp = now_ts + 900
         return {
             "status": "restricted",
             "access": revoke_token,

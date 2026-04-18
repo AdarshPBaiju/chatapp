@@ -31,4 +31,7 @@ class AllowRevokeOnly(permissions.BasePermission):
         if not auth_data:
             return False
 
-        return auth_data.get("scope") in ["full", "revoke_only"]
+        scope = auth_data.get("scope")
+        if scope is None:
+            return bool(getattr(request.user, "is_authenticated", False))
+        return scope in ["full", "revoke_only"]
