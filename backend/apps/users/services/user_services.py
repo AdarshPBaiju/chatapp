@@ -179,6 +179,66 @@ class UserService:
 
         return otp
 
+    @classmethod
+    def send_stateless_otp(cls, user: CustomUser, flow_id: str) -> None:
+        """
+        Calculates and sends a completely stateless OTP (no DB/Cache storage).
+        Used during advanced V3 identity flows.
+        """
+        from users.services.auth_otp_engine import AuthOtpEngine
+        
+        otp = AuthOtpEngine.generate_email_otp(user.email, flow_id)
+        
+        # Use existing branding and email logic for consistency
+        email_copy = {
+            "email_subject": f"{settings.BRAND_NAME} • Your Login Verification Code",
+            "email_title": "Secure Login Requested",
+            "email_intro": (
+                f"You're attempting to sign in to {settings.BRAND_NAME}. "
+                "For your protection, please verify your identity using the 6-digit code below."
+            ),
+            "email_instruction": (
+                "Enter this code on the login screen to complete your sign-in process."
+            ),
+            "email_footer_note": (
+                f"If you did not request this code, please ignore this email or secure your account password."
+            ),
+            "email_badge_label": "Identity verification",
+            "email_compatibility_note": f"Logging in to {settings.BRAND_NAME}",
+        }
+
+        context = {
+            "brand_name": settings.BRAND_NAME,
+            "brand_slogan": settings.BRAND_SLOGAN,
+            "brand_address": settings.BRAND_ADDRESS,
+            "brand_color_primary": settings.BRAND_COLOR_PRIMARY,
+            "brand_color_secondary": settings.BRAND_COLOR_SECONDARY,
+            "from_email": settings.DEFAULT_FROM_EMAIL,
+            "current_year": timezone.now().year,
+            "full_name": getattr(user.client, "full_name", "") if user else "Friend",
+            "otp_code": otp,
+            "expiry_minutes": 2, # Hardcoded 2-min window for stateless
+            **email_copy,
+        }
+
+        html_message = render_to_string("emails/auth/otp_modern.html", context)
+        plain_message = strip_tags(html_message)
+
+        try:
+            send_mail(
+                subject=email_copy["email_subject"],
+                message=plain_message,
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                recipient_list=[user.email],
+                html_message=html_message,
+                fail_silently=False,
+            )
+        except Exception as e:
+            logger.exception("Failed to send stateless OTP email to %s", user.email)
+            raise ValidationError(
+                {"email": "Verification system unavailable. Please try again later."}
+            ) from e
+
     @staticmethod
     def validate_otp(
         identifier: str,

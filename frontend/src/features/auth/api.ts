@@ -6,6 +6,7 @@ import {
   LoginResponse,
   RestrictedAuthPayload,
   UserInfo,
+  IdentityChallengePayload,
 } from "@/features/auth/types";
 
 export type SignUpResponse = {
@@ -61,6 +62,25 @@ export async function signUpFinalize(payload: {
 
 export async function login(payload: LoginRequest): Promise<LoginResponse> {
   const response = await httpClient.post<ApiEnvelope<LoginResponse>>("/login/", payload);
+  return unwrapEnvelope(response);
+}
+
+export async function identityInit(payload: { email: string }): Promise<IdentityChallengePayload> {
+  const response = await httpClient.post<ApiEnvelope<IdentityChallengePayload>>("/identity/init/", payload);
+  return unwrapEnvelope(response);
+}
+
+export async function identityChallenge(payload: {
+  hit: string;
+  method: string;
+  expected_step: number;
+  password?: string;
+  code?: string;
+}): Promise<IdentityChallengePayload | OTPValidationResponse> {
+  const response = await httpClient.post<ApiEnvelope<IdentityChallengePayload | OTPValidationResponse>>(
+    "/identity/challenge/",
+    payload,
+  );
   return unwrapEnvelope(response);
 }
 

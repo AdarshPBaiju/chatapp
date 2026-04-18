@@ -32,7 +32,10 @@ class ClientPasswordResetRequestAPIView(APIView):
 
         email = serializer.validated_data.get("email") or _authenticated_email(request)
         if not email:
-            return ResponseFactory.error(message="Email address is required.")
+            return ResponseFactory.error(
+                message="Email address is required.",
+                error_code="PASSWORD_RESET_EMAIL_REQUIRED"
+            )
 
         UserService.request_password_reset(email)
 
@@ -67,16 +70,15 @@ class ClientPasswordResetVerifyAPIView(APIView):
                 message="Invalid or expired verification code.",
                 errors={"otp_code": "The code provided is incorrect or has timed out."},
                 code=status.HTTP_400_BAD_REQUEST,
+                error_code="PASSWORD_RESET_INVALID_CODE"
             )
-
 
         user = CustomUser.objects.filter(email__iexact=email, is_active=True).first()
         if not user:
-            # The user proved they owned the email by entering the code,
-            # so now it's safe and helpful to tell them they don't have an account.
             return ResponseFactory.error(
                 message="Code verified, but no active account was found for this email address. Please sign up instead.",
                 code=status.HTTP_404_NOT_FOUND,
+                error_code="PASSWORD_RESET_USER_NOT_FOUND"
             )
 
         reset_token = UserService.generate_password_reset_token(user)
@@ -107,6 +109,7 @@ class ClientPasswordResetConfirmAPIView(APIView):
                 message="Invalid or expired reset token.",
                 errors={"reset_token": "The reset operation could not be completed."},
                 code=status.HTTP_400_BAD_REQUEST,
+                error_code="PASSWORD_RESET_TOKEN_INVALID"
             )
 
         return ResponseFactory.success(
@@ -134,6 +137,7 @@ class ClientPasswordChangeAPIView(APIView):
                     "old_password": "The current password you entered is incorrect."
                 },
                 code=status.HTTP_400_BAD_REQUEST,
+                error_code="PASSWORD_CHANGE_INVALID_CURRENT"
             )
 
         user.set_password(serializer.validated_data["password"])

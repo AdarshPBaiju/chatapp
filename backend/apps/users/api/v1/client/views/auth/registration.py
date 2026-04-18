@@ -76,12 +76,14 @@ class ClientSignUpVerifyAPIView(APIView):
                 message="Invalid or expired verification code.",
                 errors={"otp_code": "The code provided is incorrect or has timed out."},
                 code=status.HTTP_400_BAD_REQUEST,
+                error_code="REGISTRATION_INVALID_CODE"
             )
 
         if signup_token == "ALREADY_EXISTS":
             return ResponseFactory.error(
                 message="An account with this email already exists and is fully active. Please log in.",
                 code=status.HTTP_409_CONFLICT,
+                error_code="REGISTRATION_EMAIL_EXISTS"
             )
 
         return ResponseFactory.success(
@@ -111,6 +113,7 @@ class ClientSignUpFinalizeAPIView(APIView):
             return ResponseFactory.error(
                 message="Registration failed. Code may have expired.",
                 code=status.HTTP_400_BAD_REQUEST,
+                error_code="REGISTRATION_FINALIZE_FAILED"
             )
 
         existing_entropy = get_device_entropy(request)

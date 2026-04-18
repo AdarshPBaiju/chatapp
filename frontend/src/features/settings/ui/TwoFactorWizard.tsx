@@ -1,0 +1,198 @@
+import { useState } from "react";
+import { Copy, Download, Check, Shield, Smartphone } from "lucide-react";
+
+import { Button, Input } from "@/shared/ui/FormControls";
+import { setupTwoFactor, verifyTwoFactor } from "../api";
+import { TwoFactorSetup } from "../types";
+
+interface TwoFactorWizardProps {
+  onClose: () => void;
+  onSuccess: () => void;
+}
+
+export function TwoFactorWizard({ onClose, onSuccess }: TwoFactorWizardProps) {
+  const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
+  const [setupData, setSetupData] = useState<TwoFactorSetup | null>(null);
+  const [verificationCode, setVerificationCode] = useState("");
+  const [backupCodes, setBackupCodes] = useState<string[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  async function handleStart() {
+    try {
+      setIsLoading(true);
+      setError(null);
+      const data = await setupTwoFactor();
+      if (data.success) {
+        setSetupData(data.data);
+        setStep(2);
+      } else {
+        setError(data.message);
+      }
+    } catch (err) {
+      setError("Failed to initialize 2FA setup.");
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  async function handleVerify() {
+    try {
+      setIsLoading(true);
+      setError(null);
+      const data = await verifyTwoFactor(verificationCode);
+      if (data.success && data.data) {
+        setBackupCodes(data.data.backup_codes);
+        setStep(4);
+      } else {
+        setError(data.message || "Verification failed.");
+      }
+    } catch (err) {
+      setError("Verification failed. Please check the code.");
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  function handleCopyCodes() {
+    navigator.clipboard.writeText(backupCodes.join("\n"));
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
+  function handleDownloadCodes() {
+    const blob = new Blob([backupCodes.join("\n")], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "chitchat-backup-codes.txt";
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-300">
+      <div className="w-full max-w-lg bg-white rounded-3xl shadow-2xl shadow-slate-900/20 overflow-hidden outline-none">
+        <div className="p-8">
+          {step === 1 && (
+            <div className="space-y-6 text-center py-4">
+              <div className="h-20 w-20 bg-sky-50 text-sky-600 rounded-3xl flex items-center justify-center mx-auto">
+                <Shield size={40} />
+              </div>
+              <div className="space-y-2">
+                <h3 className="text-2xl font-bold text-slate-900">Secure Your Account</h3>
+                <p className="text-slate-500 leading-relaxed">
+                  Two-factor authentication adds an extra layer of security by requiring a code from your phone when you log in.
+                </p>
+              </div>
+              <div className="pt-4 flex gap-3">
+                <Button variant="outline" onClick={onClose} className="flex-1">Cancel</Button>
+                <Button onClick={handleStart} isLoading={isLoading} className="flex-1">Get Started</Button>
+              </div>
+            </div>
+          )}
+
+          {step === 2 && setupData && (
+            <div className="space-y-6">
+              <div className="text-center space-y-2">
+                <h3 className="text-xl font-bold text-slate-900">Scan QR Code</h3>
+                <p className="text-sm text-slate-500">Open your authenticator app and scan this code.</p>
+              </div>
+              
+              <div className="bg-slate-50 p-6 rounded-2xl flex items-center justify-center border-2 border-slate-100 border-dashed">
+                <img 
+                  src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(setupData.provisioning_uri)}`}
+                  alt="QR Code"
+                  className="rounded-lg shadow-sm bg-white p-2"
+                />
+              </div>
+
+              <div className="p-4 bg-sky-50 rounded-xl space-y-1">
+                <p className="text-[10px] font-bold text-sky-700 uppercase tracking-wider">Manual Entry Code</p>
+                <p className="font-mono text-lg font-bold text-sky-800 tracking-widest">{setupData.secret}</p>
+              </div>
+
+              <div className="pt-4">
+                <Button onClick={() => setStep(3)} className="w-full">Already Scanned</Button>
+              </div>
+            </div>
+          )}
+
+          {step === 3 && (
+            <div className="space-y-6">
+              <div className="text-center space-y-2">
+                <h3 className="text-xl font-bold text-slate-900">Verify Setup</h3>
+                <p className="text-sm text-slate-500">Enter the 6-digit code currently shown in your app.</p>
+              </div>
+
+              <div className="py-4">
+                <Input
+                  icon={<Smartphone size={20} />}
+                  placeholder="000000"
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={6}
+                  value={verificationCode}
+                  onChange={(e) => setVerificationCode(e.target.value)}
+                  className="text-center text-3xl font-mono tracking-[0.5em]"
+                  autoFocus
+                />
+              </div>
+
+              {error && <p className="text-sm font-medium text-red-500 text-center">{error}</p>}
+
+              <div className="pt-4 flex gap-3">
+                <Button variant="outline" onClick={() => setStep(2)} className="flex-1">Back</Button>
+                <Button 
+                  onClick={handleVerify} 
+                  isLoading={isLoading} 
+                  disabled={verificationCode.length !== 6 || isLoading}
+                  className="flex-1"
+                >
+                  Verify & Activate
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {step === 4 && (
+            <div className="space-y-6">
+              <div className="text-center space-y-2">
+                <div className="h-16 w-16 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                  <Check size={32} />
+                </div>
+                <h3 className="text-xl font-bold text-slate-900">Backup Codes</h3>
+                <p className="text-sm text-slate-500">Keep these codes in a safe place. They are your only way back if you lose your phone.</p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 p-6 bg-slate-50 rounded-2xl border-2 border-slate-100 font-mono text-sm leading-relaxed">
+                {backupCodes.map((code, idx) => (
+                  <div key={idx} className="flex items-center gap-2">
+                    <span className="text-slate-300 pointer-events-none">{String(idx + 1).padStart(2, '0')}.</span>
+                    <span className="text-slate-700 font-bold">{code}</span>
+                  </div>
+                ))}
+              </div>
+
+              <div className="flex gap-3">
+                <Button variant="outline" onClick={handleCopyCodes} className="flex-1 gap-2">
+                  {copied ? <Check size={18} /> : <Copy size={18} />} {copied ? "Copied" : "Copy All"}
+                </Button>
+                <Button variant="outline" onClick={handleDownloadCodes} className="flex-1 gap-2">
+                  <Download size={18} /> Download
+                </Button>
+              </div>
+
+              <div className="pt-4">
+                <Button onClick={onSuccess} className="w-full bg-emerald-600 hover:bg-emerald-700 shadow-lg shadow-emerald-500/10">
+                  Finish Setup
+                </Button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}

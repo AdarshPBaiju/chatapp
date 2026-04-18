@@ -39,9 +39,9 @@ export function AuthShell() {
   const copy = shellCopy[location.pathname] ?? shellCopy["/login"];
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(96,165,250,0.18),_transparent_28%),linear-gradient(180deg,_#f8fbff_0%,_#eef4ff_100%)] text-slate-950">
-      <div className="grid min-h-screen w-full md:grid-cols-[minmax(0,1fr)_minmax(380px,500px)] lg:grid-cols-[minmax(0,1fr)_minmax(420px,560px)]">
-        <aside className="hidden md:block relative overflow-hidden border-b border-white/70 bg-[linear-gradient(160deg,_rgba(255,255,255,0.94),_rgba(236,245,255,0.88))] px-4 py-6 sm:px-6 sm:py-8 md:sticky md:top-0 md:h-[100dvh] md:border-b-0 md:border-r md:px-8 md:py-8 lg:px-10 lg:py-10 xl:px-14 xl:py-12">
+    <div className="h-screen overflow-hidden bg-[radial-gradient(circle_at_top_left,_rgba(96,165,250,0.18),_transparent_28%),linear-gradient(180deg,_#f8fbff_0%,_#eef4ff_100%)] text-slate-950">
+      <div className="grid h-full w-full md:grid-cols-[minmax(0,1fr)_minmax(380px,500px)] lg:grid-cols-[minmax(0,1fr)_minmax(420px,560px)]">
+        <aside className="hidden md:block relative h-full overflow-hidden border-r bg-[linear-gradient(160deg,_rgba(255,255,255,0.94),_rgba(236,245,255,0.88))] px-4 py-6 sm:px-6 sm:py-8 md:px-8 md:py-8 lg:px-10 lg:py-10 xl:px-14 xl:py-12">
           <div className="pointer-events-none absolute inset-0">
             <div className="absolute -left-24 top-[-8%] h-72 w-72 rounded-full bg-sky-300/45 blur-3xl sm:h-96 sm:w-96" />
             <div className="absolute right-[-12%] top-[18%] h-48 w-48 rounded-full bg-violet-200/60 blur-3xl sm:h-72 sm:w-72" />
@@ -82,7 +82,7 @@ export function AuthShell() {
           </div>
         </aside>
 
-        <main className="flex min-h-[calc(100dvh-8rem)] items-start px-4 py-8 sm:px-6 sm:py-10 md:min-h-[100dvh] md:items-center md:px-8 md:py-8 xl:px-10">
+        <main className="h-full overflow-y-auto flex items-start px-4 py-8 sm:px-6 sm:py-10 md:items-center md:px-8 md:py-8 xl:px-10">
           <div className="w-full">
             <div className="mb-8 flex items-center justify-center gap-3 md:hidden">
               <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-950 text-white shadow-[0_10px_20px_-10px_rgba(15,23,42,0.5)]">
