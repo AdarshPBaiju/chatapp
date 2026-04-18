@@ -86,10 +86,8 @@ class AuthEngine:
             )
 
             if current_session:
-                is_anomaly = cls._check_impossible_travel(user_id, context, location)
-
                 if (
-                    is_anomaly
+                    cls._check_impossible_travel(user_id, context, location)
                     or cls._count_active_sessions(user_id) > cls._device_limit()
                 ):
                     return cls._build_restricted_response(
@@ -175,6 +173,9 @@ class AuthEngine:
                 longitude=location.get("lon"),
             )
             cls._sync_device_registry(user, context)
+            access_exp = (
+                now_ts + settings.AUTH_ENGINE_SETTINGS["ACCESS_TOKEN_LIFETIME"]
+            )
             return {
                 "status": "full",
                 "access": cls._create_token(
@@ -193,6 +194,8 @@ class AuthEngine:
                     fpt=context.fingerprint,
                     t_type="refresh",
                 ),
+                "access_exp": access_exp,
+                "refresh_exp": refresh_expiry_ts,
                 "session_id": session_id,
             }
 
@@ -356,6 +359,8 @@ class AuthEngine:
                 latitude=location.get("lat"),
                 longitude=location.get("lon"),
             )
+            access_ttl = settings.AUTH_ENGINE_SETTINGS["ACCESS_TOKEN_LIFETIME"]
+            access_exp = now_ts + access_ttl
             return {
                 "status": "full",
                 "access": cls._create_token(
@@ -374,6 +379,8 @@ class AuthEngine:
                     fpt=context.fingerprint,
                     t_type="refresh",
                 ),
+                "access_exp": access_exp,
+                "refresh_exp": refresh_expiry_ts,
             }
 
     @classmethod
@@ -457,6 +464,8 @@ class AuthEngine:
             cls.blacklist_tokens([previous_access_jti, previous_refresh_jti])
         cls._sync_device_registry(user, context)
 
+        access_ttl = settings.AUTH_ENGINE_SETTINGS["ACCESS_TOKEN_LIFETIME"]
+        access_exp = now_ts + access_ttl
         return {
             "access": cls._create_token(
                 user_id=user_id,
@@ -474,6 +483,8 @@ class AuthEngine:
                 fpt=context.fingerprint,
                 t_type="refresh",
             ),
+            "access_exp": access_exp,
+            "refresh_exp": refresh_expiry_ts,
         }
 
     @staticmethod
@@ -1033,6 +1044,9 @@ class AuthEngine:
             t_type="access",
             scope="revoke_only",
         )
+        now_ts = cls._now_ts()
+        access_exp = now_ts + 120  # revoke_only tokens live for 120s
+        refresh_exp = now_ts + 120
         return {
             "status": "restricted",
             "access": revoke_token,
@@ -1045,6 +1059,8 @@ class AuthEngine:
                 t_type="refresh",
                 scope="revoke_only",
             ),
+            "access_exp": access_exp,
+            "refresh_exp": refresh_exp,
             "active_sessions": cls.list_active_sessions(
                 user_id=user_id,
                 current_sid=session_id,

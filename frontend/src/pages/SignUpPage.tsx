@@ -2,8 +2,8 @@ import { FormEvent, useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Mail, Lock, User, CheckCircle } from "lucide-react";
 
-import { signUpFinalize, signUpRequest, signUpResend, signUpVerify } from "@/features/auth/api";
-import { useAuthStore } from "@/features/auth/state";
+import { signUpResend, signUpVerify } from "@/features/auth/api";
+import { runSignUpFlow, runSignUpFinalizeFlow } from "@/features/auth/flows";
 import { readApiMessage } from "@/shared/lib/apiResponse";
 import { AuthLayout } from "@/shared/ui/AuthLayout";
 import { Button, Input } from "@/shared/ui/FormControls";
@@ -23,7 +23,7 @@ export function SignUpPage() {
   const [error, setError] = useState<string | undefined>();
   const [loading, setLoading] = useState(false);
   const [signupToken, setSignupToken] = useState("");
-  const [resendInterval, setResendInterval] = useState(60);
+  const [resendInterval] = useState(60);
   const [countdown, setCountdown] = useState(0);
 
   async function handleEmail(e: FormEvent) {
@@ -31,9 +31,7 @@ export function SignUpPage() {
     setError(undefined);
     setLoading(true);
     try {
-      const data = await signUpRequest({ email });
-      setResendInterval(data.resend_interval);
-      setCountdown(data.resend_interval);
+      await runSignUpFlow({ email });
       setStep("OTP");
     } catch (err) {
       setError(readApiMessage(err, "Sign up failed."));
@@ -95,22 +93,12 @@ export function SignUpPage() {
 
     setLoading(true);
     try {
-      const result = await signUpFinalize({
+      const result = await runSignUpFinalizeFlow({
         signup_token: signupToken,
         full_name: `${firstName} ${lastName}`.trim(),
         password,
         confirm_password: confirmPassword,
       });
-
-      if (result.is_restricted) {
-        useAuthStore.getState().setRestricted(result.access, result.refresh, result.active_sessions || [], result.user);
-      } else if ("refresh" in result) {
-        useAuthStore.getState().setFull({
-          access: result.access,
-          refresh: result.refresh,
-          user: result.user,
-        });
-      }
 
       navigate(result.is_restricted ? "/session-gate" : "/dashboard");
     } catch (err) {

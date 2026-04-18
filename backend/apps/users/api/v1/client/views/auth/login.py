@@ -64,6 +64,8 @@ class ClientLoginAPIView(APIView):
                     "is_restricted": True,
                     "access": result["access"],
                     "refresh": result["refresh"],
+                    "access_exp": result["access_exp"],
+                    "refresh_exp": result["refresh_exp"],
                     "active_sessions": result["active_sessions"],
                     "user": {
                         "id": str(user.id),
@@ -82,6 +84,8 @@ class ClientLoginAPIView(APIView):
                 "is_restricted": False,
                 "access": result["access"],
                 "refresh": result["refresh"],
+                "access_exp": result["access_exp"],
+                "refresh_exp": result["refresh_exp"],
                 "user": {
                     "id": str(user.id),
                     "email": user.email,

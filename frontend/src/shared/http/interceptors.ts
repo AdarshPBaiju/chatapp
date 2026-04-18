@@ -1,192 +1,84 @@
+/**
+ * interceptors.ts
+ *
+ * Minimal, predictive-session-aware interceptors.
+ *
+ * The sessionEngine owns all refresh scheduling.
+ * These interceptors do NOT attempt any refresh themselves.
+ *
+ * Request interceptor:  attach Authorization header.
+ * Response interceptor: map error_code to deterministic local state transitions.
+ */
+
 import axios, { AxiosError, InternalAxiosRequestConfig } from "axios";
 
 import { env } from "@/shared/lib/env";
 import { getTimezoneOffsetHeaderValue } from "@/shared/lib/timezone";
-import { authStorage } from "@/shared/lib/storage";
-import { ApiEnvelope } from "@/shared/types/api";
 import { tokenManager } from "@/shared/auth/tokenManager";
-import { runSingleFlightRefresh } from "@/shared/auth/refreshCoordinator";
-import { useAuthStore } from "@/features/auth/state";
-import { SessionInfo } from "@/features/auth/types";
+import { sessionEngine } from "@/shared/auth/sessionEngine";
 
-type RefreshPayload = {
-  is_restricted: false;
-  access: string;
-  refresh: string;
-};
+// ─── Error codes that mean the session is irrecoverably dead ────────────────
+// On these, we do a LOCAL logout only — no network call to /logout/.
+const HARD_LOGOUT_CODES = new Set([
+  "AUTH_REFRESH_EXPIRED",
+  "AUTH_REVOKED_BY_SYSTEM",
+  "AUTH_SESSION_EXPIRED",
+  "AUTH_USER_NOT_FOUND",
+]);
 
-type RestrictedRefreshPayload = {
-  is_restricted: true;
-  access: string;
-  refresh: string;
-  active_sessions: SessionInfo[];
-};
+// ─── Error codes that mean the access token just expired ────────────────────
+// sessionEngine should have prevented this, but if it slips through (e.g.
+// the tab was in the background with the device sleeping), trigger one
+// forced refresh attempt rather than a hard logout.
+const SOFT_EXPIRY_CODES = new Set([
+  "AUTH_ACCESS_EXPIRED",
+]);
 
-type RetryableConfig = InternalAxiosRequestConfig & {
-  _retry?: boolean;
-};
-
-type RefreshOutcome =
-  | {
-      kind: "full";
-      access: string;
-    }
-  | {
-      kind: "restricted";
-    };
-
-function shouldSkipRefresh(url?: string): boolean {
-  if (!url) return false;
-  const path = url.toLowerCase();
-  return (
-    path.includes("/login/") ||
-    path.includes("/signup/") ||
-    path.includes("/otp-validate/") ||
-    path.includes("/otp-resend/") ||
-    path.includes("/token/refresh/")
-  );
-}
-
-async function bestEffortLogoutCurrentSession(): Promise<void> {
-  const access = tokenManager.getAccess();
-  if (!access) {
-    return;
-  }
-
-  try {
-    await axios.post(
-      `${env.apiBaseUrl}/logout/`,
-      undefined,
-      {
-        withCredentials: true,
-        validateStatus: () => true,
-        headers: {
-          Authorization: `Bearer ${access}`,
-          "X-Timezone-Offset": getTimezoneOffsetHeaderValue(),
-        },
-      },
-    );
-  } catch {
-    // Ignore cleanup failures and fall back to local auth reset.
-  }
-}
-
-export async function refreshAccessToken(): Promise<RefreshOutcome> {
-  const refresh = authStorage.getRefresh();
-  if (!refresh) {
-    throw new Error("No refresh token available.");
-  }
-
-  try {
-    const response = await axios.post<ApiEnvelope<RefreshPayload | RestrictedRefreshPayload>>(
-      `${env.apiBaseUrl}/token/refresh/`,
-      { refresh },
-      {
-        withCredentials: true,
-        headers: {
-          "X-Timezone-Offset": getTimezoneOffsetHeaderValue(),
-        },
-      },
-    );
-
-    if (!response.data.success || !response.data.data) {
-      throw new Error(response.data.message || "Refresh failed.");
-    }
-
-    const payload = response.data.data;
-    if (payload.is_restricted) {
-      useAuthStore.getState().setRestricted(payload.access, payload.refresh, payload.active_sessions);
-      return { kind: "restricted" };
-    }
-
-    const nextAccess = payload.access;
-    const nextRefresh = payload.refresh;
-    tokenManager.setAccess(nextAccess);
-    authStorage.setRefresh(nextRefresh);
-    return {
-      kind: "full",
-      access: nextAccess,
-    };
-  } catch (error) {
-    if (axios.isAxiosError(error) && error.response?.status === 401) {
-      // Advanced Race Condition Handling:
-      // If the backend says the refresh token was already used (401),
-      // check if a concurrent successful refresh updated storage in the meantime.
-      const currentRefresh = authStorage.getRefresh();
-      const currentAccess = tokenManager.getAccess();
-      
-      if (currentRefresh && currentRefresh !== refresh && currentAccess) {
-        return {
-          kind: "full",
-          access: currentAccess,
-        };
-      }
-    }
-    throw error;
-  }
-}
+// ─── Request interceptor ─────────────────────────────────────────────────────
 
 export function attachRequestInterceptor() {
   return (config: InternalAxiosRequestConfig): InternalAxiosRequestConfig => {
-    const nextConfig = config;
-    nextConfig.withCredentials = true;
-    nextConfig.headers.set("X-Timezone-Offset", getTimezoneOffsetHeaderValue());
+    config.withCredentials = true;
+    config.headers.set("X-Timezone-Offset", getTimezoneOffsetHeaderValue());
 
     const access = tokenManager.getAccess();
     if (access) {
-      nextConfig.headers.set("Authorization", `Bearer ${access}`);
+      config.headers.set("Authorization", `Bearer ${access}`);
     }
 
-    return nextConfig;
+    return config;
   };
 }
+
+// ─── Response error interceptor ──────────────────────────────────────────────
 
 export function createResponseErrorInterceptor(onAuthFail: () => void) {
   return async (error: AxiosError): Promise<unknown> => {
     const status = error.response?.status;
-    const originalRequest = error.config as RetryableConfig | undefined;
+    const data = error.response?.data as any;
+    const errorCode: string | undefined = data?.error_code;
 
-    if (
-      status !== 401 ||
-      !originalRequest ||
-      originalRequest._retry ||
-      shouldSkipRefresh(originalRequest.url)
-    ) {
+    if (status !== 401) {
       return Promise.reject(error);
     }
 
-    const refresh = authStorage.getRefresh();
-    if (!refresh) {
-      return Promise.reject(error);
-    }
-
-    originalRequest._retry = true;
-
-    try {
-      const refreshOutcome = await runSingleFlightRefresh(refreshAccessToken);
-      if (refreshOutcome.kind === "restricted") {
-        return Promise.reject(
-          new Error("Session limit reached. Revoke an existing session to continue."),
-        );
-      }
-
-      originalRequest.headers = originalRequest.headers ?? {};
-      originalRequest.headers.Authorization = `Bearer ${refreshOutcome.access}`;
-      return axios(originalRequest);
-    } catch (refreshError) {
-      // Handle "Session limit reached" from dynamic middleware (not just refresh)
-      const message = (refreshError as any)?.response?.data?.message || "";
-      if (message.includes("Session limit reached")) {
-         // The authentication middleware downgraded us. We should have been put in restricted mode 
-         // but if it happened during a normal request, we need to handle the state transition.
-         // Usually, we want to just reject and let the app handle the "restricted" status if set by middleware.
-         // Actually, let's trigger a session list fetch to be sure.
-         return Promise.reject(refreshError);
-      }
-
-      await bestEffortLogoutCurrentSession();
+    // ── Hard logout codes — session is dead, no recovery possible ────────────
+    if (errorCode && HARD_LOGOUT_CODES.has(errorCode)) {
+      tokenManager.clear();
       onAuthFail();
-      return Promise.reject(refreshError);
+      return Promise.reject(error);
     }
+
+    // ── Soft expiry — access token expired (device was sleeping, etc.) ────────
+    // Let the sessionEngine attempt one forced refresh. Don't retry the request
+    // automatically — the component that fired it will naturally re-render once
+    // the store transitions back to ACTIVE.
+    if (!errorCode || SOFT_EXPIRY_CODES.has(errorCode)) {
+      sessionEngine.forceRefresh().catch(() => {
+        // forceRefresh calls onExpired → setAnonymous internally if it fails.
+      });
+    }
+
+    return Promise.reject(error);
   };
 }

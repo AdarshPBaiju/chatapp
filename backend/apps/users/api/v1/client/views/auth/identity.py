@@ -237,6 +237,8 @@ class IdentityChallengeAPIView(APIView):
                 "status": "full",
                 "access": tokens["access"],
                 "refresh": tokens["refresh"],
+                "access_exp": tokens["access_exp"],
+                "refresh_exp": tokens["refresh_exp"],
                 "user": {
                     "id": str(user.id),
                     "email": user.email,

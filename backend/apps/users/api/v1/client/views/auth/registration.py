@@ -126,6 +126,8 @@ class ClientSignUpFinalizeAPIView(APIView):
             "is_restricted": result["status"] == "restricted",
             "access": result["access"],
             "refresh": result["refresh"],
+            "access_exp": result["access_exp"],
+            "refresh_exp": result["refresh_exp"],
             "user": {
                 "id": str(user.id),
                 "email": user.email,
