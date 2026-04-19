@@ -222,7 +222,12 @@ class IdentityChallengeAPIView(APIView):
         is_2fa = user.client.is_two_factor_enabled
         current_amr = payload.get("amr", [])
 
-        if is_2fa and "totp" not in current_amr and "backup" not in current_amr and amr_tag not in {"totp", "backup"}:
+        if (
+            is_2fa
+            and "totp" not in current_amr
+            and "backup" not in current_amr
+            and amr_tag not in {"totp", "backup"}
+        ):
             next_hit = HitEngine.issue_next_hit(
                 payload, [amr_tag], target_acr=acr_target
             )
@@ -373,6 +378,7 @@ class ClientTokenRefreshAPIView(APIView):
                     SessionQueryService.ACTIVITY_GRACE_PERIOD.total_seconds()
                 ),
             )
+
             user = CustomUser.objects.get(id=payload["user_id"], is_active=True)
 
             if not existing_entropy:

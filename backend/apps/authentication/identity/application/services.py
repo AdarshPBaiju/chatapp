@@ -8,6 +8,7 @@ from typing import Any
 from django.conf import settings
 from django.db import transaction
 from django.core.cache import cache
+from django.utils import timezone as dj_timezone
 from authentication.core.crypto import AuthCryptoEngine
 from authentication.core.request_context import (
     get_device_entropy,
@@ -44,10 +45,11 @@ class TokenIssueService:
         access_jti = access_jti or str(uuid.uuid4())
         refresh_jti = refresh_jti or str(uuid.uuid4())
 
-        access_exp = now + timedelta(
-            minutes=ttl_minutes
-        ) if ttl_minutes is not None else now + timedelta(
-            seconds=settings.AUTH_ENGINE_SETTINGS["ACCESS_TOKEN_LIFETIME"]
+        access_exp = (
+            now + timedelta(minutes=ttl_minutes)
+            if ttl_minutes is not None
+            else now
+            + timedelta(seconds=settings.AUTH_ENGINE_SETTINGS["ACCESS_TOKEN_LIFETIME"])
         )
         refresh_exp = now + timedelta(
             seconds=settings.AUTH_ENGINE_SETTINGS["REFRESH_TOKEN_LIFETIME"]
@@ -103,6 +105,10 @@ class TokenRotateService:
         session_id = refresh_payload["sid"]
         refresh_jti = refresh_payload["jti"]
         access_jti = refresh_payload["partner_jti"]
+        from authentication.identity.infrastructure.cache import (
+            RedisSessionStore,
+            RefreshGraceService,
+        )
 
         session = SessionQueryService.get_active_session(
             user_id=user_id,
@@ -114,25 +120,51 @@ class TokenRotateService:
         )
 
         if not session:
+            inherited = RefreshGraceService.get_rotated_result(refresh_jti)
+            if inherited:
+                return inherited
+
             TokenBlacklistService.blacklist_tokens([refresh_jti, access_jti])
             raise ValueError("Session context not found or already revoked.")
 
         TokenBlacklistService.blacklist_tokens([refresh_jti, access_jti])
 
         context = build_auth_request_context(request)
+        now_ts = int(time.time())
 
-        if (
-            SessionQueryService.count_active_sessions(user_id)
-            > DeviceRegistryService.get_device_limit()
-        ):
-            return LoginService.build_restricted_response(
+        device_limit = DeviceRegistryService.get_device_limit()
+        active_sessions = SessionQueryService.count_active_sessions(user_id)
+
+        if device_limit > 0 and active_sessions > device_limit:
+            new_access_jti = str(uuid.uuid4())
+            new_refresh_jti = str(uuid.uuid4())
+
+            SessionManager.persist_session(
+                user=user,
+                session_id=session_id,
+                access_jti=new_access_jti,
+                refresh_jti=new_refresh_jti,
+                fingerprint=context.fingerprint,
+                device_label=context.device_label,
+                device_entropy=context.device_entropy,
+                ip_address=context.ip_address,
+                expires_at=dj_timezone.now() + timedelta(minutes=15),
+                location_data={
+                    "city": session.city,
+                    "country_code": session.country_code,
+                },
+                session_type=session.session_type,
+            )
+
+            result = LoginService.build_restricted_response(
                 user_id=user_id,
                 context=context,
-                access_jti=access_jti,
-                refresh_jti=refresh_jti,
+                access_jti=new_access_jti,
+                refresh_jti=new_refresh_jti,
                 session_id=session_id,
-                location={"city": session.city, "country_code": session.country_code},
             )
+            RefreshGraceService.register_rotated_result(refresh_jti, result)
+            return result
 
         tokens = TokenIssueService.issue_tokens(
             user=user,
@@ -154,12 +186,48 @@ class TokenRotateService:
             session_type=session.session_type,
         )
 
+        # Sync with Redis Registry (Promote or Update)
+        session_meta = {
+            "session_id": session_id,
+            "access_jti": tokens["jti"],
+            "refresh_jti": tokens["partner_jti"],
+            "device": context.device_label,
+            "ip": context.ip_address,
+            "started_at": int(session.started_at.timestamp()),
+            "last_seen_at": now_ts,
+            "city": session.city,
+            "country": session.country_code,
+            "lat": float(session.latitude) if session.latitude else None,
+            "lon": float(session.longitude) if session.longitude else None,
+            "type": session.session_type,
+        }
+
+        register_res = RedisSessionStore.update_session(
+            user_id=user_id,
+            session_id=session_id,
+            session_meta=session_meta,
+            refresh_expiry_ts=tokens["refresh_exp"],
+            now_ts=now_ts,
+        )
+        if register_res != "SUCCESS":
+            # Promotion case: Session wasn't in Redis ZSET yet
+            RedisSessionStore.register_session(
+                user_id=user_id,
+                session_id=session_id,
+                session_meta=session_meta,
+                refresh_expiry_ts=tokens["refresh_exp"],
+                device_limit=DeviceRegistryService.get_device_limit(),
+                now_ts=now_ts,
+            )
+
         DeviceRegistryService.sync_device_registry(user, context)
 
-        return {
+        final_result = {
             "status": "full",
             **tokens,
         }
+        RefreshGraceService.register_rotated_result(refresh_jti, final_result)
+        return final_result
 
     @classmethod
     def promote_restricted_session(
@@ -173,14 +241,20 @@ class TokenRotateService:
         ).first()
         active_sessions = SessionQueryService.count_active_sessions(user_id)
         device_limit = DeviceRegistryService.get_device_limit()
-        if session:
-            if active_sessions > device_limit:
+        if device_limit > 0:
+            if session:
+                if active_sessions > device_limit:
+                    raise ValueError("Device limit still exceeded.")
+            elif active_sessions >= device_limit:
                 raise ValueError("Device limit still exceeded.")
-        elif active_sessions >= device_limit:
-            raise ValueError("Device limit still exceeded.")
 
         context = build_auth_request_context(request)
-        user = session.user if session else CustomUser.objects.get(id=user_id, is_active=True)
+
+        user = (
+            session.user
+            if session
+            else CustomUser.objects.get(id=user_id, is_active=True)
+        )
         tokens = TokenIssueService.issue_tokens(
             user=user,
             session_id=session_id,
@@ -319,6 +393,22 @@ class LoginService:
             )
 
         if register_res != "SUCCESS":
+            with transaction.atomic():
+                SessionManager.persist_session(
+                    user=user,
+                    session_id=session_id,
+                    access_jti=access_jti,
+                    refresh_jti=refresh_jti,
+                    fingerprint=context.fingerprint,
+                    device_label=context.device_label,
+                    device_entropy=context.device_entropy,
+                    ip_address=context.ip_address,
+                    expires_at=datetime.fromtimestamp(refresh_expiry_ts, tz=UTC),
+                    location_data=location,
+                    session_type=session_type,
+                )
+                DeviceRegistryService.sync_device_registry(user, context)
+
             return cls.build_restricted_response(
                 user_id=user_id,
                 context=context,
@@ -379,15 +469,18 @@ class LoginService:
         from users.models import CustomUser
 
         # Restricted tokens live for 15 mins
-        restricted_user = cache.get(f"user_obj:{user_id}") or CustomUser.objects.filter(
-            id=user_id
-        ).first()
+        restricted_user = (
+            cache.get(f"user_obj:{user_id}")
+            or CustomUser.objects.filter(id=user_id).first()
+        )
         tokens = TokenIssueService.issue_tokens(
             user=restricted_user or type("User", (), {"id": user_id})(),
             session_id=session_id,
             fingerprint=context.fingerprint,
             scope="revoke_only",
             ttl_minutes=15,
+            access_jti=access_jti,
+            refresh_jti=refresh_jti,
         )
 
         return {

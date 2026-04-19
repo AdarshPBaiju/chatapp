@@ -1,4 +1,3 @@
-
 from typing import ClassVar
 
 from django.conf import settings
@@ -10,6 +9,7 @@ from core.utils import SmartUploadPath, UploadPathConfig
 from django.contrib.auth.hashers import make_password, check_password
 import secrets
 import string
+
 
 class Client(UUIDModel):
     class Gender(models.TextChoices):
@@ -39,6 +39,7 @@ class Client(UUIDModel):
         max_length=10,
         choices=Gender.choices,
         blank=True,
+        null=True,
     )
     phone_number = models.CharField(max_length=16, unique=True, blank=True, null=True)
     is_two_factor_enabled = models.BooleanField(default=False)
@@ -77,8 +78,7 @@ class Client(UUIDModel):
         saves the hashes to the DB, and returns the plaintext codes (for one-time display).
         """
         plain_codes = [
-            "".join(secrets.choice(string.digits) for _ in range(8))
-            for _ in range(10)
+            "".join(secrets.choice(string.digits) for _ in range(8)) for _ in range(10)
         ]
         self.backup_codes = [make_password(code) for code in plain_codes]
         self.save(update_fields=["backup_codes"])

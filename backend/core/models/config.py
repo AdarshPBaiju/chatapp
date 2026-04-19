@@ -20,10 +20,18 @@ class GlobalConfiguration(UUIDModel):
 
     @classmethod
     def get_value(cls, key: str, default: any | None = None) -> any:
+        cache_key = f"auth:config:{key}"
+        cached_val = cache.get(cache_key)
+        if cached_val is not None:
+            return cached_val
+
         try:
-            return cls.objects.get(key=key).value
+            val = cls.objects.get(key=key).value
         except cls.DoesNotExist:
             return default
+        else:
+            cache.set(cache_key, val, timeout=3600)
+            return val
 
     def save(self, *args, **kwargs):
         super().save(*args, **kwargs)

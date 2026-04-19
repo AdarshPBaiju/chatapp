@@ -20,8 +20,9 @@ class RedisSessionStore:
     local ttl = tonumber(ARGV[6])
 
     redis.call('ZREMRANGEBYSCORE', sessions_key, '-inf', now)
-    if redis.call('ZCARD', sessions_key) < limit then
+    if limit == 0 or redis.call('ZCARD', sessions_key) < limit then
         redis.call('ZADD', sessions_key, expiry_ts, session_id)
+
         redis.call('SETEX', hash_prefix .. session_id, ttl, meta_json)
         return 'SUCCESS'
     end
@@ -156,3 +157,42 @@ class TokenBlacklistService:
     @staticmethod
     def is_blacklisted(jti: str) -> bool:
         return bool(cache.get(f"blacklist:{jti}"))
+
+
+class GraceJTIService:
+    """
+    Manages a 60-second grace window for recently rotated access tokens.
+    This prevents race conditions during page refreshes and background rotations
+    without compromising the absolute security of JTI matching.
+    """
+
+    @staticmethod
+    def register_grace_jti(session_id: str, jti: str) -> None:
+        if jti:
+            cache.set(f"grace_jti:{session_id}:{jti}", "1", timeout=60)
+
+    @staticmethod
+    def is_in_grace(session_id: str, jti: str) -> bool:
+        if not jti:
+            return False
+        return bool(cache.get(f"grace_jti:{session_id}:{jti}"))
+
+
+class RefreshGraceService:
+    """
+    Handles 'Inherited Tokens' during rotation.
+    Caches the results of a successful refresh call for 60 seconds,
+    keyed by the OLD refresh JTI. This allows parallel requests (e.g. from multiple tabs)
+    to adopt the latest tokens instead of failing due to a JTI mismatch.
+    """
+
+    @staticmethod
+    def register_rotated_result(old_refresh_jti: str, tokens: dict[str, Any]) -> None:
+        if old_refresh_jti:
+            cache.set(f"rotated_tokens:{old_refresh_jti}", tokens, timeout=60)
+
+    @staticmethod
+    def get_rotated_result(old_refresh_jti: str) -> dict[str, Any] | None:
+        if not old_refresh_jti:
+            return None
+        return cache.get(f"rotated_tokens:{old_refresh_jti}")
