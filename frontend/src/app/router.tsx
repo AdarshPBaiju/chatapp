@@ -18,7 +18,7 @@ import { ActiveSessionsSection } from "@/features/settings/ui/ActiveSessionsSect
 function RootRedirect() {
   const status = useAuthStore((state) => state.status);
 
-  if (status === "full") return <Navigate to="/settings/profile" replace />;
+  if (status === "full") return <Navigate to="/settings" replace />;
   if (status === "restricted") return <Navigate to="/auth/active-sessions" replace />;
   if (status === "pending_verification") return <Navigate to="/auth/verify" replace />;
   return <Navigate to="/auth/login" replace />;
@@ -35,7 +35,7 @@ function FullAuthGuard({ children }: { children: JSX.Element }) {
 
 function RestrictedGuard({ children }: { children: JSX.Element }) {
   const status = useAuthStore((state) => state.status);
-  if (status === "full") return <Navigate to="/settings/profile" replace />;
+  if (status === "full") return <Navigate to="/settings" replace />;
   if (status !== "restricted") {
     return <Navigate to="/auth/login" replace />;
   }
@@ -52,7 +52,7 @@ function OtpGuard({ children }: { children: JSX.Element }) {
 
 function PublicGuard({ children }: { children: JSX.Element }) {
   const status = useAuthStore((state) => state.status);
-  if (status === "full") return <Navigate to="/settings/profile" replace />;
+  if (status === "full") return <Navigate to="/settings" replace />;
   if (status === "restricted") return <Navigate to="/auth/active-sessions" replace />;
   if (status === "pending_verification") return <Navigate to="/auth/verify" replace />;
   return children;
@@ -64,9 +64,9 @@ export const appRouter = createBrowserRouter([
     element: <RootRedirect />,
     errorElement: <ErrorPage />,
   },
-  { path: "/dashboard", element: <Navigate to="/settings/profile" replace /> },
-  { path: "/app", element: <Navigate to="/settings/profile" replace /> },
-  { path: "/account", element: <Navigate to="/settings/profile" replace /> },
+  { path: "/dashboard", element: <Navigate to="/settings" replace /> },
+  { path: "/app", element: <Navigate to="/settings" replace /> },
+  { path: "/account", element: <Navigate to="/settings" replace /> },
   {
     element: <AuthShell />,
     errorElement: <ErrorPage />,
@@ -105,7 +105,7 @@ export const appRouter = createBrowserRouter([
       { path: "security", element: <SecuritySection /> },
       { path: "devices", element: <ActiveSessionsSection /> },
       { path: "notifications", element: <div className="p-20 text-center font-bold text-muted-foreground/30 uppercase tracking-widest text-xs">Access Restricted • Coming Soon</div> },
-      { path: "", element: <Navigate to="profile" replace /> },
+      { index: true, element: null },
     ],
   },
 ]);
