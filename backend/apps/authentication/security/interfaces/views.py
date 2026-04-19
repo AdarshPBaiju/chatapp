@@ -103,20 +103,12 @@ class TwoFactorBackupCodesAPIView(views.APIView):
             )
 
         client = request.user.client
-        if not client.backup_codes:
-            backup_codes = client.generate_and_set_backup_codes()
-            return ResponseFactory.success(
-                message="Backup codes generated.",
-                data={"backup_codes": backup_codes},
-            )
+        # Always regenerate fresh codes when this endpoint is called via POST
+        backup_codes = client.generate_and_set_backup_codes()
 
         return ResponseFactory.success(
-            message="Backup codes retrieved.",
-            data={
-                "backup_codes": [
-                    "Existing codes are hashed and cannot be viewed. Regenerate to get new codes."
-                ]
-            },
+            message="Fresh backup codes generated successfully.",
+            data={"backup_codes": backup_codes},
         )
 
 
