@@ -22,7 +22,12 @@ export function SettingsPage() {
   useEffect(() => {
     const isRootSettings = location.pathname === "/settings" || location.pathname === "/settings/";
     setIsMobileMenu(isRootSettings);
-  }, [location.pathname]);
+
+    // On desktop, auto-redirect /settings to /settings/profile
+    if (isRootSettings && window.innerWidth >= 1024) {
+      navigate("/settings/profile", { replace: true });
+    }
+  }, [location.pathname, navigate]);
 
   async function handleLogout() {
     await logoutFlow();
