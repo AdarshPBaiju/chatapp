@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Mail, ShieldCheck, Lock, CheckCircle, ArrowLeft } from "lucide-react";
+import { Mail, Lock, CheckCircle, ArrowLeft } from "lucide-react";
 
 import {
   confirmPasswordReset,
@@ -9,7 +9,7 @@ import {
 } from "@/features/auth/api";
 import { readApiMessage } from "@/shared/lib/apiResponse";
 import { AuthLayout } from "@/shared/ui/AuthLayout";
-import { Button, Input } from "@/shared/ui/FormControls";
+import { Button, Input, OtpInput } from "@/shared/ui/FormControls";
 import { useForm } from "@/shared/hooks/useForm";
 import { v } from "@/shared/lib/validation";
 
@@ -218,15 +218,16 @@ export function PasswordResetPage() {
               <span className="font-bold text-foreground">{values.email}</span>
             </div>
 
-            <Input
-              type="text"
-              label="Recovery Code"
-              placeholder="6-digit code"
-              icon={<ShieldCheck size={20} />}
-              {...getFieldProps("otpCode")}
-              maxLength={6}
-              disabled={loading}
-            />
+            <div className="space-y-4">
+              <label className="pl-1 text-[11px] font-black uppercase tracking-[0.25em] text-muted-foreground">
+                Recovery Code
+              </label>
+              <OtpInput
+                value={values.otpCode}
+                onChange={(val) => setFieldValue("otpCode", val)}
+                isLoading={loading}
+              />
+            </div>
             <div className="flex flex-col gap-5">
               <Button type="submit" className="py-4" isLoading={loading}>
                 Verify Code

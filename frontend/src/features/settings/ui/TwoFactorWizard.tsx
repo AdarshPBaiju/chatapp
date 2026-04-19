@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { Copy, Download, Check, Shield, Smartphone } from "lucide-react";
+import { Copy, Download, Check, Shield } from "lucide-react";
 
-import { Button, Input } from "@/shared/ui/FormControls";
+import { Button, OtpInput } from "@/shared/ui/FormControls";
 import { Modal } from "@/shared/ui/Modal";
 import { setupTwoFactor, verifyTwoFactor } from "../api";
 import { TwoFactorSetup } from "../types";
@@ -139,17 +139,11 @@ export function TwoFactorWizard({ onClose, onSuccess }: TwoFactorWizardProps) {
             </div>
 
             <div className="py-2">
-              <Input
+              <OtpInput
                 compact
-                icon={<Smartphone size={16} />}
-                placeholder="000 000"
-                type="text"
-                inputMode="numeric"
-                maxLength={6}
                 value={verificationCode}
-                onChange={(e) => setVerificationCode(e.target.value)}
-                className="text-center text-2xl font-mono tracking-[0.3em]"
-                autoFocus
+                onChange={setVerificationCode}
+                isLoading={isLoading}
               />
             </div>
 
