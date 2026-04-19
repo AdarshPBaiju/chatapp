@@ -120,9 +120,9 @@ export function TwoFactorWizard({ onClose, onSuccess }: TwoFactorWizardProps) {
               </div>
             </div>
 
-            <div className="p-3 bg-primary/5 rounded-lg border border-primary/10 space-y-1">
+            <div className="p-3 bg-primary/5 rounded-lg border border-primary/10 space-y-1 overflow-hidden">
               <p className="text-[9px] font-bold text-primary uppercase tracking-wider">Manual Entry Code</p>
-              <p className="font-mono text-base font-bold text-foreground tracking-widest">{setupData.secret}</p>
+              <p className="font-mono text-base font-bold text-foreground tracking-wider break-all leading-relaxed">{setupData.secret}</p>
             </div>
 
             <div className="pt-2 flex gap-2">

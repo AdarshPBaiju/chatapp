@@ -1,4 +1,5 @@
 import React, { useEffect } from "react";
+import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { clsx, type ClassValue } from "clsx";
@@ -14,6 +15,7 @@ interface ModalProps {
   title: string;
   children: React.ReactNode;
   maxWidth?: "sm" | "md" | "lg" | "xl" | "2xl";
+  className?: string;
 }
 
 export function Modal({ 
@@ -21,7 +23,8 @@ export function Modal({
   onClose, 
   title, 
   children, 
-  maxWidth = "md" 
+  maxWidth = "md",
+  className
 }: ModalProps) {
   useEffect(() => {
     if (isOpen) {
@@ -42,53 +45,50 @@ export function Modal({
     "2xl": "max-w-2xl",
   };
 
-  return (
+  if (typeof document === "undefined") return null;
+
+  return createPortal(
     <AnimatePresence>
       {isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
           {/* Backdrop */}
           <motion.div 
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
             className="fixed inset-0 bg-slate-900/20 backdrop-blur-[2px]"
           />
 
           {/* Modal Content */}
           <motion.div 
-            initial={{ opacity: 0, scale: 0.9, y: 20 }}
+            initial={{ opacity: 0, scale: 0.95, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.9, y: 20 }}
-            transition={{ 
-              type: "spring", 
-              damping: 25, 
-              stiffness: 300,
-              mass: 0.8
-            }}
+            exit={{ opacity: 0, scale: 0.95, y: 20 }}
             className={cn(
-              "relative w-full bg-card rounded-2xl shadow-2xl overflow-hidden border border-border",
-              maxWidthClasses[maxWidth]
+              "relative w-full bg-card rounded-2xl shadow-xl overflow-hidden border border-border",
+              maxWidthClasses[maxWidth],
+              className
             )}
           >
             {/* Header */}
-            <div className="flex items-center justify-between p-5 border-b border-border">
-              <h3 className="text-lg font-bold text-foreground">{title}</h3>
+            <div className="flex items-center justify-between p-4 border-b border-border/50 bg-muted/30">
+              <h3 className="text-sm font-bold text-foreground leading-none">{title}</h3>
               <button 
                 onClick={onClose}
-                className="h-8 w-8 flex items-center justify-center rounded-lg bg-muted text-muted-foreground hover:bg-foreground hover:text-background transition-all"
+                className="p-1 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
               >
-                <X size={16} />
+                <X size={18} />
               </button>
             </div>
 
             {/* Body */}
-            <div className="p-5 max-h-[80vh] overflow-y-auto">
+            <div className="p-5 overflow-y-auto custom-scrollbar">
               {children}
             </div>
           </motion.div>
         </div>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body
   );
 }
