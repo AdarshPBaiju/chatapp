@@ -6,6 +6,7 @@ import { fetchSessions, revokeSession, revokeOtherSessions } from "../api";
 import { AuthSession } from "../types";
 import { Button } from "@/shared/ui/FormControls";
 import { cn } from "@/shared/lib/utils";
+import { toast } from "@/shared/ui/Toast";
 
 export function ActiveSessionsSection() {
   const [sessions, setSessions] = useState<AuthSession[]>([]);
@@ -36,6 +37,7 @@ export function ActiveSessionsSection() {
       setRevokingId(sessionId);
       const res = await revokeSession(sessionId);
       if (res.success) {
+        toast.info("Session revoked successfully.");
         setSessions((prev) => prev.filter((s) => s.session_id !== sessionId));
       }
     } catch (err) {
@@ -52,6 +54,7 @@ export function ActiveSessionsSection() {
       setRevokingOthers(true);
       const res = await revokeOtherSessions();
       if (res.success) {
+        toast.success("Other sessions terminated successfully.");
         setSessions((prev) => prev.filter((s) => s.is_current));
       }
     } catch (err) {

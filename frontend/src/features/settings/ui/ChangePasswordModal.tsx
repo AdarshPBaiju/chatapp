@@ -4,6 +4,7 @@ import { Lock, CheckCircle, ShieldAlert } from "lucide-react";
 import { changePassword } from "@/features/auth/api";
 import { readApiMessage } from "@/shared/lib/apiResponse";
 import { Modal } from "@/shared/ui/Modal";
+import { toast } from "@/shared/ui/Toast";
 import { Button, Input } from "@/shared/ui/FormControls";
 import { useForm } from "@/shared/hooks/useForm";
 import { v } from "@/shared/lib/validation";
@@ -36,9 +37,12 @@ export function ChangePasswordModal({ isOpen, onClose }: ChangePasswordModalProp
           password: formValues.password,
           confirm_password: formValues.confirmPassword,
         });
+        toast.success("Password changed successfully.");
         setSuccess(true);
       } catch (err) {
-        setErrors({ confirmPassword: readApiMessage(err, "Failed to change password.") });
+        const msg = readApiMessage(err, "Failed to change password.");
+        toast.error(msg);
+        setErrors({ confirmPassword: msg });
       } finally {
         setLoading(false);
       }

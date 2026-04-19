@@ -9,6 +9,7 @@ import { AuthLayout } from "@/shared/ui/AuthLayout";
 import { Button, Input, OtpInput } from "@/shared/ui/FormControls";
 import { useForm } from "@/shared/hooks/useForm";
 import { v } from "@/shared/lib/validation";
+import { toast } from "@/shared/ui/Toast";
 
 type Step = "EMAIL" | "OTP" | "DETAILS";
 
@@ -20,7 +21,7 @@ export function SignUpPage() {
   const [resendInterval, setResendInterval] = useState(60);
   const [countdown, setCountdown] = useState(0);
 
-  const { values, getFieldProps, setErrors, setFieldTouched, setFieldValue } = useForm({
+  const { values, getFieldProps, setErrors, setFieldTouched, setFieldValue, errors, touched } = useForm({
     initialValues: {
       email: "",
       otpCode: "",
@@ -60,9 +61,12 @@ export function SignUpPage() {
       const emailToRequest: string = values.email;
       const data = await runSignUpFlow({ email: emailToRequest });
       setResendInterval(data.resend_interval);
+      toast.success("Verification code sent to your email.");
       setStep("OTP");
     } catch (err) {
-      setErrors({ email: readApiMessage(err, "Sign up failed.") });
+      const msg = readApiMessage(err, "Sign up failed.");
+      toast.error(msg);
+      setErrors({ email: msg });
     } finally {
       setLoading(false);
     }
@@ -107,11 +111,13 @@ export function SignUpPage() {
       setSignupToken(data.signup_token);
       setStep("DETAILS");
     } catch (err: any) {
+      const msg = readApiMessage(err, "Verification failed.");
+      toast.error(msg);
       if (err?.response?.status === 409) {
         setErrors({ otpCode: "This account already exists. Please login instead." });
         return;
       }
-      setErrors({ otpCode: readApiMessage(err, "Verification failed.") });
+      setErrors({ otpCode: msg });
     } finally {
       setLoading(false);
     }
@@ -162,7 +168,9 @@ export function SignUpPage() {
 
       navigate(result.is_restricted ? "/auth/active-sessions" : "/settings/profile");
     } catch (err) {
-      setErrors({ confirmPassword: readApiMessage(err, "Failed to complete sign up.") });
+      const msg = readApiMessage(err, "Failed to complete setup.");
+      toast.error(msg);
+      setErrors({ confirmPassword: msg });
     } finally {
       setLoading(false);
     }
@@ -224,6 +232,11 @@ export function SignUpPage() {
               onChange={(val) => setFieldValue("otpCode", val)}
               isLoading={loading}
             />
+            {touched.otpCode && errors.otpCode && (
+              <p className="pl-1 text-[11px] font-bold text-destructive uppercase tracking-widest animate-shake">
+                {errors.otpCode}
+              </p>
+            )}
           </div>
 
           <div className="flex flex-col gap-4">

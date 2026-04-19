@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 
 import { logoutFlow } from "@/features/sessions/flows";
 import { cn } from "@/shared/lib/utils";
+import { toast } from "@/shared/ui/Toast";
 
 const tabs = [
   { id: "profile", label: "Profile", icon: User, path: "/settings/profile", desc: "Your identity & contact details" },
@@ -31,6 +32,7 @@ export function SettingsPage() {
 
   async function handleLogout() {
     await logoutFlow();
+    toast.info("Logged out successfully.");
     navigate("/auth/login");
   }
 
