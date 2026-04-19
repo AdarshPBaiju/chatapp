@@ -14,6 +14,9 @@ export type SessionInfo = {
   is_current: boolean;
   city?: string;
   country_code?: string;
+  ip_address?: string;
+  lat?: number | null;
+  lon?: number | null;
 };
 
 export type RestrictedAuthPayload = {

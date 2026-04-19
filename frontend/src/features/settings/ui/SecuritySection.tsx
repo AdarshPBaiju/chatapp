@@ -5,8 +5,8 @@ import { motion } from "framer-motion";
 import { Button } from "@/shared/ui/FormControls";
 import { fetchProfile } from "../api";
 import { UserProfile } from "../types";
-import { TwoFactorWizard } from "@/features/settings/ui/TwoFactorWizard";
-import { TwoFactorManageModal } from "./TwoFactorManageModal";
+import { MfaSetupWizard } from "@/features/settings/ui/MfaSetupWizard";
+import { MfaManagementModal } from "./MfaManagementModal";
 import { ChangePasswordModal } from "./ChangePasswordModal";
 import { cn } from "@/shared/lib/utils";
 
@@ -128,7 +128,7 @@ export function SecuritySection() {
       />
 
       {showWizard && (
-        <TwoFactorWizard
+        <MfaSetupWizard
           onClose={() => setShowWizard(false)}
           onSuccess={() => {
             setShowWizard(false);
@@ -138,7 +138,7 @@ export function SecuritySection() {
       )}
 
       {showManage && (
-        <TwoFactorManageModal
+        <MfaManagementModal
           onClose={() => setShowManage(false)}
           onSuccess={() => {
             setShowManage(false);

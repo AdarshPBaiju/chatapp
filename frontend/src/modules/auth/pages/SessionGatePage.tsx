@@ -92,12 +92,23 @@ export function SessionGatePage() {
                     {session.device?.toLowerCase().includes("phone") ? <Smartphone size={18} /> : <Laptop size={18} />}
                   </div>
                   <div className="min-w-0">
-                    <h3 className="truncate text-sm font-black text-slate-800">
-                      {session.device || "Unknown Device"}
-                    </h3>
-                    <p className="truncate text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                      {session.city || "Unknown City"}
-                    </p>
+                    <div className="flex items-center gap-2">
+                      <h3 className="truncate text-sm font-black text-slate-800">
+                        {session.device || "Unknown Device"}
+                      </h3>
+                      {session.is_current && (
+                        <span className="px-1.5 py-0.5 rounded-md bg-blue-50 text-[10px] font-black text-blue-500 uppercase">Current</span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <p className="truncate text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                        {session.city || "Unknown City"}, {session.country_code}
+                      </p>
+                      <span className="text-slate-200 text-[10px]">•</span>
+                      <p className="text-[10px] font-mono font-medium text-slate-400">
+                        {session.ip_address}
+                      </p>
+                    </div>
                   </div>
                 </div>
 

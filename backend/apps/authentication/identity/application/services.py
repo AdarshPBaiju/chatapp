@@ -124,6 +124,19 @@ class TokenRotateService:
             if inherited:
                 return inherited
 
+            if TokenBlacklistService.is_blacklisted(refresh_jti):
+                logger.critical(
+                    "refresh_token_reuse_detected",
+                    extra={
+                        "user_id": user_id,
+                        "session_id": session_id,
+                        "jti": refresh_jti,
+                    },
+                )
+                # Revoke the entire session family to stop the attacker
+                SessionManager.revoke_session(user_id=user_id, session_id=session_id)
+                raise ValueError("Security breach: Token reuse detected. Session revoked.")
+
             TokenBlacklistService.blacklist_tokens([refresh_jti, access_jti])
             raise ValueError("Session context not found or already revoked.")
 
@@ -546,7 +559,7 @@ class HitEngine:
 
     @classmethod
     def create_initial_flow(
-        cls, user_id: str, request: Any, expected_step: int = 1
+        cls, user_id: str, request: Any, expected_step: int = 1, initial_acr: int = 0
     ) -> dict[str, Any]:
         flow_id = str(uuid.uuid4())
         jti = str(uuid.uuid4())
@@ -566,7 +579,7 @@ class HitEngine:
             "jti": jti,
             "flow_id": flow_id,
             "amr": [],
-            "acr": 0,
+            "acr": initial_acr,
             "step_counter": expected_step,
             "dev_hash": dev_hash,
             "type": "hit",

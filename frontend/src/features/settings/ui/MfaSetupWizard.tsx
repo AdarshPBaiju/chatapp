@@ -7,12 +7,12 @@ import { setupTwoFactor, verifyTwoFactor } from "../api";
 import { toast } from "@/shared/ui/Toast";
 import { TwoFactorSetup } from "../types";
 
-interface TwoFactorWizardProps {
+interface MfaSetupWizardProps {
   onClose: () => void;
   onSuccess: () => void;
 }
 
-export function TwoFactorWizard({ onClose, onSuccess }: TwoFactorWizardProps) {
+export function MfaSetupWizard({ onClose, onSuccess }: MfaSetupWizardProps) {
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
   const [setupData, setSetupData] = useState<TwoFactorSetup | null>(null);
   const [verificationCode, setVerificationCode] = useState("");

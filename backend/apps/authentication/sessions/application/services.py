@@ -258,6 +258,9 @@ class SessionQueryService:
                 "is_current": is_current,
                 "city": session.city or "",
                 "country_code": session.country_code or "",
+                "ip_address": session.ip_address or "Unknown",
+                "lat": float(session.latitude) if session.latitude else None,
+                "lon": float(session.longitude) if session.longitude else None,
                 "expires_at": int(session.expires_at.timestamp()),
             })
 
@@ -312,55 +315,80 @@ class SessionQueryService:
 
 
 class AnomalyDetectionService:
-    @staticmethod
-    def check_impossible_travel(
-        user_id: str, current_location: dict[str, Any], **_kwargs: Any
-    ) -> bool:
+    @classmethod
+    def calculate_risk_score(
+        cls, user_id: str, request: Any, current_location: dict[str, Any]
+    ) -> int:
         """
-        Detects if a login attempt is coming from a location that is geographically
-        implausible given the last known activity.
+        Evaluates the security risk of an authentication attempt.
+        Returns a score from 0 (Safe) to 100 (Critical).
         """
+        score = 0
+        factors: dict[str, int] = {}
+
+        # 1. Impossible Travel Detection
         last_session = (
             AuthSession.objects.filter(user_id=user_id, is_active=True)
             .order_by("-last_seen_at")
             .first()
         )
 
-        if not last_session or not last_session.latitude or not last_session.longitude:
-            return False
+        if (
+            last_session
+            and last_session.latitude
+            and last_session.longitude
+            and current_location.get("lat")
+            and current_location.get("lon")
+        ):
+            from authentication.sessions.infrastructure.cache import GeoLocationService
 
-        if not current_location.get("lat") or not current_location.get("lon"):
-            return False
+            dist = GeoLocationService.calculate_distance(
+                float(last_session.latitude),
+                float(last_session.longitude),
+                float(current_location["lat"]),
+                float(current_location["lon"]),
+            )
 
-        from authentication.sessions.infrastructure.cache import GeoLocationService
+            if dist > 10:
+                time_diff = (
+                    dj_timezone.now() - last_session.last_seen_at
+                ).total_seconds() / 3600
+                speed = dist / max(time_diff, 0.001)
 
-        dist = GeoLocationService.calculate_distance(
-            float(last_session.latitude),
-            float(last_session.longitude),
-            float(current_location["lat"]),
-            float(current_location["lon"]),
+                if speed > 800:
+                    factors["impossible_travel"] = 80
+                elif speed > 400:
+                    factors["suspicious_travel"] = 40
+
+        # 2. New Device Recognition
+        from authentication.core.request_context import (
+            build_fingerprint,
+            get_device_entropy,
         )
 
-        if dist < 10:
-            return False
+        current_fpt = build_fingerprint(
+            request, device_entropy=get_device_entropy(request)
+        )
 
-        time_diff = (
-            dj_timezone.now() - last_session.last_seen_at
-        ).total_seconds() / 3600
-        if time_diff < 0.01:
-            return True
+        known_device = AuthSession.objects.filter(
+            user_id=user_id, fingerprint=current_fpt
+        ).exists()
 
-        speed = dist / time_diff
-        if speed > 800:
-            logger.warning(
-                "impossible_travel_detected",
+        if not known_device:
+            factors["unrecognized_device"] = 30
+
+        # 3. Sum and Cap
+        score = sum(factors.values())
+        final_score = min(score, 100)
+
+        if final_score > 0:
+            logger.info(
+                "risk_score_calculated",
                 extra={
                     "user_id": user_id,
-                    "distance": dist,
-                    "speed": speed,
-                    "hours": time_diff,
+                    "risk_score": final_score,
+                    "factors": factors,
                 },
             )
-            return True
 
-        return False
+        return final_score
