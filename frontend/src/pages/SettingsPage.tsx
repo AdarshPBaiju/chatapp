@@ -4,6 +4,8 @@ import { useNavigate, useLocation, Outlet, NavLink } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 
 import { logoutFlow } from "@/features/sessions/flows";
+import { fetchProfile } from "@/features/settings/api";
+import { UserProfile } from "@/features/settings/types";
 import { cn } from "@/shared/lib/utils";
 import { toast } from "@/shared/ui/Toast";
 
@@ -18,6 +20,11 @@ export function SettingsPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const [isMobileMenu, setIsMobileMenu] = useState(true);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+
+  useEffect(() => {
+    fetchProfile().then(d => { if (d.success && d.data) setProfile(d.data); });
+  }, []);
 
   // Sync mobile menu state with route depth
   useEffect(() => {
@@ -50,17 +57,29 @@ export function SettingsPage() {
         <div className="flex h-full flex-col overflow-hidden">
           {/* Account Header */}
           <div className="p-6 pb-4">
-            <div className="mb-6 flex items-center justify-between">
+            <div className="mb-5 flex items-center gap-3">
               <button
                 onClick={() => navigate("/settings/profile")}
-                className="group flex h-8 w-8 items-center justify-center rounded-lg bg-muted transition-colors hover:bg-foreground hover:text-background"
+                className="group flex h-8 w-8 items-center justify-center rounded-lg bg-muted transition-colors hover:bg-primary hover:text-primary-foreground"
               >
                 <ArrowLeft size={16} />
               </button>
-              <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground/60">Console</span>
             </div>
-            <h1 className="text-2xl font-bold tracking-tight text-foreground">Settings</h1>
-            <p className="mt-1 text-xs font-medium text-muted-foreground/80">System configuration.</p>
+
+            {/* User profile identity in sidebar */}
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center overflow-hidden shrink-0">
+                {profile?.profile_picture
+                  ? <img src={profile.profile_picture} className="h-full w-full object-cover" />
+                  : <User size={18} className="text-primary" />}
+              </div>
+              <div className="min-w-0">
+                <p className="text-sm font-bold tracking-tight text-foreground truncate">{profile?.full_name || "Loading..."}</p>
+                <p className="text-[10px] font-medium text-muted-foreground truncate">{profile?.email}</p>
+              </div>
+            </div>
+
+            <h1 className="mt-5 text-xl font-bold tracking-tight text-foreground">Settings</h1>
           </div>
 
           {/* Navigation Tabs */}
@@ -123,15 +142,15 @@ export function SettingsPage() {
       {/* Main Content Area */}
       <main
         className={cn(
-          "fixed inset-0 z-50 flex h-full w-full flex-col bg-muted transition-all duration-500 lg:static lg:z-auto lg:h-full lg:flex-1 lg:translate-x-0",
+          "fixed inset-0 z-50 flex h-full w-full flex-col bg-background transition-all duration-500 lg:static lg:z-auto lg:h-full lg:flex-1 lg:translate-x-0",
           isMobileMenu && "translate-x-full lg:translate-x-0"
         )}
       >
         {/* Sub-page Header (Mobile only) */}
-        <div className="flex items-center gap-3 border-b border-border bg-background/80 p-4 backdrop-blur-xl lg:hidden">
+        <div className="flex items-center gap-3 border-b border-border bg-background p-4 lg:hidden">
           <button
             onClick={() => navigate("/settings")}
-            className="flex h-9 w-9 items-center justify-center rounded-lg bg-muted"
+            className="flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-primary hover:text-primary-foreground transition-colors"
           >
             <ArrowLeft size={18} />
           </button>
