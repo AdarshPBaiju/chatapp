@@ -3,7 +3,7 @@ import { RouterProvider } from "react-router-dom";
 import { appRouter } from "@/app/router";
 import { useAuthBootstrap } from "@/app/bootstrap";
 import { PropsWithChildren, createContext, useContext } from "react";
-import { useAuthStore } from "@/features/auth/state";
+import { useAuthStore } from "@/modules/auth/state/authState";
 import { ThemeProvider } from "@/shared/ui/ThemeProvider";
 import { ThemeSwitcher } from "@/shared/ui/ThemeSwitcher";
 

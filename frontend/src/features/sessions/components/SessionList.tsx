@@ -1,5 +1,5 @@
 import { formatRelativeTime } from "@/shared/lib/date";
-import { SessionInfo } from "@/features/auth/types";
+import { SessionInfo } from "@/modules/auth/api/types";
 import { Monitor, Smartphone, Laptop, Globe, LogOut } from "lucide-react";
 import { Button } from "@/shared/ui/FormControls";
 import { cn } from "@/shared/lib/utils";

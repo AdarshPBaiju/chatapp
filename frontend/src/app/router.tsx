@@ -1,11 +1,7 @@
 import { Navigate, createBrowserRouter } from "react-router-dom";
 
-import { useAuthStore } from "@/features/auth/state";
-import { LoginPage } from "@/pages/LoginPage";
-import { OtpPage } from "@/pages/OtpPage";
-import { PasswordResetPage } from "@/pages/PasswordResetPage";
-import { SessionGatePage } from "@/pages/SessionGatePage";
-import { SignUpPage } from "@/pages/SignUpPage";
+import { useAuthStore } from "@/modules/auth/state/authState";
+import { AuthPage } from "@/modules/auth/pages/AuthPage";
 import { SettingsPage } from "@/pages/SettingsPage";
 import { ErrorPage } from "@/pages/ErrorPage";
 import { AuthShell } from "@/shared/ui/AuthShell";
@@ -19,42 +15,17 @@ function RootRedirect() {
   const status = useAuthStore((state) => state.status);
 
   if (status === "full") return <Navigate to="/settings" replace />;
-  if (status === "restricted") return <Navigate to="/auth/active-sessions" replace />;
-  if (status === "pending_verification") return <Navigate to="/auth/verify" replace />;
-  return <Navigate to="/auth/login" replace />;
+  if (status === "restricted") return <Navigate to="/auth?mode=restricted" replace />;
+  if (status === "pending_verification") return <Navigate to="/auth?mode=verify" replace />;
+  return <Navigate to="/auth?mode=login" replace />;
 }
 
 function FullAuthGuard({ children }: { children: JSX.Element }) {
   const status = useAuthStore((state) => state.status);
-  if (status === "restricted") return <Navigate to="/auth/active-sessions" replace />;
+  if (status === "restricted") return <Navigate to="/auth?mode=restricted" replace />;
   if (status !== "full") {
-    return <Navigate to="/auth/login" replace />;
+    return <Navigate to="/auth?mode=login" replace />;
   }
-  return children;
-}
-
-function RestrictedGuard({ children }: { children: JSX.Element }) {
-  const status = useAuthStore((state) => state.status);
-  if (status === "full") return <Navigate to="/settings" replace />;
-  if (status !== "restricted") {
-    return <Navigate to="/auth/login" replace />;
-  }
-  return children;
-}
-
-function OtpGuard({ children }: { children: JSX.Element }) {
-  const status = useAuthStore((state) => state.status);
-  if (status !== "pending_verification") {
-    return <Navigate to="/auth/login" replace />;
-  }
-  return children;
-}
-
-function PublicGuard({ children }: { children: JSX.Element }) {
-  const status = useAuthStore((state) => state.status);
-  if (status === "full") return <Navigate to="/settings" replace />;
-  if (status === "restricted") return <Navigate to="/auth/active-sessions" replace />;
-  if (status === "pending_verification") return <Navigate to="/auth/verify" replace />;
   return children;
 }
 
@@ -64,32 +35,19 @@ export const appRouter = createBrowserRouter([
     element: <RootRedirect />,
     errorElement: <ErrorPage />,
   },
-  { path: "/dashboard", element: <Navigate to="/settings" replace /> },
   { path: "/app", element: <Navigate to="/settings" replace /> },
   { path: "/account", element: <Navigate to="/settings" replace /> },
   {
     element: <AuthShell />,
     errorElement: <ErrorPage />,
     children: [
-      { path: "/auth/login", element: <PublicGuard><LoginPage /></PublicGuard> },
-      { path: "/auth/join", element: <PublicGuard><SignUpPage /></PublicGuard> },
-      { path: "/auth/reset-password", element: <PublicGuard><PasswordResetPage /></PublicGuard> },
-      {
-        path: "/auth/verify",
-        element: (
-          <OtpGuard>
-            <OtpPage />
-          </OtpGuard>
-        ),
-      },
-      {
-        path: "/auth/active-sessions",
-        element: (
-          <RestrictedGuard>
-            <SessionGatePage />
-          </RestrictedGuard>
-        ),
-      },
+      { path: "/auth", element: <AuthPage /> },
+      // Support legacy paths by redirecting to params
+      { path: "/auth/login", element: <Navigate to="/auth?mode=login" replace /> },
+      { path: "/auth/join", element: <Navigate to="/auth?mode=signup" replace /> },
+      { path: "/auth/verify", element: <Navigate to="/auth?mode=verify" replace /> },
+      { path: "/auth/forgot-password", element: <Navigate to="/auth?mode=recovery" replace /> },
+      { path: "/auth/active-sessions", element: <Navigate to="/auth?mode=restricted" replace /> },
     ],
   },
   {

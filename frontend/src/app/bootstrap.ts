@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 
-import { runBootstrapRefresh } from "@/features/auth/flows";
-import { useAuthStore } from "@/features/auth/state";
+import { runBootstrapRefresh } from "@/modules/auth/utils/authFlows";
+import { useAuthStore } from "@/modules/auth/state/authState";
 
 export function useAuthBootstrap(): boolean {
   const [ready, setReady] = useState(false);

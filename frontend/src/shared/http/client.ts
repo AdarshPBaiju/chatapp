@@ -5,7 +5,7 @@ import {
   attachRequestInterceptor,
   createResponseErrorInterceptor,
 } from "@/shared/http/interceptors";
-import { useAuthStore } from "@/features/auth/state";
+import { useAuthStore } from "@/modules/auth/state/authState";
 
 export const httpClient = axios.create({
   baseURL: env.apiBaseUrl,

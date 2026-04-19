@@ -2,7 +2,7 @@ from django.db.models.signals import pre_save
 from django.dispatch import receiver
 from django.contrib.auth import get_user_model
 from core.middleware.request_context import get_current_session_id
-from users.services.auth_engine import AuthEngine
+from authentication.sessions.application.services import SessionManager
 
 User = get_user_model()
 
@@ -20,7 +20,7 @@ def handle_password_change(sender, instance, **kwargs):
         if old_instance.password != instance.password:
             # Password has changed
             current_sid = get_current_session_id()
-            AuthEngine.revoke_all_sessions(
+            SessionManager.revoke_all_sessions(
                 user_id=str(instance.id), exclude_session_id=current_sid
             )
     except User.DoesNotExist:
