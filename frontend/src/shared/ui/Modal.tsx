@@ -16,6 +16,7 @@ interface ModalProps {
   children: React.ReactNode;
   maxWidth?: "sm" | "md" | "lg" | "xl" | "2xl";
   className?: string;
+  hideClose?: boolean;
 }
 
 export function Modal({ 
@@ -24,7 +25,8 @@ export function Modal({
   title, 
   children, 
   maxWidth = "md",
-  className
+  className,
+  hideClose = false,
 }: ModalProps) {
   useEffect(() => {
     if (isOpen) {
@@ -73,12 +75,14 @@ export function Modal({
             {/* Header */}
             <div className="flex items-center justify-between p-4 border-b border-border/50 bg-muted/30">
               <h3 className="text-sm font-bold text-foreground leading-none">{title}</h3>
-              <button 
-                onClick={onClose}
-                className="p-1 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-              >
-                <X size={18} />
-              </button>
+              {!hideClose && (
+                <button 
+                  onClick={onClose}
+                  className="p-1 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                >
+                  <X size={18} />
+                </button>
+              )}
             </div>
 
             {/* Body */}

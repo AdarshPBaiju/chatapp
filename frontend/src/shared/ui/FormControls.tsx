@@ -61,7 +61,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
             }}
             type={isPassword ? (isVisible ? "text" : "password") : type}
             className={cn(
-              "w-full outline-none transition-all duration-300",
+              "w-full outline-none transition-all duration-300 cursor-text",
               "placeholder:text-muted-foreground/40 dark:placeholder:text-white/30 font-medium text-foreground",
               "bg-muted/40 border border-border focus:bg-background focus:border-accent focus:shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] focus:ring-4 focus:ring-accent/5 backdrop-blur-[2px]",
               compact 
@@ -77,7 +77,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
               type="button"
               onClick={handleActionClick}
               className={cn(
-                "absolute top-1/2 -translate-y-1/2 text-muted-foreground/40 transition-all duration-300 hover:text-foreground",
+                "absolute top-1/2 -translate-y-1/2 text-muted-foreground/40 transition-all duration-300 hover:text-foreground cursor-pointer",
                 compact ? "right-4" : "right-5"
               )}
             >
@@ -201,7 +201,7 @@ export function Button({
     <motion.button
       whileTap={{ scale: 0.98 }}
       className={cn(
-        "group relative flex items-center justify-center gap-2 overflow-hidden whitespace-nowrap font-bold transition-all duration-300 disabled:cursor-not-allowed disabled:opacity-50",
+        "group relative flex items-center justify-center gap-2 overflow-hidden whitespace-nowrap font-bold transition-all duration-300 disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer",
         compact 
           ? "rounded-xl px-4 py-2 text-[11px]" 
           : "rounded-2xl px-8 py-3.5 text-sm",
