@@ -4,33 +4,33 @@ import { motion, AnimatePresence } from "framer-motion";
 
 const shellCopy: Record<string, { kicker: string; title: string; body: string; icon: any }> = {
   "/auth/login": {
-    kicker: "Secure Access",
-    title: "Reconnect with your team instantly.",
-    body: "Jump right back into your conversations. Simple, secure, and blazing fast authentication.",
-    icon: ShieldCheck,
+    kicker: "Welcome back",
+    title: "Your conversations are waiting.",
+    body: "Messages, threads, and your whole team — all right where you left them. Sign in and pick up where you left off.",
+    icon: MessageSquare,
   },
   "/auth/join": {
-    kicker: "New Chapter",
-    title: "Start chatting in seconds.",
-    body: "Create your account and experience a new standard in team communication.",
+    kicker: "Join ChitChat",
+    title: "Where great teams talk.",
+    body: "Real-time messaging, organized threads, and zero noise. Create your account and start chatting in under a minute.",
     icon: Sparkles,
   },
   "/auth/verify": {
-    kicker: "Safety First",
-    title: "Keeping your chats secure.",
-    body: "Enter the code sent to your device to verify your identity and protect your conversations.",
+    kicker: "One last step",
+    title: "Confirm it's really you.",
+    body: "We sent a code to your inbox. Enter it to verify your identity and unlock your ChitChat workspace.",
     icon: ShieldCheck,
   },
   "/auth/reset-password": {
-    kicker: "Recovery",
-    title: "Get back to your messages.",
-    body: "We'll help you securely reset your password so you don't miss any important team updates.",
+    kicker: "Account recovery",
+    title: "Back to your messages, fast.",
+    body: "Forgot your password? No worries. Set a new one in seconds and jump straight back into your conversations.",
     icon: Zap,
   },
   "/auth/active-sessions": {
-    kicker: "Session Limit",
-    title: "Manage your active devices.",
-    body: "You've reached your device limit. Sign out elsewhere to continue chatting here.",
+    kicker: "Device limit reached",
+    title: "Too many active chats.",
+    body: "You're signed in on the maximum number of devices. Sign out of another session to continue chatting here.",
     icon: ShieldCheck,
   },
 };
@@ -41,41 +41,41 @@ export function AuthShell() {
   const Icon = copy.icon;
 
   return (
-    <div className="h-screen overflow-hidden bg-muted/30 text-foreground font-sans selection:bg-primary selection:text-primary-foreground">
-      <div className="grid h-full w-full md:grid-cols-[1fr_480px] lg:grid-cols-[1fr_540px] xl:grid-cols-[1fr_600px]">
-        {/* Cinematic Side Panel - Light Transition */}
-        <aside className="hidden md:block relative h-full overflow-hidden bg-background border-r border-border shadow-[20px_0_60px_rgba(0,0,0,0.02)]">
-          <div className="pointer-events-none absolute inset-0 overflow-hidden">
-            <motion.div
-              animate={{
-                scale: [1, 1.2, 1],
-                rotate: [0, 45, 0],
-                x: [-100, 50, -100]
-              }}
-              transition={{ duration: 20, repeat: Infinity, ease: "easeInOut" }}
-              className="absolute -left-40 -top-40 h-[600px] w-[600px] rounded-full bg-primary/10 blur-[130px]"
-            />
-            <motion.div
-              animate={{
-                scale: [1, 1.3, 1],
-                rotate: [0, -30, 0],
-                y: [-50, 100, -50]
-              }}
-              transition={{ duration: 25, repeat: Infinity, ease: "easeInOut" }}
-              className="absolute -right-40 top-1/2 h-[500px] w-[500px] rounded-full bg-success/10 blur-[110px]"
-            />
-            <motion.div
-              animate={{
-                opacity: [0.3, 0.6, 0.3],
-                scale: [1, 1.1, 1]
-              }}
-              transition={{ duration: 12, repeat: Infinity, ease: "easeInOut" }}
-              className="absolute bottom-[-10%] left-[20%] h-[400px] w-[400px] rounded-full bg-primary/5 blur-[120px]"
-            />
+    // Full-screen gradient — single source of truth for both panes
+    <div className="auth-shell-bg relative h-screen overflow-hidden font-sans text-foreground selection:bg-primary selection:text-primary-foreground">
 
-            {/* Soft Ambient Overlay */}
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,_rgba(15,23,42,0.02)_0%,_transparent_50%)]" />
-          </div>
+      {/* Shared animated orbs — red, green, yellow, pink */}
+      <div className="pointer-events-none absolute inset-0 overflow-hidden">
+        {/* Red — top left */}
+        <motion.div
+          animate={{ scale: [1, 1.3, 1], rotate: [0, 60, 0], x: [-60, 80, -60] }}
+          transition={{ duration: 22, repeat: Infinity, ease: "easeInOut" }}
+          className="absolute -left-48 -top-48 h-[700px] w-[700px] rounded-full bg-red-400/30 blur-[160px]"
+        />
+        {/* Green — right center */}
+        <motion.div
+          animate={{ scale: [1, 1.25, 1], rotate: [0, -50, 0], y: [-60, 120, -60] }}
+          transition={{ duration: 26, repeat: Infinity, ease: "easeInOut" }}
+          className="absolute -right-48 top-1/4 h-[600px] w-[600px] rounded-full bg-green-400/25 blur-[140px]"
+        />
+        {/* Yellow — bottom center */}
+        <motion.div
+          animate={{ opacity: [0.3, 0.6, 0.3], scale: [1, 1.2, 1], x: [0, 60, 0] }}
+          transition={{ duration: 18, repeat: Infinity, ease: "easeInOut" }}
+          className="absolute bottom-[-10%] left-[20%] h-[500px] w-[500px] rounded-full bg-yellow-300/30 blur-[130px]"
+        />
+        {/* Pink — top right */}
+        <motion.div
+          animate={{ scale: [1, 1.15, 1], rotate: [0, 30, 0], y: [0, -80, 0] }}
+          transition={{ duration: 20, repeat: Infinity, ease: "easeInOut" }}
+          className="absolute right-[10%] -top-24 h-[500px] w-[500px] rounded-full bg-pink-400/25 blur-[150px]"
+        />
+      </div>
+
+      <div className="relative z-10 grid h-full w-full md:grid-cols-[1fr_480px] lg:grid-cols-[1fr_540px] xl:grid-cols-[1fr_600px]">
+
+        {/* Left: Branding pane — glass on top of shared gradient */}
+        <aside className="hidden md:flex relative h-full flex-col overflow-hidden">
 
           <div className="relative flex h-full flex-col p-12 lg:p-16 xl:p-20">
             <Link to="/" className="flex items-center gap-3 w-fit group">
@@ -98,7 +98,7 @@ export function AuthShell() {
                   transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
                   className="space-y-10"
                 >
-                  <div className="inline-flex items-center gap-2 rounded-full bg-foreground/5 px-4 py-1.5 text-[11px] font-black uppercase tracking-[0.3em] text-muted-foreground">
+                  <div className="inline-flex items-center gap-2 rounded-full bg-foreground/5 border border-foreground/10 px-4 py-1.5 text-[11px] font-black uppercase tracking-[0.3em] text-muted-foreground">
                     <Icon size={14} className="text-foreground" />
                     {copy.kicker}
                   </div>
@@ -116,9 +116,10 @@ export function AuthShell() {
           </div>
         </aside>
 
-        {/* Dynamic Content Area */}
-        <main className="h-full overflow-y-auto custom-scrollbar flex items-center bg-muted/10">
-          <div className="w-full px-6 py-12 sm:px-12 md:px-16 lg:px-20">
+        {/* Right: Form pane — glass on top of same gradient */}
+        <main className="relative h-full overflow-y-auto custom-scrollbar flex items-center">
+
+          <div className="relative z-10 w-full px-6 py-12 sm:px-12 md:px-16 lg:px-20">
             {/* Mobile Header */}
             <div className="mb-12 flex items-center justify-center gap-3 md:hidden">
               <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-foreground text-background">

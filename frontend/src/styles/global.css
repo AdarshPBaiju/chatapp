@@ -131,6 +131,26 @@
   background: radial-gradient(circle at 50% 50%, var(--accent) / 0.05, transparent 80%);
 }
 
+/* Auth Shell — Full-screen synced gradient background */
+.auth-shell-bg {
+  background-color: var(--background);
+  background-image:
+    radial-gradient(ellipse 70% 55% at 5% 0%,   rgba(248, 113, 113, 0.18) 0%, transparent 60%),
+    radial-gradient(ellipse 50% 50% at 95% 80%,  rgba(74,  222, 128, 0.15) 0%, transparent 60%),
+    radial-gradient(ellipse 55% 45% at 55% 100%, rgba(253, 224, 71,  0.15) 0%, transparent 60%),
+    radial-gradient(ellipse 45% 45% at 92% 5%,   rgba(244, 114, 182, 0.15) 0%, transparent 55%);
+}
+
+.dark .auth-shell-bg {
+  background-color: var(--background);
+  background-image:
+    radial-gradient(ellipse 70% 55% at 5% 0%,   rgba(248, 113, 113, 0.22) 0%, transparent 60%),
+    radial-gradient(ellipse 50% 50% at 95% 80%,  rgba(74,  222, 128, 0.18) 0%, transparent 60%),
+    radial-gradient(ellipse 55% 45% at 55% 100%, rgba(253, 224, 71,  0.16) 0%, transparent 60%),
+    radial-gradient(ellipse 45% 45% at 92% 5%,   rgba(244, 114, 182, 0.18) 0%, transparent 55%);
+}
+
+
 .custom-scrollbar::-webkit-scrollbar {
   width: 5px;
 }
