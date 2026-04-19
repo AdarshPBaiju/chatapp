@@ -221,18 +221,16 @@ class SessionQueryService:
 
         results: list[dict[str, Any]] = []
         for session in sessions:
-            is_current = False
-            if current_sid and str(session.session_id) == str(current_sid):
-                is_current = True
-            elif current_access_jti and session.access_jti == current_access_jti:
-                is_current = True
-            elif (
-                current_fingerprint
-                and current_device_entropy is not None
-                and session.fingerprint == current_fingerprint
-                and session.device_entropy == current_device_entropy
-            ):
-                is_current = True
+            is_current = (
+                (current_sid and str(session.session_id) == str(current_sid))
+                or (current_access_jti and session.access_jti == current_access_jti)
+                or (
+                    current_fingerprint
+                    and current_device_entropy is not None
+                    and session.fingerprint == current_fingerprint
+                    and session.device_entropy == current_device_entropy
+                )
+            )
 
             results.append({
                 "session_id": str(session.session_id),
