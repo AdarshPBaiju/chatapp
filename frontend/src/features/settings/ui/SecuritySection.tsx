@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Shield, KeyRound, Check, Lock } from "lucide-react";
+import { Shield, KeyRound, Lock } from "lucide-react";
 import { motion } from "framer-motion";
 
 import { Button } from "@/shared/ui/FormControls";
@@ -46,90 +46,78 @@ export function SecuritySection() {
     <motion.div
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      className="space-y-12"
+      className="space-y-8"
     >
-      <div className="space-y-2 border-b border-border pb-8">
-        <h2 className="text-3xl font-bold tracking-tight text-foreground">Security Vault</h2>
-        <p className="text-muted-foreground text-sm font-medium tracking-wide">Protect your digital identity with advanced cryptographic safeguards.</p>
+      <div className="space-y-1 border-b border-border pb-6">
+        <h2 className="text-2xl font-bold tracking-tight text-foreground">Security Control</h2>
+        <p className="text-muted-foreground text-xs font-medium">Configure advanced cryptographic safeguards.</p>
       </div>
 
-      <div className="grid gap-8">
-        {/* Password Card */}
-        <div className="group relative flex flex-col md:flex-row md:items-center justify-between gap-6 p-8 rounded-[32px] border border-border bg-card hover:border-primary/20 hover:shadow-2xl hover:shadow-primary/5 transition-all duration-500">
-          <div className="flex items-center gap-6">
-            <div className="h-16 w-16 rounded-[22px] bg-muted flex items-center justify-center text-muted-foreground group-hover:bg-foreground group-hover:text-background transition-all duration-500">
-              <KeyRound size={28} />
+      <div className="grid gap-px bg-border border border-border rounded-xl overflow-hidden shadow-sm">
+        {/* Password Item */}
+        <div className="group flex items-center justify-between gap-4 p-4 bg-card transition-colors hover:bg-muted/30">
+          <div className="flex items-center gap-4">
+            <div className="h-10 w-10 rounded-lg bg-muted flex items-center justify-center text-muted-foreground group-hover:bg-foreground group-hover:text-background transition-all duration-300">
+              <KeyRound size={20} />
             </div>
-            <div className="space-y-1">
-              <p className="text-lg font-bold tracking-tight text-foreground">Master Password</p>
-              <p className="text-xs font-medium text-muted-foreground">Control your primary account access key.</p>
+            <div>
+              <p className="text-sm font-semibold text-foreground">Master Password</p>
+              <p className="text-[11px] text-muted-foreground">Primary account access key.</p>
             </div>
           </div>
           <Button
+            compact
             variant="outline"
             onClick={() => setShowPasswordModal(true)}
-            className="rounded-2xl border-border px-8 py-5 text-[11px] font-black uppercase tracking-widest"
+            className="rounded-lg px-4"
           >
-            Update Key
+            Update
           </Button>
         </div>
 
-        {/* 2FA Card */}
-        <div className={cn(
-          "group relative flex flex-col md:flex-row md:items-center justify-between gap-6 p-8 rounded-[32px] border transition-all duration-500",
-          profile?.is_two_factor_enabled
-            ? "bg-primary border-primary text-primary-foreground shadow-2xl shadow-primary/20 hover:bg-primary/95"
-            : "bg-card border-border hover:border-primary/20 hover:shadow-2xl hover:shadow-primary/5"
-        )}>
-          <div className="flex items-center gap-6">
+        {/* 2FA Item */}
+        <div className="group flex items-center justify-between gap-4 p-4 bg-card transition-colors hover:bg-muted/30">
+          <div className="flex items-center gap-4">
             <div className={cn(
-              "h-16 w-16 rounded-[22px] flex items-center justify-center transition-all duration-500",
+              "h-10 w-10 rounded-lg flex items-center justify-center transition-all duration-300",
               profile?.is_two_factor_enabled
-                ? "bg-primary-foreground/15 text-primary-foreground"
-                : "bg-muted text-muted-foreground"
+                ? "bg-success/10 text-success"
+                : "bg-muted text-muted-foreground group-hover:bg-foreground group-hover:text-background"
             )}>
-              <Shield size={28} />
+              <Shield size={20} />
             </div>
-            <div className="space-y-1">
-              <div className="flex items-center gap-3">
-                <p className={cn("text-lg font-bold tracking-tight", profile?.is_two_factor_enabled ? "text-primary-foreground" : "text-foreground")}>
-                  Two-Factor Protocol
-                </p>
+            <div>
+              <div className="flex items-center gap-2">
+                <p className="text-sm font-semibold text-foreground">Two-Factor Authentication</p>
                 {profile?.is_two_factor_enabled && (
-                  <span className="flex items-center gap-1.5 bg-success text-success-foreground text-[9px] font-black uppercase tracking-[0.25em] px-2.5 py-1 rounded-full">
-                    <Check size={10} strokeWidth={4} /> Hardened
+                  <span className="flex items-center gap-1 rounded-full bg-success/10 px-2 py-0.5 text-[8px] font-bold uppercase tracking-wider text-success border border-success/20">
+                    Active
                   </span>
                 )}
               </div>
-              <p className={cn("text-xs font-medium", profile?.is_two_factor_enabled ? "text-primary-foreground/60" : "text-muted-foreground")}>
-                Multi-layer verification via mobile authenticator.
-              </p>
+              <p className="text-[11px] text-muted-foreground">Verification via mobile authenticator.</p>
             </div>
           </div>
           <Button
-            variant={profile?.is_two_factor_enabled ? "outline" : "outline"}
+            compact
+            variant="outline"
             onClick={() => profile?.is_two_factor_enabled ? setShowManage(true) : setShowWizard(true)}
-            className={cn(
-              "rounded-2xl border-border px-8 py-5 text-[11px] font-black uppercase tracking-widest bg-background",
-              profile?.is_two_factor_enabled
-                ? ""
-                : "border-border"
-            )}
+            className="rounded-lg px-4"
           >
-            {profile?.is_two_factor_enabled ? "Auth Protocol Settings" : "Deploy 2FA"}
+            {profile?.is_two_factor_enabled ? "Configure" : "Enable"}
           </Button>
         </div>
       </div>
 
       {/* Security Tip */}
-      <div className="p-8 rounded-[32px] bg-muted border border-border flex items-start gap-4">
-        <div className="mt-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-background/50 text-foreground">
+      <div className="p-4 rounded-xl bg-muted/30 border border-border/50 flex items-start gap-3">
+        <div className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-background shadow-sm text-foreground">
           <Lock size={12} />
         </div>
-        <div className="space-y-1">
-          <p className="text-xs font-bold uppercase tracking-widest text-foreground">Pro-Active Safety</p>
-          <p className="text-xs font-medium leading-relaxed text-muted-foreground">
-            ChitChat employs Zero-Trust architecture. We recommend rotating your master password every 90 days and maintaining an active 2FA device.
+        <div>
+          <p className="text-[10px] font-bold uppercase tracking-wider text-foreground">Pro-Active Safety</p>
+          <p className="text-[11px] font-medium leading-relaxed text-muted-foreground/80">
+            ChitChat employs Zero-Trust architecture. Rotate your master password every 90 days.
           </p>
         </div>
       </div>

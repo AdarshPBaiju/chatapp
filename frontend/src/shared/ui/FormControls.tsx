@@ -7,28 +7,33 @@ interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
   label?: string;
   error?: string;
   icon?: ReactNode;
+  compact?: boolean;
 }
 
 export const Input = forwardRef<HTMLInputElement, InputProps>(
-  ({ className, type, label, error, icon, ...props }, ref) => {
+  ({ className, type, label, error, icon, compact, ...props }, ref) => {
     const [showPassword, setShowPassword] = useState(false);
     const [isFocused, setIsFocused] = useState(false);
     const isPassword = type === "password";
 
     return (
-      <div className="w-full space-y-2">
+      <div className="w-full space-y-1.5">
         {label && (
-          <label className="pl-1 text-[11px] font-bold uppercase tracking-[0.2em] text-muted-foreground group-focus-within:text-foreground transition-colors">
+          <label className={cn(
+            "pl-1 font-bold uppercase tracking-[0.2em] text-muted-foreground group-focus-within:text-foreground transition-colors",
+            compact ? "text-[9px]" : "text-[11px]"
+          )}>
             {label}
           </label>
         )}
         <div className="group relative">
           {icon && (
             <div className={cn(
-              "absolute left-5 top-1/2 -translate-y-1/2 transition-all duration-300",
+              "absolute top-1/2 -translate-y-1/2 transition-all duration-300",
+              compact ? "left-4" : "left-5",
               isFocused ? "text-foreground" : "text-muted-foreground"
             )}>
-              {icon}
+              {icon && (typeof icon === 'object' && 'props' in icon ? (icon as any).type === 'svg' || (icon as any).props?.size ? icon : <div className={cn(compact ? "scale-75" : "")}>{icon}</div> : icon)}
             </div>
           )}
           <input
@@ -44,12 +49,15 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
             }}
             type={isPassword ? (showPassword ? "text" : "password") : type}
             className={cn(
-              "w-full rounded-2xl border bg-background px-5 py-4 text-foreground outline-none transition-all duration-300",
+              "w-full border bg-background text-foreground outline-none transition-all duration-300",
               "placeholder:text-muted-foreground/40 font-medium",
+              compact 
+                ? "rounded-xl px-4 py-2.5 text-sm" 
+                : "rounded-2xl px-5 py-4 text-base",
               isFocused 
                 ? "border-primary shadow-[0_0_0_4px_var(--primary)/2%] shadow-xl" 
                 : "border-border shadow-sm",
-              icon ? "pl-14 pr-14" : "px-6 pr-14",
+              icon ? (compact ? "pl-11 pr-11" : "pl-14 pr-14") : (compact ? "px-4 pr-11" : "px-6 pr-14"),
               error && "border-destructive/30 focus:border-destructive/50 focus:ring-destructive/5",
               className,
             )}
@@ -58,9 +66,12 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
             <button
               type="button"
               onClick={() => setShowPassword(!showPassword)}
-              className="absolute right-5 top-1/2 -translate-y-1/2 text-muted-foreground transition-all duration-300 hover:text-foreground"
+              className={cn(
+                "absolute top-1/2 -translate-y-1/2 text-muted-foreground transition-all duration-300 hover:text-foreground",
+                compact ? "right-4" : "right-5"
+              )}
             >
-              {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              {showPassword ? <EyeOff size={compact ? 16 : 18} /> : <Eye size={compact ? 16 : 18} />}
             </button>
           )}
         </div>
@@ -160,6 +171,7 @@ interface ButtonProps extends HTMLMotionProps<"button"> {
   isLoading?: boolean;
   leftIcon?: ReactNode;
   rightIcon?: ReactNode;
+  compact?: boolean;
 }
 
 export function Button({
@@ -169,13 +181,17 @@ export function Button({
   isLoading,
   leftIcon,
   rightIcon,
+  compact,
   ...props
 }: ButtonProps) {
   return (
     <motion.button
       whileTap={{ scale: 0.98 }}
       className={cn(
-        "group relative flex items-center justify-center gap-3 overflow-hidden whitespace-nowrap rounded-2xl px-8 py-4 text-sm font-bold uppercase tracking-wider transition-all duration-300 disabled:cursor-not-allowed disabled:opacity-50",
+        "group relative flex items-center justify-center gap-3 overflow-hidden whitespace-nowrap font-bold uppercase tracking-wider transition-all duration-300 disabled:cursor-not-allowed disabled:opacity-50",
+        compact 
+          ? "rounded-xl px-4 py-2 text-[10px]" 
+          : "rounded-2xl px-8 py-4 text-sm",
         variants[variant],
         isLoading && "cursor-wait",
         className,

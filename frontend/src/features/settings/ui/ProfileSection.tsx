@@ -127,16 +127,16 @@ export function ProfileSection() {
     <motion.div 
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      className="space-y-12"
+      className="space-y-8"
     >
       {/* Profile Header Card */}
-      <div className="flex flex-col md:flex-row items-start md:items-center gap-8 group">
+      <div className="flex items-center gap-6 group border-b border-border pb-6">
         <div className="relative group">
           <motion.div 
             whileHover={{ scale: 1.05 }}
             className={cn(
-              "h-32 w-32 rounded-[32px] bg-muted border-4 border-background shadow-2xl flex items-center justify-center overflow-hidden transition-all duration-500",
-              touched.profile_picture && errors.profile_picture ? "border-destructive/40 ring-4 ring-destructive/10" : "group-hover:shadow-primary/5"
+              "h-20 w-20 rounded-2xl bg-muted border-2 border-background shadow-md flex items-center justify-center overflow-hidden transition-all duration-300",
+              touched.profile_picture && errors.profile_picture ? "border-destructive/40 ring-2 ring-destructive/10" : "group-hover:shadow-primary/5"
             )}
           >
             {previewUrl || initialProfile.profile_picture ? (
@@ -146,16 +146,16 @@ export function ProfileSection() {
                 className="h-full w-full object-cover" 
               />
             ) : (
-              <User size={48} className="text-muted-foreground/30" />
+              <User size={32} className="text-muted-foreground/30" />
             )}
             
             {/* Upload Overlay */}
             <label 
               htmlFor="avatar-upload" 
-              className="absolute inset-0 bg-foreground/60 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer backdrop-blur-[2px]"
+              className="absolute inset-0 bg-foreground/60 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer backdrop-blur-[1px]"
             >
-              <Camera size={28} className="text-background mb-2" />
-              <span className="text-[10px] text-background font-bold uppercase tracking-[0.2em]">Change</span>
+              <Camera size={20} className="text-background mb-1" />
+              <span className="text-[8px] text-background font-bold uppercase tracking-[0.1em]">Edit</span>
             </label>
           </motion.div>
           
@@ -168,14 +168,14 @@ export function ProfileSection() {
           />
         </div>
         
-        <div className="space-y-2">
-          <h2 className="text-4xl font-bold tracking-tight text-foreground">{initialProfile.full_name || "Guest Identity"}</h2>
+        <div className="space-y-1">
+          <h2 className="text-xl font-bold tracking-tight text-foreground">{initialProfile.full_name || "Guest Identity"}</h2>
           <div className="flex items-center gap-2 text-muted-foreground">
-            <Mail size={16} />
-            <span className="text-sm font-medium tracking-wide">{initialProfile.email}</span>
-            <div className="h-4 w-px bg-border mx-2" />
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-success/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-success">
-              <Check size={10} /> Verified
+            <Mail size={14} />
+            <span className="text-xs font-medium tracking-wide">{initialProfile.email}</span>
+            <div className="h-3 w-px bg-border mx-1" />
+            <span className="inline-flex items-center gap-1 rounded-full bg-success/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-success">
+              <Check size={9} /> Verified
             </span>
           </div>
         </div>
@@ -193,27 +193,29 @@ export function ProfileSection() {
       )}
 
       {/* Profile Form */}
-      <form onSubmit={handleSubmit} noValidate className="space-y-10">
-        <div className="grid md:grid-cols-2 gap-8">
+      <form onSubmit={handleSubmit} noValidate className="space-y-6">
+        <div className="grid md:grid-cols-2 gap-4">
           <Input
+            compact
             label="Legal Full Name"
-            icon={<User size={18} />}
+            icon={<User size={16} />}
             placeholder="Johnathan Doe"
             {...getFieldProps("full_name")}
             disabled={isSaving}
           />
           <Input
+            compact
             label="Mobile Identity"
-            icon={<Phone size={18} />}
+            icon={<Phone size={16} />}
             placeholder="+1 (555) 000-0000"
             {...getFieldProps("phone_number")}
             disabled={isSaving}
           />
         </div>
 
-        <div className="space-y-3">
+        <div className="space-y-2">
           <label className={cn(
-            "pl-1 text-[11px] font-bold uppercase tracking-[0.2em] transition-colors",
+            "pl-1 text-[9px] font-bold uppercase tracking-[0.2em] transition-colors",
             touched.bio && errors.bio ? "text-destructive" : "text-muted-foreground"
           )}>
             Account Bio
@@ -222,38 +224,38 @@ export function ProfileSection() {
             <textarea
               placeholder="Who are you in the digital world?"
               className={cn(
-                "w-full min-h-[140px] p-5 bg-background border transition-all outline-none resize-none text-foreground placeholder:text-muted-foreground/40 text-sm leading-relaxed rounded-[24px]",
+                "w-full min-h-[100px] p-4 bg-background border transition-all outline-none resize-none text-foreground placeholder:text-muted-foreground/40 text-sm leading-relaxed rounded-xl",
                 touched.bio && errors.bio 
-                  ? "border-destructive/40 ring-4 ring-destructive/5" 
-                  : "border-border focus:border-primary focus:ring-4 focus:ring-primary/5 shadow-sm"
+                  ? "border-destructive/40 ring-2 ring-destructive/5" 
+                  : "border-border focus:border-primary focus:ring-2 focus:ring-primary/5 shadow-sm"
               )}
               {...getFieldProps("bio")}
               disabled={isSaving}
             />
             <div className={cn(
-              "absolute top-5 right-5 transition-colors",
+              "absolute top-4 right-4 transition-colors",
               touched.bio && errors.bio ? "text-destructive" : "text-muted-foreground group-focus-within:text-foreground"
             )}>
-              {touched.bio && errors.bio ? <AlertCircle size={18} /> : <Info size={18} />}
+              {touched.bio && errors.bio ? <AlertCircle size={16} /> : <Info size={16} />}
             </div>
           </div>
           {touched.bio && errors.bio && (
-            <p className="pl-1 text-[10px] font-bold text-destructive uppercase tracking-widest">{errors.bio}</p>
+            <p className="pl-1 text-[9px] font-bold text-destructive uppercase tracking-widest">{errors.bio}</p>
           )}
         </div>
 
-        <div className="space-y-3">
-           <label className="pl-1 text-[11px] font-bold uppercase tracking-[0.2em] text-muted-foreground">Gender Identity</label>
-           <div className="grid grid-cols-3 gap-3">
+        <div className="space-y-2">
+           <label className="pl-1 text-[9px] font-bold uppercase tracking-[0.2em] text-muted-foreground">Gender Identity</label>
+           <div className="grid grid-cols-3 gap-2">
               {(['male', 'female', 'other'] as const).map((g) => (
                 <button
                   key={g}
                   type="button"
                   onClick={() => setFieldValue("gender", g)}
                   className={cn(
-                    "rounded-2xl border-2 py-4 text-xs font-bold uppercase tracking-widest transition-all",
+                    "rounded-xl border-2 py-2 text-[10px] font-bold uppercase tracking-widest transition-all",
                     values.gender === g 
-                      ? "border-primary bg-primary text-primary-foreground shadow-xl shadow-primary/20" 
+                      ? "border-primary bg-primary text-primary-foreground shadow-sm" 
                       : "border-muted bg-muted text-muted-foreground hover:border-border hover:bg-background hover:text-foreground"
                   )}
                   disabled={isSaving}
@@ -264,26 +266,26 @@ export function ProfileSection() {
            </div>
         </div>
 
-        <div className="pt-6 flex items-center justify-between">
+        <div className="pt-2 flex items-center justify-between">
           <div className="hidden sm:block">
              <AnimatePresence>
                {success && (
                  <motion.p 
-                   initial={{ opacity: 0, x: -20 }}
+                   initial={{ opacity: 0, x: -10 }}
                    animate={{ opacity: 1, x: 0 }}
-                   exit={{ opacity: 0, x: -20 }}
-                   className="text-sm font-bold text-success flex items-center gap-2"
+                   exit={{ opacity: 0, x: -10 }}
+                   className="text-[10px] font-bold text-success flex items-center gap-1.5"
                  >
-                   <Check size={18} className="p-0.5 rounded-full bg-success/10" />
-                   Changes deployed successfully.
+                   <Check size={14} className="p-0.5 rounded-full bg-success/10" />
+                   Changes saved.
                  </motion.p>
                )}
                {errorVisible && (
                  <motion.p 
-                   initial={{ opacity: 0, x: -20 }}
+                   initial={{ opacity: 0, x: -10 }}
                    animate={{ opacity: 1, x: 0 }}
-                   exit={{ opacity: 0, x: -20 }}
-                   className="text-sm font-bold text-destructive"
+                   exit={{ opacity: 0, x: -10 }}
+                   className="text-[10px] font-bold text-destructive"
                  >
                    {errorVisible}
                  </motion.p>
@@ -292,12 +294,13 @@ export function ProfileSection() {
           </div>
 
           <Button
+            compact
             type="submit" 
             isLoading={isSaving} 
             disabled={isSaving} 
-            className="w-full sm:w-auto px-12 py-5"
+            className="w-full sm:w-auto px-8"
           >
-            Update Identity
+            Update Profile
           </Button>
         </div>
       </form>

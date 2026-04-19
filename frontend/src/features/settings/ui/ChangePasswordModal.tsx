@@ -59,60 +59,63 @@ export function ChangePasswordModal({ isOpen, onClose }: ChangePasswordModalProp
   return (
     <Modal isOpen={isOpen} onClose={handleClose} title="Change Password" maxWidth="md">
       {success ? (
-        <div className="space-y-8 py-4 animate-in fade-in zoom-in-95 duration-300">
-          <div className="flex flex-col items-center gap-6 rounded-[28px] border-2 border-success/10 bg-success/5 p-8 text-center">
-            <div className="flex h-20 w-20 items-center justify-center rounded-full bg-success/10 shadow-xl shadow-success/10">
-              <CheckCircle className="text-success" size={40} />
+        <div className="space-y-6 py-2 animate-in fade-in zoom-in-95 duration-300">
+          <div className="flex flex-col items-center gap-4 rounded-xl border border-success/20 bg-success/5 p-6 text-center">
+            <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-success/10 shadow-sm">
+              <CheckCircle className="text-success" size={24} />
             </div>
             <div className="space-y-1">
-              <p className="text-xl font-bold text-foreground">Password Updated</p>
-              <p className="text-sm text-muted-foreground leading-relaxed">Your new security credentials are now active and all other sessions have been refreshed.</p>
+              <p className="text-base font-bold text-foreground">Password Updated</p>
+              <p className="text-xs text-muted-foreground leading-relaxed">Your new security credentials are now active.</p>
             </div>
           </div>
-          <Button onClick={handleClose} className="w-full py-4 text-success-foreground bg-success hover:bg-success/90 shadow-none">
+          <Button compact onClick={handleClose} className="w-full">
             Done
           </Button>
         </div>
       ) : (
-        <form onSubmit={handleSubmit} noValidate className="space-y-8 py-2">
-          <div className="flex items-start gap-4 rounded-2xl border-2 border-primary/10 bg-primary/5 p-4">
-            <ShieldAlert className="shrink-0 text-primary mt-0.5" size={24} />
-            <p className="text-sm leading-relaxed text-muted-foreground">
-              Enter your current password to verify your identity before setting a new one.
+        <form onSubmit={handleSubmit} noValidate className="space-y-6 py-1">
+          <div className="flex items-start gap-3 rounded-lg border border-primary/10 bg-primary/5 p-3">
+            <ShieldAlert className="shrink-0 text-primary mt-0.5" size={18} />
+            <p className="text-xs leading-relaxed text-muted-foreground">
+              Confirm your identity with your current password.
             </p>
           </div>
 
           <Input
+            compact
             type="password"
             label="Current Password"
-            placeholder="Enter current password"
-            icon={<Lock size={20} />}
+            placeholder="Account password"
+            icon={<Lock size={16} />}
             {...getFieldProps("oldPassword")}
             disabled={loading}
           />
 
-          <div className="space-y-6 pt-2">
+          <div className="space-y-4 pt-1">
             <Input
+              compact
               type="password"
               label="New Password"
-              placeholder="Minimum 8 characters"
-              icon={<Lock size={20} />}
+              placeholder="Min 8 chars"
+              icon={<Lock size={16} />}
               {...getFieldProps("password")}
               disabled={loading}
             />
 
             <Input
+              compact
               type="password"
               label="Confirm New Password"
-              placeholder="Repeat new password"
-              icon={<Lock size={20} />}
+              placeholder="Repeat password"
+              icon={<Lock size={16} />}
               {...getFieldProps("confirmPassword")}
               disabled={loading}
             />
           </div>
 
-          <Button type="submit" className="w-full py-4 shadow-xl shadow-primary/10" isLoading={loading}>
-             Update Security Credentials
+          <Button compact type="submit" className="w-full" isLoading={loading}>
+             Update Credentials
           </Button>
         </form>
       )}

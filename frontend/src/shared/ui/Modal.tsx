@@ -51,9 +51,8 @@ export function Modal({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.3, ease: "easeOut" }}
-            className="fixed inset-0 bg-background/80 backdrop-blur-md"
-            onClick={onClose}
+            transition={{ duration: 0.2 }}
+            className="fixed inset-0 bg-slate-900/20 backdrop-blur-[2px]"
           />
 
           {/* Modal Content */}
@@ -68,23 +67,23 @@ export function Modal({
               mass: 0.8
             }}
             className={cn(
-              "relative w-full bg-card rounded-[40px] shadow-2xl overflow-hidden border border-border",
+              "relative w-full bg-card rounded-2xl shadow-2xl overflow-hidden border border-border",
               maxWidthClasses[maxWidth]
             )}
           >
             {/* Header */}
-            <div className="flex items-center justify-between p-6 md:p-8 border-b border-border">
-              <h3 className="text-xl font-bold text-foreground">{title}</h3>
+            <div className="flex items-center justify-between p-5 border-b border-border">
+              <h3 className="text-lg font-bold text-foreground">{title}</h3>
               <button 
                 onClick={onClose}
-                className="h-10 w-10 flex items-center justify-center rounded-xl bg-muted text-muted-foreground hover:bg-foreground hover:text-background transition-all"
+                className="h-8 w-8 flex items-center justify-center rounded-lg bg-muted text-muted-foreground hover:bg-foreground hover:text-background transition-all"
               >
-                <X size={20} />
+                <X size={16} />
               </button>
             </div>
 
             {/* Body */}
-            <div className="p-6 md:p-8 max-h-[80vh] overflow-y-auto">
+            <div className="p-5 max-h-[80vh] overflow-y-auto">
               {children}
             </div>
           </motion.div>
