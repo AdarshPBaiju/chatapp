@@ -53,7 +53,6 @@ export function ProfileSection() {
           toast.success("Profile updated successfully.");
           setSuccess(true);
           setInitialProfile(data.data);
-          // Only clear the file, keep the other values as updated
           setFieldValue("profile_picture", null);
         } else if (data.success && !data.data) {
           setErrorVisible("Update successful but no profile data returned.");
@@ -105,7 +104,6 @@ export function ProfileSection() {
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (file) {
-      // DSL handles validation on submit/blur, but we set it here for preview
       setFieldValue("profile_picture", file);
       const url = URL.createObjectURL(file);
       setPreviewUrl(url);
@@ -226,10 +224,10 @@ export function ProfileSection() {
             <textarea
               placeholder="Who are you in the digital world?"
               className={cn(
-                "w-full min-h-[100px] p-4 bg-background border transition-all outline-none resize-none text-foreground placeholder:text-muted-foreground/40 text-sm leading-relaxed rounded-xl",
+                "w-full min-h-[100px] p-4 bg-muted/40 border transition-all outline-none resize-none text-foreground placeholder:text-muted-foreground/40 text-sm leading-relaxed rounded-xl",
                 touched.bio && errors.bio 
                   ? "border-destructive/40 ring-2 ring-destructive/5" 
-                  : "border-border focus:border-primary focus:ring-2 focus:ring-primary/5 shadow-sm"
+                  : "border-border focus:border-accent focus:ring-4 focus:ring-accent/5 shadow-sm backdrop-blur-[2px]"
               )}
               {...getFieldProps("bio")}
               disabled={isSaving}

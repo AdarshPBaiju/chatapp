@@ -43,7 +43,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
             <div className={cn(
               "absolute top-1/2 -translate-y-1/2 transition-all duration-300 pointer-events-none z-10",
               compact ? "left-4" : "left-5",
-              isFocused ? "text-slate-800" : "text-slate-400"
+              isFocused ? "text-foreground" : "text-muted-foreground/60"
             )}>
               {icon && (typeof icon === 'object' && 'props' in icon ? (icon as any).type === 'svg' || (icon as any).props?.size ? icon : <div className={cn(compact ? "scale-75" : "")}>{icon}</div> : icon)}
             </div>
@@ -62,13 +62,13 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
             type={isPassword ? (isVisible ? "text" : "password") : type}
             className={cn(
               "w-full outline-none transition-all duration-300",
-              "placeholder:text-slate-300 font-medium text-slate-700",
-              "bg-slate-100/50 border border-slate-200/60 focus:bg-white focus:border-slate-400 focus:shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)]",
+              "placeholder:text-muted-foreground/40 font-medium text-foreground",
+              "bg-muted/40 border border-border focus:bg-background focus:border-accent focus:shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] focus:ring-4 focus:ring-accent/5 backdrop-blur-[2px]",
               compact 
                 ? "rounded-xl px-4 py-2.5 text-sm" 
                 : "rounded-2xl px-5 py-3.5 text-sm",
               icon ? (compact ? "pl-11 pr-11" : "pl-13 pr-13") : (compact ? "px-4 pr-11" : "px-6 pr-13"),
-              error && "border-red-200 bg-red-50/30 focus:border-red-300",
+              error && "border-destructive/40 bg-destructive/5 focus:border-destructive/60",
               className,
             )}
           />
@@ -77,7 +77,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
               type="button"
               onClick={handleActionClick}
               className={cn(
-                "absolute top-1/2 -translate-y-1/2 text-slate-300 transition-all duration-300 hover:text-slate-600",
+                "absolute top-1/2 -translate-y-1/2 text-muted-foreground/40 transition-all duration-300 hover:text-foreground",
                 compact ? "right-4" : "right-5"
               )}
             >
@@ -161,8 +161,8 @@ export function OtpInput({ value, onChange, isLoading, compact }: OtpInputProps)
             "rounded-2xl border transition-all duration-300 text-center font-black outline-none w-full",
             compact ? "h-12 text-lg" : "h-14 text-xl",
             values[i] 
-              ? "border-slate-800 bg-slate-800 text-white shadow-lg" 
-              : "border-slate-200 bg-slate-100/50 text-slate-800 focus:border-slate-400 focus:bg-white"
+              ? "border-primary bg-primary text-primary-foreground shadow-lg" 
+              : "border-border bg-muted/40 text-foreground focus:border-accent focus:bg-background focus:ring-4 focus:ring-accent/5"
           )}
         />
       ))}
@@ -171,11 +171,11 @@ export function OtpInput({ value, onChange, isLoading, compact }: OtpInputProps)
 }
 
 const variants = {
-  primary: "bg-slate-900 text-white hover:bg-slate-800 shadow-[0_8px_30px_rgb(0,0,0,0.12)] active:scale-[0.98]",
-  outline: "border-2 border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-slate-800",
-  ghost: "bg-transparent text-slate-500 hover:bg-slate-50 hover:text-slate-800",
-  link: "h-auto border-none bg-transparent px-0 py-0 text-slate-500 hover:text-slate-800 hover:underline",
-  social: "border border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50 shadow-sm px-4",
+  primary: "bg-primary text-primary-foreground hover:brightness-110 shadow-[0_8px_30px_rgba(var(--primary),0.2)] active:scale-[0.98]",
+  outline: "border-2 border-border bg-transparent text-muted-foreground hover:border-accent hover:text-foreground",
+  ghost: "bg-transparent text-muted-foreground hover:bg-muted hover:text-foreground",
+  link: "h-auto border-none bg-transparent px-0 py-0 text-muted-foreground hover:text-foreground hover:underline",
+  social: "border border-border bg-muted/20 text-muted-foreground hover:border-accent/40 hover:bg-muted/40 hover:text-foreground shadow-sm px-4",
 };
 
 interface ButtonProps extends HTMLMotionProps<"button"> {

@@ -75,21 +75,50 @@ class IdentityInitAPIView(APIView):
             new_entropy = generate_device_entropy()
             request.META["HTTP_X_DEVICE_ENTROPY"] = new_entropy
 
-        flow_data = HitEngine.create_initial_flow(user_id=str(user.id), request=request)
+        # Risk assessment
+        from authentication.sessions.infrastructure.cache import GeoLocationService
+        from authentication.core.request_context import get_request_ip
+        from authentication.sessions.application.services import AnomalyDetectionService
+
+        location_data = GeoLocationService.get_location_from_ip(get_request_ip(request))
+        location = GeoLocationService.normalize_location(location_data)
+        risk_score = AnomalyDetectionService.calculate_risk_score(
+            str(user.id), request, location
+        )
+
+        # If risk > 70, we mandate MFA (acr=2)
+        target_acr = 2 if risk_score > 70 else 0
+
+        flow_data = HitEngine.create_initial_flow(
+            user_id=str(user.id), request=request, initial_acr=target_acr
+        )
 
         allowed_methods = ["password", "email_otp"]
         if user.client.is_two_factor_enabled:
             allowed_methods.append("totp")
 
+        # If high risk, we might want to prioritize MFA methods
+        challenge_type = "password"
+        if risk_score > 70:
+            challenge_type = "mfa"
+            # If user has no 2FA, we might still force email OTP as a fallback step-up
+            if not user.client.is_two_factor_enabled:
+                allowed_methods = ["email_otp"]
+            else:
+                allowed_methods = ["totp", "email_otp"]
+
         response = ResponseFactory.success(
-            message="Identity verified. Please select a verification method.",
+            message="Identity verified. High security requirements applied due to risk."
+            if risk_score > 70
+            else "Identity verified. Please select a verification method.",
             data={
                 "status": "challenge_required",
                 "hit": flow_data["hit"],
                 "flow_id": flow_data["flow_id"],
                 "expected_step": 1,
                 "allowed_methods": allowed_methods,
-                "challenge_type": "password",
+                "challenge_type": challenge_type,
+                "risk_score": risk_score,
             },
         )
 
