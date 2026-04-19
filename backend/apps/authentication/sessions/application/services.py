@@ -12,6 +12,7 @@ logger = logging.getLogger("core")
 
 class SessionManager:
     @classmethod
+    @transaction.atomic
     def persist_session(
         cls,
         *,
@@ -28,8 +29,23 @@ class SessionManager:
         session_type: str = "client",
     ) -> AuthSession:
         from authentication.sessions.infrastructure.cache import GeoLocationService
+        from authentication.identity.infrastructure.cache import GraceJTIService
 
         location = GeoLocationService.normalize_location(location_data)
+
+        existing_session = AuthSession.objects.filter(
+            user=user, session_id=session_id
+        ).first()
+        if existing_session:
+            # Record both Access and Refresh JTIs in grace window during rotation
+            if existing_session.access_jti != access_jti:
+                GraceJTIService.register_grace_jti(
+                    str(existing_session.session_id), existing_session.access_jti
+                )
+            if existing_session.refresh_jti != refresh_jti:
+                GraceJTIService.register_grace_jti(
+                    str(existing_session.session_id), existing_session.refresh_jti
+                )
 
         session, _ = AuthSession.objects.update_or_create(
             user=user,
@@ -255,27 +271,44 @@ class SessionQueryService:
         session_id: str,
         jti: str,
         partner_jti: str | None = None,
-        scope: str | None = None,
+        token_type: str | None = None,
+        session_scope: str | None = None,
     ) -> bool:
-        from authentication.identity.infrastructure.cache import TokenBlacklistService
+        from authentication.identity.infrastructure.cache import (
+            TokenBlacklistService,
+            GraceJTIService,
+        )
 
         if TokenBlacklistService.is_blacklisted(jti):
             return False
         if partner_jti and TokenBlacklistService.is_blacklisted(partner_jti):
             return False
 
-        if scope == "revoke_only":
+        if session_scope == "revoke_only":
             return True
 
         session = cls.get_active_session(
             user_id=user_id,
             session_id=session_id,
-            access_jti=jti if scope != "refresh" else None,
-            refresh_jti=jti if scope == "refresh" else None,
+            access_jti=jti if token_type != "refresh" else None,
+            refresh_jti=jti if token_type == "refresh" else None,
             allow_context_fallback=False,
             require_all_identifiers=True,
         )
-        return bool(session)
+
+        if session:
+            return True
+
+        if GraceJTIService.is_in_grace(session_id, jti):
+            session_status = cls.get_active_session(
+                user_id=user_id,
+                session_id=session_id,
+                allow_context_fallback=False,
+                require_all_identifiers=False,
+            )
+            return bool(session_status)
+
+        return False
 
 
 class AnomalyDetectionService:
@@ -308,17 +341,17 @@ class AnomalyDetectionService:
             float(current_location["lon"]),
         )
 
-        if dist < 10:  # Ignore small movements
+        if dist < 10:
             return False
 
         time_diff = (
             dj_timezone.now() - last_session.last_seen_at
         ).total_seconds() / 3600
-        if time_diff < 0.01:  # Practically simultaneous
+        if time_diff < 0.01:
             return True
 
         speed = dist / time_diff
-        if speed > 800:  # Faster than a commercial jet
+        if speed > 800:
             logger.warning(
                 "impossible_travel_detected",
                 extra={

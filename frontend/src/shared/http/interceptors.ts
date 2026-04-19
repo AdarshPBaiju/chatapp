@@ -29,7 +29,6 @@ function isIdentityFlowRequest(url?: string): boolean {
 const HARD_LOGOUT_CODES = new Set([
   "AUTH_REFRESH_EXPIRED",
   "AUTH_REVOKED_BY_SYSTEM",
-  "AUTH_SESSION_EXPIRED",
   "AUTH_USER_NOT_FOUND",
 ]);
 
@@ -39,6 +38,7 @@ const HARD_LOGOUT_CODES = new Set([
 // forced refresh attempt rather than a hard logout.
 const SOFT_EXPIRY_CODES = new Set([
   "AUTH_ACCESS_EXPIRED",
+  "AUTH_SESSION_EXPIRED",
 ]);
 
 // ─── Request interceptor ─────────────────────────────────────────────────────

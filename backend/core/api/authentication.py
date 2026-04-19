@@ -6,10 +6,11 @@ from rest_framework import authentication, exceptions
 
 from authentication.core.token_validator import (
     TokenValidationError,
+    TokenExpiredError,
+    RefreshTokenExpiredError,
     validate_token_for_request,
 )
 from authentication.sessions.application.services import SessionQueryService
-from authentication.core.device_registry import DeviceRegistryService
 from authentication.identity.infrastructure.cache import RedisSessionStore
 from core.middleware.request_context import set_current_session_id
 from users.models import CustomUser
@@ -24,6 +25,7 @@ class AdvancedJWTAuthentication(authentication.BaseAuthentication):
 
     def authenticate(self, request: Any) -> tuple[CustomUser, dict[str, Any]] | None:
         auth_header = request.META.get("HTTP_AUTHORIZATION")
+
         if not auth_header or not auth_header.startswith("Bearer "):
             return None
 
@@ -44,17 +46,13 @@ class AdvancedJWTAuthentication(authentication.BaseAuthentication):
                     session_id=str(session_id),
                     jti=payload.get("jti", ""),
                     partner_jti=payload.get("partner_jti", ""),
-                    scope=payload.get("scope"),
+                    token_type="access",
+                    session_scope=payload.get("scope"),
                 ):
                     raise TokenValidationError("Session is no longer active.")
 
-                if (
-                    SessionQueryService.count_active_sessions(user_id)
-                    > DeviceRegistryService.get_device_limit()
-                ):
-                    raise TokenValidationError(
-                        "Session limit reached. Revoke a session to continue."
-                    )
+        except (TokenExpiredError, RefreshTokenExpiredError):
+            return None
         except TokenValidationError as e:
             raise exceptions.AuthenticationFailed(str(e)) from e
         except Exception as e:

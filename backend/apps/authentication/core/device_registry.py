@@ -12,9 +12,14 @@ class DeviceRegistryService:
     def get_device_limit() -> int:
         """
         Returns the maximum number of concurrent active sessions allowed per user.
-        Deflects to settings for centralized configuration.
+        Prioritizes database configuration (GlobalConfiguration) over settings.
         """
-        return settings.AUTH_ENGINE_SETTINGS.get("MAX_DEVICES_PER_USER", 5)
+        from core.models import GlobalConfiguration
+
+        return GlobalConfiguration.get_value(
+            "max_devices_per_user",
+            settings.AUTH_ENGINE_SETTINGS.get("MAX_DEVICES_PER_USER", 5),
+        )
 
     @classmethod
     def sync_device_registry(cls, user: Any, context: Any) -> None:

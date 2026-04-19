@@ -62,7 +62,9 @@ def validate_token_for_request(
 ) -> dict[str, Any]:
     # 1. Decrypt + verify signature
     try:
-        payload = AuthCryptoEngine.decrypt_and_verify(token, grace_period_sec=grace_period_sec)
+        payload = AuthCryptoEngine.decrypt_and_verify(
+            token, grace_period_sec=grace_period_sec
+        )
     except ValueError as exc:
         msg = str(exc)
         if "expired" in msg.lower():
@@ -81,9 +83,7 @@ def validate_token_for_request(
     jti = payload.get("jti", "")
     subject_id = str(payload.get("sub") or payload.get("user_id") or "")
     if TokenBlacklistService.is_blacklisted(jti):
-        logger.warning(
-            "blacklist_hit", extra={"jti": jti, "user_id": subject_id}
-        )
+        logger.warning("blacklist_hit", extra={"jti": jti, "user_id": subject_id})
         raise TokenRevokedError("This session has been revoked by the system.")
 
     # 4. Fingerprint check
@@ -103,7 +103,8 @@ def validate_token_for_request(
             session_id=session_id,
             jti=payload.get("jti", ""),
             partner_jti=payload.get("partner_jti", ""),
-            scope=payload.get("scope"),
+            token_type=expected_type,
+            session_scope=payload.get("scope"),
         ):
             logger.warning(
                 "inactive_session_token_use",
