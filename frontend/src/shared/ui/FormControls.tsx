@@ -1,4 +1,4 @@
-import { ReactNode, useState, forwardRef, InputHTMLAttributes } from "react";
+import { ReactNode, useState, forwardRef, useRef, InputHTMLAttributes } from "react";
 import { Eye, EyeOff } from "lucide-react";
 import { motion, AnimatePresence, HTMLMotionProps } from "framer-motion";
 import { cn } from "@/shared/lib/utils";
@@ -95,13 +95,15 @@ Input.displayName = "Input";
 
 interface OtpInputProps {
   value: string;
-  onChange: (value: string) => void;
+  onChange: (val: string) => void;
   isLoading?: boolean;
+  compact?: boolean;
 }
 
-export function OtpInput({ value, onChange, isLoading }: OtpInputProps) {
+export function OtpInput({ value, onChange, isLoading, compact }: OtpInputProps) {
   const inputs = Array(6).fill(0);
   const values = value.split("").concat(Array(6 - value.length).fill(""));
+  const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
   const handleChange = (index: number, val: string) => {
     if (!/^\d*$/.test(val)) return;
@@ -111,15 +113,13 @@ export function OtpInput({ value, onChange, isLoading }: OtpInputProps) {
     onChange(finalValue);
 
     if (val && index < 5) {
-      const nextInput = document.getElementById(`otp-${index + 1}`);
-      nextInput?.focus();
+      inputRefs.current[index + 1]?.focus();
     }
   };
 
   const handleKeyDown = (index: number, e: React.KeyboardEvent) => {
     if (e.key === "Backspace" && !values[index] && index > 0) {
-      const prevInput = document.getElementById(`otp-${index - 1}`);
-      prevInput?.focus();
+      inputRefs.current[index - 1]?.focus();
     }
   };
 
@@ -128,6 +128,9 @@ export function OtpInput({ value, onChange, isLoading }: OtpInputProps) {
     const pastedData = e.clipboardData.getData("text").slice(0, 6);
     if (/^\d+$/.test(pastedData)) {
       onChange(pastedData);
+      // Focus the last filled input or the 6th one
+      const focusIndex = Math.min(pastedData.length, 5);
+      inputRefs.current[focusIndex]?.focus();
     }
   };
 
@@ -136,7 +139,7 @@ export function OtpInput({ value, onChange, isLoading }: OtpInputProps) {
       {inputs.map((_, i) => (
         <motion.input
           key={i}
-          id={`otp-${i}`}
+          ref={(el) => (inputRefs.current[i] = el)}
           type="text"
           inputMode="numeric"
           autoComplete="one-time-code"
@@ -146,7 +149,10 @@ export function OtpInput({ value, onChange, isLoading }: OtpInputProps) {
           onChange={(e) => handleChange(i, e.target.value)}
           onKeyDown={(e) => handleKeyDown(i, e)}
           className={cn(
-            "h-16 w-full rounded-2xl border transition-all duration-300 text-center text-2xl font-bold",
+            "rounded-2xl border transition-all duration-300 text-center font-bold outline-none",
+            compact 
+              ? "h-14 w-full text-xl" 
+              : "h-16 w-full text-2xl",
             values[i] 
               ? "border-primary bg-primary text-primary-foreground shadow-xl shadow-primary/10" 
               : "border-border bg-background text-foreground focus:border-primary focus:shadow-[0_0_0_4px_var(--primary)/3%] shadow-sm"

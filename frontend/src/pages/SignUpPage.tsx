@@ -1,12 +1,12 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Mail, Lock, User, CheckCircle } from "lucide-react";
+import { Mail, Lock, User } from "lucide-react";
 
 import { signUpResend, signUpVerify } from "@/features/auth/api";
 import { runSignUpFlow, runSignUpFinalizeFlow } from "@/features/auth/flows";
 import { readApiMessage } from "@/shared/lib/apiResponse";
 import { AuthLayout } from "@/shared/ui/AuthLayout";
-import { Button, Input } from "@/shared/ui/FormControls";
+import { Button, Input, OtpInput } from "@/shared/ui/FormControls";
 import { useForm } from "@/shared/hooks/useForm";
 import { v } from "@/shared/lib/validation";
 
@@ -215,15 +215,16 @@ export function SignUpPage() {
             <span className="font-bold text-foreground">{values.email}</span>
           </div>
 
-          <Input
-            type="text"
-            label="Verification Code"
-            placeholder="6-digit code"
-            icon={<CheckCircle size={20} />}
-            {...getFieldProps("otpCode")}
-            maxLength={6}
-            disabled={loading}
-          />
+          <div className="space-y-4">
+            <label className="pl-1 text-[11px] font-black uppercase tracking-[0.25em] text-muted-foreground">
+              Verification Code
+            </label>
+            <OtpInput
+              value={values.otpCode}
+              onChange={(val) => setFieldValue("otpCode", val)}
+              isLoading={loading}
+            />
+          </div>
 
           <div className="flex flex-col gap-4">
             <Button type="submit" className="py-4 text-sm font-black" isLoading={loading}>
