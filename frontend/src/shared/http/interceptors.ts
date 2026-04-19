@@ -16,6 +16,14 @@ import { getTimezoneOffsetHeaderValue } from "@/shared/lib/timezone";
 import { tokenManager } from "@/shared/auth/tokenManager";
 import { sessionEngine } from "@/shared/auth/sessionEngine";
 
+function isIdentityFlowRequest(url?: string): boolean {
+  if (!url) return false;
+  return (
+    url.includes("auth/identity/init/") ||
+    url.includes("auth/identity/challenge/")
+  );
+}
+
 // ─── Error codes that mean the session is irrecoverably dead ────────────────
 // On these, we do a LOCAL logout only — no network call to /logout/.
 const HARD_LOGOUT_CODES = new Set([
@@ -49,6 +57,15 @@ export function attachRequestInterceptor() {
   };
 }
 
+// ─── Error codes from the identity flow (login). These are validation
+// failures, NOT session expiry. Do NOT trigger any refresh logic.
+const IDENTITY_FLOW_CODES = new Set([
+  "IDENTITY_INVALID_CREDENTIALS",
+  "IDENTITY_INVALID_CODE",
+  "IDENTITY_FLOW_EXPIRED",
+  "IDENTITY_METHOD_UNSUPPORTED",
+]);
+
 // ─── Response error interceptor ──────────────────────────────────────────────
 
 export function createResponseErrorInterceptor(onAuthFail: () => void) {
@@ -56,8 +73,18 @@ export function createResponseErrorInterceptor(onAuthFail: () => void) {
     const status = error.response?.status;
     const data = error.response?.data as any;
     const errorCode: string | undefined = data?.error_code;
+    const requestUrl = error.config?.url;
 
     if (status !== 401) {
+      return Promise.reject(error);
+    }
+
+    if (isIdentityFlowRequest(requestUrl)) {
+      return Promise.reject(error);
+    }
+
+    // ── Identity flow errors — pass through, these are handled by the UI ─────
+    if (errorCode && IDENTITY_FLOW_CODES.has(errorCode)) {
       return Promise.reject(error);
     }
 

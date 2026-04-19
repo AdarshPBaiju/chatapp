@@ -7,18 +7,18 @@ export function ErrorPage() {
   const error = useRouteError();
   const navigate = useNavigate();
 
-  let title = "Application Error";
-  let message = "Something went wrong in the digital workspace.";
+  let title = "Oops! We hit a snag.";
+  let message = "Something didn't go quite right on our end. Let's get you back on track.";
   let code = "500";
 
   if (isRouteErrorResponse(error)) {
     if (error.status === 404) {
-      title = "Section Not Found";
-      message = "The requested path does not exist in your workspace.";
+      title = "Lost in space?";
+      message = "We couldn't find the page you're looking for. It might have moved or never existed.";
       code = "404";
-    } else if (error.status === 401) {
-      title = "Access Denied";
-      message = "You don't have the permissions to access this segment.";
+    } else if (error.status === 403 || error.status === 401) {
+      title = "Wait a moment...";
+      message = "It looks like you don't have permission to enter this area just yet.";
       code = "401";
     }
   }
@@ -39,7 +39,7 @@ export function ErrorPage() {
         </div>
 
         <span className="mb-4 text-xs font-black uppercase tracking-[0.4em] text-muted-foreground">
-          Security Protocol Error {code}
+          Something went wrong • {code}
         </span>
 
         <h1 className="mb-4 text-5xl font-bold tracking-tight text-foreground sm:text-6xl">
@@ -52,11 +52,11 @@ export function ErrorPage() {
 
         <div className="flex flex-col sm:flex-row items-center gap-4 w-full sm:w-auto">
           <Button
-            onClick={() => navigate("/settings/profile")}
+            onClick={() => navigate("/")}
             className="w-full sm:w-auto px-10"
             leftIcon={<Home size={18} />}
           >
-            Return to Safety
+            Take Me Home
           </Button>
           <Button
             variant="outline"
@@ -64,7 +64,7 @@ export function ErrorPage() {
             className="w-full sm:w-auto px-10"
             leftIcon={<RefreshCcw size={18} />}
           >
-            Reset Segment
+            Try Again
           </Button>
         </div>
 
@@ -72,7 +72,7 @@ export function ErrorPage() {
           onClick={() => navigate(-1)}
           className="mt-12 flex items-center gap-2 text-sm font-bold uppercase tracking-widest text-muted-foreground transition-colors hover:text-foreground"
         >
-          <ArrowLeft size={16} /> Previous View
+          <ArrowLeft size={16} /> Go back a step
         </button>
       </motion.div>
 

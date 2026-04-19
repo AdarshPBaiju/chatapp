@@ -4,12 +4,15 @@ from typing import Any
 
 from rest_framework import authentication, exceptions
 
-from core.auth.token_validator import TokenValidationError, validate_token_for_request
+from authentication.core.token_validator import (
+    TokenValidationError,
+    validate_token_for_request,
+)
+from authentication.sessions.application.services import SessionQueryService
+from authentication.core.device_registry import DeviceRegistryService
+from authentication.identity.infrastructure.cache import RedisSessionStore
 from core.middleware.request_context import set_current_session_id
-from users.services.auth_engine import AuthEngine
 from users.models import CustomUser
-
-
 
 
 class AdvancedJWTAuthentication(authentication.BaseAuthentication):
@@ -36,7 +39,7 @@ class AdvancedJWTAuthentication(authentication.BaseAuthentication):
                 session_id = payload.get("sid")
                 user_id = str(payload.get("user_id", ""))
 
-                if session_id and not AuthEngine.is_session_active(
+                if session_id and not SessionQueryService.is_session_active(
                     user_id=user_id,
                     session_id=str(session_id),
                     jti=payload.get("jti", ""),
@@ -45,9 +48,13 @@ class AdvancedJWTAuthentication(authentication.BaseAuthentication):
                 ):
                     raise TokenValidationError("Session is no longer active.")
 
-                # Dynamic limit check: if limit decreased globally, downgrade on next request
-                if AuthEngine._count_active_sessions(user_id) > AuthEngine._device_limit():
-                    raise TokenValidationError("Session limit reached. Revoke a session to continue.")
+                if (
+                    SessionQueryService.count_active_sessions(user_id)
+                    > DeviceRegistryService.get_device_limit()
+                ):
+                    raise TokenValidationError(
+                        "Session limit reached. Revoke a session to continue."
+                    )
         except TokenValidationError as e:
             raise exceptions.AuthenticationFailed(str(e)) from e
         except Exception as e:
@@ -66,7 +73,10 @@ class AdvancedJWTAuthentication(authentication.BaseAuthentication):
         if session_id:
             set_current_session_id(str(session_id))
             if payload.get("scope") != "revoke_only":
-                AuthEngine.touch_session(str(user.id), str(session_id))
+                from datetime import UTC, datetime
+
+                now_ts = int(datetime.now(UTC).timestamp())
+                RedisSessionStore.touch_session(str(session_id), now_ts)
         return (user, payload)
 
     def authenticate_header(self, request: Any) -> str:

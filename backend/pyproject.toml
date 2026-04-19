@@ -103,6 +103,7 @@ ignore = [
     "PLR0917", # too many positional arguments
     "PLR0916", # too many boolean expressions
     "PLR0914", # too many local variables
+    "PLC0415", # import outside toplevel
 ]
 
 [tool.ruff.lint.per-file-ignores]

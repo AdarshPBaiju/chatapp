@@ -4,7 +4,6 @@ from .clients import (
     ClientBanRecord,
     ClientDevice,
 )
-from .auth import AuthSession, TokenBlacklist
 from .user import CustomUser
 
 __all__ = [
@@ -13,6 +12,4 @@ __all__ = [
     "ClientAccountSuspension",
     "ClientBanRecord",
     "ClientDevice",
-    "AuthSession",
-    "TokenBlacklist",
 ]

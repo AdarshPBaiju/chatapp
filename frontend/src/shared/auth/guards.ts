@@ -1,4 +1,4 @@
-import { AuthStatus } from "@/features/auth/types";
+import { AuthStatus } from "@/modules/auth/api/types";
 
 export function canAccessFullRoutes(status: AuthStatus): boolean {
   return status === "full";

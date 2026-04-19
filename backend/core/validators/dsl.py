@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 from rest_framework import serializers
 from .base import ValidationSchema
 from .rules import (
@@ -49,7 +49,9 @@ class RuleBuilder:
         self._drf_kwargs["allow_blank"] = blank
         return self
 
-    def access(self, read: bool | None = None, write: bool | None = None) -> RuleBuilder:
+    def access(
+        self, read: bool | None = None, write: bool | None = None
+    ) -> RuleBuilder:
         """Configures the read_only and write_only status of the field."""
         if read is not None:
             self._drf_kwargs["read_only"] = read
@@ -70,6 +72,11 @@ class RuleBuilder:
     def help_text(self, text: str) -> RuleBuilder:
         """Attaches help text for API documentation."""
         self._drf_kwargs["help_text"] = text
+        return self
+
+    def default(self, value: Any) -> RuleBuilder:
+        """Applies a default value to the DRF field."""
+        self._drf_kwargs["default"] = value
         return self
 
     def choices(self, choices: list[tuple[str, str]]) -> RuleBuilder:
@@ -96,18 +103,12 @@ class RuleBuilder:
         return self
 
     def unique(
-        self, model: type[models.Model], field: str | None = None
+        self, model: type[models.Model], field: str | None = None, **filters
     ) -> RuleBuilder:
         """Queues a database check to ensure the value is globally unique."""
-        self._rules.append(UniqueConstraintRule(model=model, field_name=field))
-        return self
-
-    def filter(self, **kwargs) -> RuleBuilder:
-        """Adds scoped filters to the most recently added database rule."""
-        if self._rules:
-            last_rule = self._rules[-1]
-            if isinstance(last_rule, UniqueConstraintRule):
-                last_rule.options.update(kwargs)
+        self._rules.append(
+            UniqueConstraintRule(model=model, field_name=field, **filters)
+        )
         return self
 
     def min(self, value: float, message: str | None = None) -> RuleBuilder:
@@ -219,7 +220,9 @@ class V:
 
     def file(self, max_mb: float = 5, exts: list[str] | None = None) -> RuleBuilder:
         """Factory for File upload fields."""
-        return RuleBuilder(serializers.FileField).required().file(max_mb=max_mb, exts=exts)
+        return (
+            RuleBuilder(serializers.FileField).required().file(max_mb=max_mb, exts=exts)
+        )
 
     def confirm_password(self, target: str = "password") -> RuleBuilder:
         """Shorthand for creating a password confirmation field."""

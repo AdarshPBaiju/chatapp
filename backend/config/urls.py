@@ -28,7 +28,9 @@ from django.conf import settings
 from django.conf.urls.static import static
 
 urlpatterns = [
-    # Auth & Users
+    # Auth & Identity
+    path("api/v1/auth/", include("authentication.api.v1.urls")),
+    # Users & Profiles
     path("", include("users.urls")),
     # API Documentation
     path("api/schema/", SpectacularAPIView.as_view(), name="schema"),

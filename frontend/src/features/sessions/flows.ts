@@ -1,4 +1,4 @@
-import { useAuthStore } from "@/features/auth/state";
+import { useAuthStore } from "@/modules/auth/state/authState";
 import { listSessions, logout, revokeSession, revokeOthers } from "@/features/sessions/api";
 import { authStorage } from "@/shared/lib/storage";
 
@@ -30,7 +30,7 @@ export async function fetchSessionsFlow(): Promise<void> {
       refresh: result.refresh,
       access_exp: result.access_exp,
       refresh_exp: result.refresh_exp,
-      sessions: result.sessions || [],
+      sessions: result.active_sessions || result.sessions || [],
     });
   } else {
     const sessions = result.sessions || [];
@@ -71,7 +71,7 @@ export async function revokeSessionFlow(sessionId: string): Promise<void> {
       refresh: result.refresh,
       access_exp: result.access_exp,
       refresh_exp: result.refresh_exp,
-      sessions: result.sessions || [],
+      sessions: result.active_sessions || result.sessions || [],
     });
     return;
   }
@@ -111,7 +111,7 @@ export async function revokeOthersFlow(): Promise<void> {
       refresh: result.refresh,
       access_exp: result.access_exp,
       refresh_exp: result.refresh_exp,
-      sessions: result.sessions || [],
+      sessions: result.active_sessions || result.sessions || [],
     });
     return;
   }

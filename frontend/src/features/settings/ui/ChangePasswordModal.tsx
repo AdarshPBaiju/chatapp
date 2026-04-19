@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Lock, CheckCircle, ShieldAlert } from "lucide-react";
 
-import { changePassword } from "@/features/auth/api";
+import { changePassword } from "@/modules/auth/api/authApi";
 import { readApiMessage } from "@/shared/lib/apiResponse";
 import { Modal } from "@/shared/ui/Modal";
 import { toast } from "@/shared/ui/Toast";

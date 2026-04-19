@@ -1,5 +1,4 @@
 import { ReactNode } from "react";
-import { motion } from "framer-motion";
 import { cn } from "@/shared/lib/utils";
 
 interface AuthLayoutProps {
@@ -19,52 +18,30 @@ export function AuthLayout({
 }: AuthLayoutProps) {
   return (
     <div className={cn("mx-auto w-full", isWide ? "max-w-4xl" : "max-w-xl")}>
-      <motion.div 
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
-        className="overflow-hidden rounded-[32px] p-6 sm:p-8 lg:p-10"
+      <div 
+        className="overflow-hidden rounded-[32px] bg-white/40 backdrop-blur-2xl border border-white/40 shadow-[0_24px_48px_-12px_rgba(0,0,0,0.08)] p-8 sm:p-10 lg:p-12 transition-all duration-300"
       >
-        <div className="mb-10 space-y-3">
-          <motion.h1 
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
-            className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl"
-          >
+        <div className="mb-10 text-center space-y-2">
+          <h1 className="text-3xl font-black tracking-tighter text-slate-800">
             {heading}
-          </motion.h1>
+          </h1>
           {subheading && (
-            <motion.div 
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.15 }}
-              className="text-sm font-bold leading-relaxed text-muted-foreground sm:text-base"
-            >
+            <div className="text-sm font-bold text-slate-500/80 max-w-[280px] mx-auto leading-relaxed">
               {subheading}
-            </motion.div>
+            </div>
           )}
         </div>
 
-        <motion.div
-           initial={{ opacity: 0, y: 15 }}
-           animate={{ opacity: 1, y: 0 }}
-           transition={{ delay: 0.2 }}
-        >
+        <div className="animate-in fade-in duration-100">
           {children}
-        </motion.div>
+        </div>
 
         {footer && (
-          <motion.div 
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.3 }}
-            className="mt-10 border-t border-border pt-8"
-          >
+          <div className="mt-10 border-t border-slate-200/50 pt-8">
             {footer}
-          </motion.div>
+          </div>
         )}
-      </motion.div>
+      </div>
     </div>
   );
 }
