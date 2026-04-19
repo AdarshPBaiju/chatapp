@@ -29,16 +29,16 @@ export function AuthShell() {
       />
 
       {/* Atmospheric Overlays */}
-      <div className="absolute inset-0 z-1 bg-gradient-to-br from-white/10 via-transparent to-black/5" />
+      <div className="absolute inset-0 z-1 bg-gradient-to-br from-white/10 via-transparent to-black/10 transition-opacity duration-700 dark:from-white/5 dark:to-black/30" />
       
       <div className="relative z-10 flex flex-col min-h-screen">
         {/* Top Header / Logo */}
         <header className="px-8 py-10">
           <Link to="/" className="flex items-center gap-3 w-fit group">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/40 backdrop-blur-md border border-white/20 shadow-xl transition-transform group-hover:-rotate-3">
-              <MessageSquare size={20} className="text-slate-800" />
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-card/40 backdrop-blur-md border border-border/20 shadow-xl transition-transform group-hover:-rotate-3">
+              <MessageSquare size={20} className="text-foreground dark:text-white" />
             </div>
-            <span className="text-xl font-black tracking-tighter text-slate-800 drop-shadow-sm">ChitChat</span>
+            <span className="text-xl font-black tracking-tighter text-foreground dark:text-white drop-shadow-sm">ChitChat</span>
           </Link>
         </header>
 

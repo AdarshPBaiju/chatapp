@@ -1,3 +1,4 @@
+import { forwardRef } from "react";
 import { create } from "zustand";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
@@ -65,11 +66,12 @@ const TOAST_ICONS = {
   warning: <AlertTriangle size={18} className="text-warning-500" />,
 };
 
-function ToastItem({ toast }: { toast: Toast }) {
+const ToastItem = forwardRef<HTMLDivElement, { toast: Toast }>(({ toast }, ref) => {
   const remove = useToastStore((s) => s.removeToast);
 
   return (
     <motion.div
+      ref={ref}
       layout
       initial={{ opacity: 0, y: 20, scale: 0.9 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -90,10 +92,10 @@ function ToastItem({ toast }: { toast: Toast }) {
       </div>
       
       <div className="flex-1 space-y-0.5">
-        <p className="text-[13px] font-bold text-foreground leading-tight">
+        <p className="text-[13px] font-bold text-foreground dark:text-white leading-tight">
           {toast.type.charAt(0).toUpperCase() + toast.type.slice(1)}
         </p>
-        <p className="text-xs font-medium text-muted-foreground leading-relaxed">
+        <p className="text-xs font-medium text-muted-foreground dark:text-white/60 leading-relaxed">
           {toast.message}
         </p>
       </div>
@@ -123,7 +125,7 @@ function ToastItem({ toast }: { toast: Toast }) {
       )}
     </motion.div>
   );
-}
+});
 
 export function Toaster() {
   const toasts = useToastStore((s) => s.toasts);
