@@ -9,6 +9,7 @@ import { ThemeSwitcher } from "@/shared/ui/ThemeSwitcher";
 
 import { LoadingScreen } from "@/shared/ui/LoadingScreen";
 import { Toaster } from "@/shared/ui/Toast";
+import { AlertDialogProvider } from "@/shared/ui/AlertDialog";
 
 interface AuthContextValue {
   status: string;
@@ -40,6 +41,7 @@ export function AppProviders({ children }: PropsWithChildren) {
           {children}
           <ThemeSwitcher />
           <Toaster />
+          <AlertDialogProvider />
         </div>
       </AuthContext.Provider>
     </ThemeProvider>

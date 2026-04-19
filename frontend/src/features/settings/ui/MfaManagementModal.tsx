@@ -3,6 +3,7 @@ import { Copy, Download, Check, ShieldOff, Eye, EyeOff } from "lucide-react";
 
 import { Button } from "@/shared/ui/FormControls";
 import { Modal } from "@/shared/ui/Modal";
+import { alertDialog } from "@/shared/ui/AlertDialog";
 import { getBackupCodes, disableTwoFactor } from "../api";
 import { toast } from "@/shared/ui/Toast";
 
@@ -87,6 +88,26 @@ export function MfaManagementModal({ onClose, onSuccess }: MfaManagementModalPro
     setTimeout(() => setCopied(false), 2000);
   }
 
+  function handleDownloadCodes() {
+    const content = [
+      "ChitChat Recovery Keys",
+      "======================",
+      `Generated: ${new Date().toLocaleString()}`,
+      "",
+      "Store these in a secure location. Each code can only be used once.",
+      "",
+      ...backupCodes.map((code, i) => `${String(i + 1).padStart(2, "0")}. ${code}`),
+    ].join("\n");
+    const blob = new Blob([content], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "chitchat-recovery-keys.txt";
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success("Recovery keys downloaded.");
+  }
+
   const titles = {
     menu: "Manage 2FA",
     verify: "Authentication Required",
@@ -100,6 +121,7 @@ export function MfaManagementModal({ onClose, onSuccess }: MfaManagementModalPro
       onClose={onClose}
       title={titles[view]}
       maxWidth="sm"
+      hideClose
     >
       <div className="py-2">
         {view === "menu" && (
@@ -208,11 +230,25 @@ export function MfaManagementModal({ onClose, onSuccess }: MfaManagementModalPro
               ))}
             </div>
 
-            <div className="flex gap-2">
-              <Button compact variant="outline" onClick={handleCopyCodes} className="flex-1 gap-2">
-                {copied ? <Check size={14} /> : <Copy size={14} />} {copied ? "Copied" : "Copy"}
-              </Button>
-              <Button compact onClick={() => setView("menu")} className="flex-1">
+            <div className="space-y-2">
+              <div className="flex gap-2">
+                <Button compact variant="outline" onClick={handleCopyCodes} className="flex-1 gap-2">
+                  {copied ? <Check size={14} /> : <Copy size={14} />} {copied ? "Copied" : "Copy Keys"}
+                </Button>
+                <Button compact variant="outline" onClick={handleDownloadCodes} className="flex-1 gap-2">
+                  <Download size={14} /> Download
+                </Button>
+              </div>
+              <Button compact onClick={() => {
+                alertDialog.confirm({
+                  title: "Leave without saving?",
+                  message: "Make sure you've stored your recovery keys. You won't be able to retrieve them without re-authenticating.",
+                  variant: "warning",
+                  confirmLabel: "Yes, go back",
+                  cancelLabel: "Stay here",
+                  onConfirm: () => setView("menu"),
+                });
+              }} className="w-full">
                 Back to Menu
               </Button>
             </div>
