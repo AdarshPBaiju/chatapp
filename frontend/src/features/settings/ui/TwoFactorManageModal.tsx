@@ -3,6 +3,7 @@ import { ShieldAlert, Lock } from "lucide-react";
 import { Button, Input } from "@/shared/ui/FormControls";
 import { Modal } from "@/shared/ui/Modal";
 import { disableTwoFactor } from "../api";
+import { toast } from "@/shared/ui/Toast";
 
 interface TwoFactorManageModalProps {
   onClose: () => void;
@@ -21,12 +22,14 @@ export function TwoFactorManageModal({ onClose, onSuccess }: TwoFactorManageModa
       setError(null);
       const res = await disableTwoFactor(password);
       if (res.success) {
+        toast.info("Two-factor authentication disabled.");
         onSuccess();
       } else {
         setError(res.message);
       }
-    } catch {
-      setError("Failed to disable 2FA. Please check your password.");
+    } catch (err) {
+      toast.error("Failed to disable protection.");
+      setError("Please check your password and try again.");
     } finally {
       setIsLoading(false);
     }

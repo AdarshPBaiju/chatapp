@@ -12,6 +12,7 @@ import { AuthLayout } from "@/shared/ui/AuthLayout";
 import { Button, Input, OtpInput } from "@/shared/ui/FormControls";
 import { useForm } from "@/shared/hooks/useForm";
 import { v } from "@/shared/lib/validation";
+import { toast } from "@/shared/ui/Toast";
 
 type Step = "REQUEST" | "VERIFY" | "CONFIRM" | "SUCCESS";
 
@@ -23,7 +24,7 @@ export function PasswordResetPage() {
   const [resendInterval, setResendInterval] = useState(60);
   const [countdown, setCountdown] = useState(0);
 
-  const { values, getFieldProps, setErrors, setFieldTouched, setFieldValue } = useForm({
+  const { values, getFieldProps, setErrors, setFieldTouched, setFieldValue, errors, touched } = useForm({
     initialValues: {
       email: "",
       otpCode: "",
@@ -58,9 +59,12 @@ export function PasswordResetPage() {
       const data = await requestPasswordReset({ email: values.email });
       setResendInterval(data.resend_interval);
       setCountdown(data.resend_interval);
+      toast.success("Recovery code sent to your email.");
       setStep("VERIFY");
     } catch (err) {
-      setErrors({ email: readApiMessage(err, "Failed to send reset code.") });
+      const msg = readApiMessage(err, "Failed to send reset code.");
+      toast.error(msg);
+      setErrors({ email: msg });
     } finally {
       setLoading(false);
     }
@@ -101,9 +105,12 @@ export function PasswordResetPage() {
     try {
       const { reset_token } = await verifyPasswordResetOtp({ email: values.email, otp_code: values.otpCode });
       setSignupToken(reset_token);
+      toast.success("Email verified. Please set your new password.");
       setStep("CONFIRM");
     } catch (err) {
-      setErrors({ otpCode: readApiMessage(err, "Invalid verification code.") });
+      const msg = readApiMessage(err, "Invalid verification code.");
+      toast.error(msg);
+      setErrors({ otpCode: msg });
     } finally {
       setLoading(false);
     }
@@ -142,9 +149,12 @@ export function PasswordResetPage() {
         password: values.password,
         confirm_password: values.confirmPassword,
       });
+      toast.success("Password updated successfully.");
       setStep("SUCCESS");
     } catch (err) {
-      setErrors({ confirmPassword: readApiMessage(err, "Failed to reset password.") });
+      const msg = readApiMessage(err, "Failed to reset password.");
+      toast.error(msg);
+      setErrors({ confirmPassword: msg });
     } finally {
       setLoading(false);
     }
@@ -227,6 +237,11 @@ export function PasswordResetPage() {
                 onChange={(val) => setFieldValue("otpCode", val)}
                 isLoading={loading}
               />
+              {touched.otpCode && errors.otpCode && (
+                <p className="pl-1 text-[11px] font-bold text-destructive uppercase tracking-widest animate-shake">
+                  {errors.otpCode}
+                </p>
+              )}
             </div>
             <div className="flex flex-col gap-5">
               <Button type="submit" className="py-4" isLoading={loading}>

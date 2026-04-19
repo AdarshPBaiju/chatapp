@@ -8,6 +8,7 @@ import { UserProfile } from "../types";
 import { cn } from "@/shared/lib/utils";
 import { useForm } from "@/shared/hooks/useForm";
 import { v } from "@/shared/lib/validation";
+import { toast } from "@/shared/ui/Toast";
 
 export function ProfileSection() {
   const [initialProfile, setInitialProfile] = useState<UserProfile | null>(null);
@@ -49,6 +50,7 @@ export function ProfileSection() {
 
         const data = await updateProfile(formData);
         if (data.success && data.data) {
+          toast.success("Profile updated successfully.");
           setSuccess(true);
           setInitialProfile(data.data);
           // Only clear the file, keep the other values as updated

@@ -4,6 +4,7 @@ import { Copy, Download, Check, Shield } from "lucide-react";
 import { Button, OtpInput } from "@/shared/ui/FormControls";
 import { Modal } from "@/shared/ui/Modal";
 import { setupTwoFactor, verifyTwoFactor } from "../api";
+import { toast } from "@/shared/ui/Toast";
 import { TwoFactorSetup } from "../types";
 
 interface TwoFactorWizardProps {
@@ -44,6 +45,7 @@ export function TwoFactorWizard({ onClose, onSuccess }: TwoFactorWizardProps) {
       setError(null);
       const data = await verifyTwoFactor(verificationCode);
       if (data.success && data.data) {
+        toast.success("Two-factor authentication enabled successfully.");
         setBackupCodes(data.data.backup_codes);
         setStep(4);
       } else {
