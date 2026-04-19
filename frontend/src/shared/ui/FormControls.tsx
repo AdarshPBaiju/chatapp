@@ -62,7 +62,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
             type={isPassword ? (isVisible ? "text" : "password") : type}
             className={cn(
               "w-full outline-none transition-all duration-300",
-              "placeholder:text-muted-foreground/40 font-medium text-foreground",
+              "placeholder:text-muted-foreground/40 dark:placeholder:text-white/30 font-medium text-foreground",
               "bg-muted/40 border border-border focus:bg-background focus:border-accent focus:shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] focus:ring-4 focus:ring-accent/5 backdrop-blur-[2px]",
               compact 
                 ? "rounded-xl px-4 py-2.5 text-sm" 
