@@ -240,13 +240,24 @@ export function MfaManagementModal({ onClose, onSuccess }: MfaManagementModalPro
                 </Button>
               </div>
               <Button compact onClick={() => {
-                alertDialog.confirm({
-                  title: "Leave without saving?",
-                  message: "Make sure you've stored your recovery keys. You won't be able to retrieve them without re-authenticating.",
+                alertDialog.show({
+                  title: "Unsaved Recovery Keys",
+                  message: "You haven't confirmed saving your keys. If you lose access, you will be locked out permanently.",
                   variant: "warning",
-                  confirmLabel: "Yes, go back",
-                  cancelLabel: "Stay here",
-                  onConfirm: () => setView("menu"),
+                  size: "md",
+                  buttons: [
+                    {
+                      label: "Go Back",
+                      variant: "ghost",
+                      keyboardTrigger: "escape",
+                      onClick: () => setView("menu")
+                    },
+                    {
+                      label: "Stay Protected",
+                      variant: "warning",
+                      keyboardTrigger: "enter"
+                    }
+                  ]
                 });
               }} className="w-full">
                 Back to Menu

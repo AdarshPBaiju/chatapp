@@ -60,7 +60,7 @@ export function SettingsPage() {
             <div className="mb-5 flex items-center gap-3">
               <button
                 onClick={() => navigate("/settings/profile")}
-                className="group flex h-8 w-8 items-center justify-center rounded-lg bg-muted transition-colors hover:bg-primary hover:text-primary-foreground"
+                className="group flex h-8 w-8 items-center justify-center rounded-lg bg-muted transition-colors hover:bg-primary hover:text-primary-foreground cursor-pointer"
               >
                 <ArrowLeft size={16} />
               </button>
@@ -93,7 +93,7 @@ export function SettingsPage() {
                   key={tab.id}
                   to={tab.path}
                   className={({ isActive: linkActive }) => cn(
-                    "group flex items-center justify-between rounded-xl p-3 transition-all duration-200",
+                    "group flex items-center justify-between rounded-xl p-3 transition-all duration-200 cursor-pointer",
                     linkActive 
                       ? "bg-primary/5 text-primary border border-primary/10" 
                       : "text-muted-foreground hover:bg-muted/50 hover:text-foreground border border-transparent"
@@ -128,7 +128,7 @@ export function SettingsPage() {
           <div className="mt-auto p-3 border-t border-border/50">
             <button
               onClick={handleLogout}
-              className="group flex w-full items-center gap-3 rounded-xl p-3 text-destructive transition-all hover:bg-destructive/5"
+              className="group flex w-full items-center gap-3 rounded-xl p-3 text-destructive transition-all hover:bg-destructive/5 cursor-pointer"
             >
               <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-destructive/5 text-destructive transition-colors group-hover:bg-destructive/10">
                 <LogOut size={18} />
@@ -150,7 +150,7 @@ export function SettingsPage() {
         <div className="flex items-center gap-3 border-b border-border bg-background p-4 lg:hidden">
           <button
             onClick={() => navigate("/settings")}
-            className="flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-primary hover:text-primary-foreground transition-colors"
+            className="flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-primary hover:text-primary-foreground transition-colors cursor-pointer"
           >
             <ArrowLeft size={18} />
           </button>
