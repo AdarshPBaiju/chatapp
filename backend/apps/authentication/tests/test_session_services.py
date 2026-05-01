@@ -93,6 +93,36 @@ class SessionServicesTests(TestCase):
             score = AnomalyDetectionService.calculate_risk_score(str(self.user.id), MockRequest(), current_loc)
             self.assertGreaterEqual(score, 80)
 
+    def test_geo_location_service_caching(self):
+        from authentication.sessions.infrastructure.cache import GeoLocationService
+        
+        ip = "8.8.8.8"
+        
+        # Test Fresh Call (Mocking requests)
+        with patch("requests.get") as mock_get:
+            mock_get.return_value.json.return_value = {
+                "status": "success",
+                "city": "Mountain View",
+                "countryCode": "US",
+                "lat": 37.4,
+                "lon": -122.1
+            }
+            res = GeoLocationService.get_location_from_ip(ip)
+            self.assertEqual(res["city"], "Mountain View")
+        
+        # Test Cache Hit (No requests)
+        with patch("requests.get") as mock_get:
+            res = GeoLocationService.get_location_from_ip(ip)
+            mock_get.assert_not_called()
+            self.assertEqual(res["city"], "Mountain View")
+
+    def test_haversine_calculation(self):
+        from authentication.sessions.infrastructure.cache import GeoLocationService
+        # NYC to London is roughly 5570km
+        dist = GeoLocationService.calculate_distance(40.7128, -74.0060, 51.5074, -0.1278)
+        self.assertGreater(dist, 5500)
+        self.assertLess(dist, 5600)
+
     def test_session_query_active_check(self):
         session_id = str(uuid.uuid4())
         SessionManager.persist_session(

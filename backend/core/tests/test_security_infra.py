@@ -1,4 +1,5 @@
 from django.test import TestCase, RequestFactory, override_settings
+from unittest.mock import patch
 from users.models import CustomUser, Client
 from rest_framework.exceptions import AuthenticationFailed, ValidationError
 from core.api.authentication import AdvancedJWTAuthentication
@@ -74,6 +75,42 @@ class SecurityInfraTests(TestCase):
         with self.assertRaises(AuthenticationFailed) as cm:
             self.auth.authenticate(request)
         self.assertIn("inactive", str(cm.exception))
+
+    def test_advanced_jwt_auth_revoke_only_scope(self):
+        payload = {
+            "sub": str(self.user.id),
+            "user_id": str(self.user.id),
+            "jti": str(uuid.uuid4()),
+            "type": "access",
+            "scope": "revoke_only",
+        }
+        token = AuthCryptoEngine.encrypt_and_sign(payload, ttl_seconds=60)
+        request = self.factory.get("/", HTTP_AUTHORIZATION=f"Bearer {token}")
+        
+        user, auth_payload = self.auth.authenticate(request)
+        self.assertEqual(auth_payload["scope"], "revoke_only")
+
+    @patch("core.api.authentication.SessionQueryService.is_session_active")
+    def test_advanced_jwt_auth_inactive_session(self, is_active_mock):
+        is_active_mock.return_value = False
+        payload = {
+            "sub": str(self.user.id),
+            "user_id": str(self.user.id),
+            "sid": str(uuid.uuid4()),
+            "jti": str(uuid.uuid4()),
+            "type": "access",
+            "scope": "full",
+        }
+        token = AuthCryptoEngine.encrypt_and_sign(payload, ttl_seconds=60)
+        request = self.factory.get("/", HTTP_AUTHORIZATION=f"Bearer {token}")
+        
+        with self.assertRaises(AuthenticationFailed) as cm:
+            self.auth.authenticate(request)
+        self.assertIn("Session is no longer active", str(cm.exception))
+
+    def test_advanced_jwt_auth_authenticate_header(self):
+        header = self.auth.authenticate_header(None)
+        self.assertEqual(header, "Bearer")
 
 class CoreAPITests(TestCase):
     def test_response_factory_success(self):

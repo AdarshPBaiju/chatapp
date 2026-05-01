@@ -2,7 +2,6 @@ from rest_framework.test import APITestCase
 from rest_framework import status
 from django.core import mail
 from users.models import CustomUser, Client
-from unittest.mock import patch
 from django.core.cache import cache
 
 class AuthFlowTests(APITestCase):
@@ -70,14 +69,18 @@ class AuthFlowTests(APITestCase):
         # Verify login with new password
         self.assertTrue(user.check_password("NewStrongPass123!"))
 
-    @patch("authentication.security.application.services.OtpDeliveryService.send_otp")
-    def test_otp_cooldown_enforcement(self, send_otp_mock):
-        user = CustomUser.objects.create_user(email="cooldown@example.com", password="password")
+    def test_registration_conflict_existing_user(self):
+        # Create user first
+        CustomUser.objects.create_user(email="conflict@example.com", password="password")
         
-        from authentication.security.application.services import OtpDeliveryService
-        # First send
-        OtpDeliveryService.send_otp(user)
-        # Second send within seconds should fail or be throttled if implemented
-        # (Assuming implementation has a cooldown check)
-        with self.assertRaises(Exception): # Adjust based on actual exception raised (e.g. ValueError)
-             OtpDeliveryService.send_otp(user, ignore_cooldown=False)
+        from rest_framework.exceptions import ValidationError
+        from authentication.registration.application.services import RegistrationService
+        
+        # Attempt to init registration with same email
+        with self.assertRaises(ValidationError) as cm:
+            RegistrationService.initiate_registration(
+                email="conflict@example.com",
+                password="new-password",
+                full_name="Conflict Guy"
+            )
+        self.assertIn("already exists", str(cm.exception))
