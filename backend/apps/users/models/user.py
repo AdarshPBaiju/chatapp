@@ -48,6 +48,9 @@ class CustomUser(UUIDModel, AbstractBaseUser, PermissionsMixin):
 
     objects = UserManager()
 
+    class Meta:
+        app_label = "users"
+
     USERNAME_FIELD = "email"
     REQUIRED_FIELDS: ClassVar[list[str]] = ["user_type"]
 

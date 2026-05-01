@@ -34,6 +34,7 @@ class ClientBanRecord(UUIDModel):
     is_active = models.BooleanField(default=True, db_index=True)
 
     class Meta:
+        app_label = "users"
         indexes: ClassVar[list[models.Index]] = [
             models.Index(fields=["client"]),
             models.Index(fields=["is_active", "ban_type", "end_at"]),
