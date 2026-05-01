@@ -26,12 +26,6 @@ def _auth_settings_override() -> dict:
 
 @override_settings(
     AUTH_ENGINE_SETTINGS=_auth_settings_override(),
-    CACHES={
-        "default": {
-            "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
-            "LOCATION": "client-login-api-tests",
-        }
-    },
 )
 class ClientLoginAPITests(APITestCase):
     endpoint = "/api/v1/auth/identity/login/"
@@ -124,7 +118,12 @@ class ClientLoginAPITests(APITestCase):
             response.data["data"]["active_sessions"], [{"session_id": "s1"}]
         )
 
-    def test_identity_init_route_is_registered(self):
+    @patch("authentication.identity.interfaces.views.HitEngine.create_fake_flow")
+    @patch("authentication.identity.interfaces.views.HitEngine.create_initial_flow")
+    def test_identity_init_route_is_registered(self, init_mock, fake_mock):
+        # Setup mocks to prevent Redis/Service dependencies
+        fake_mock.return_value = {"hit": "fake-hit", "flow_id": "fake-flow"}
+        
         # Even for missing users, we return 200 with challenge_required to prevent enumeration
         response = self.client.post(
             self.identity_init_endpoint,
@@ -133,3 +132,4 @@ class ClientLoginAPITests(APITestCase):
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["data"]["status"], "challenge_required")
+        fake_mock.assert_called_once()
