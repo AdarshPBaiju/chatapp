@@ -102,8 +102,17 @@ class RedisSessionStore:
         return res.decode() if isinstance(res, bytes) else res
 
     @classmethod
+    def _get_connection(cls):
+        from django.core.cache import cache
+
+        try:
+            return cache.client.get_client()
+        except AttributeError:
+            return cache
+
+    @classmethod
     def remove_session(cls, user_id: str, session_id: str) -> None:
-        conn = cache.client.get_client()
+        conn = cls._get_connection()
         conn.zrem(f"auth:user:{user_id}:sessions", session_id)
         conn.delete(f"auth:session:{session_id}")
 
@@ -121,7 +130,7 @@ class RedisSessionStore:
         Best-effort cache synchronization for session listings.
         This is intentionally non-authoritative; the database remains the source of truth.
         """
-        conn = cache.client.get_client()
+        conn = cls._get_connection()
         sessions_key = f"auth:user:{user_id}:sessions"
         conn.delete(sessions_key)
         now_ts = int(time.time())

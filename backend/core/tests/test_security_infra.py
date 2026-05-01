@@ -31,11 +31,13 @@ class SecurityInfraTests(TestCase):
         self.user = CustomUser.objects.create_user(
             email="security@example.com", password="password123", is_active=True
         )
-        self.client_obj = Client.objects.create(user=self.user, full_name="Security Tester")
+        self.client_obj = Client.objects.create(
+            user=self.user, full_name="Security Tester"
+        )
         self.factory = RequestFactory()
         self.auth = AdvancedJWTAuthentication()
 
-    @patch("core.api.authentication.build_fingerprint")
+    @patch("authentication.core.request_context.build_fingerprint")
     def test_advanced_jwt_auth_success(self, build_fpt_mock):
         build_fpt_mock.return_value = "fixed-fpt"
         payload = {
@@ -48,7 +50,7 @@ class SecurityInfraTests(TestCase):
         }
         token = AuthCryptoEngine.encrypt_and_sign(payload, ttl_seconds=60)
         request = self.factory.get("/", HTTP_AUTHORIZATION=f"Bearer {token}")
-        
+
         user, auth_payload = self.auth.authenticate(request)
         self.assertEqual(user, self.user)
         self.assertEqual(auth_payload["sub"], payload["sub"])
@@ -63,12 +65,12 @@ class SecurityInfraTests(TestCase):
         with self.assertRaises(AuthenticationFailed):
             self.auth.authenticate(request)
 
-    @patch("core.api.authentication.build_fingerprint")
+    @patch("authentication.core.request_context.build_fingerprint")
     def test_advanced_jwt_auth_inactive_user(self, build_fpt_mock):
         build_fpt_mock.return_value = "fixed-fpt"
         self.user.is_active = False
         self.user.save()
-        
+
         payload = {
             "sub": str(self.user.id),
             "user_id": str(self.user.id),
@@ -79,12 +81,12 @@ class SecurityInfraTests(TestCase):
         }
         token = AuthCryptoEngine.encrypt_and_sign(payload, ttl_seconds=60)
         request = self.factory.get("/", HTTP_AUTHORIZATION=f"Bearer {token}")
-        
+
         with self.assertRaises(AuthenticationFailed) as cm:
             self.auth.authenticate(request)
         self.assertIn("inactive", str(cm.exception))
 
-    @patch("core.api.authentication.build_fingerprint")
+    @patch("authentication.core.request_context.build_fingerprint")
     def test_advanced_jwt_auth_revoke_only_scope(self, build_fpt_mock):
         build_fpt_mock.return_value = "fixed-fpt"
         payload = {
@@ -97,12 +99,12 @@ class SecurityInfraTests(TestCase):
         }
         token = AuthCryptoEngine.encrypt_and_sign(payload, ttl_seconds=60)
         request = self.factory.get("/", HTTP_AUTHORIZATION=f"Bearer {token}")
-        
+
         user, auth_payload = self.auth.authenticate(request)
         self.assertEqual(auth_payload["scope"], "revoke_only")
 
-    @patch("core.api.authentication.build_fingerprint")
-    @patch("core.api.authentication.SessionQueryService.is_session_active")
+    @patch("authentication.core.request_context.build_fingerprint")
+    @patch("authentication.core.token_validator.SessionQueryService.is_session_active")
     def test_advanced_jwt_auth_inactive_session(self, is_active_mock, build_fpt_mock):
         is_active_mock.return_value = False
         build_fpt_mock.return_value = "fixed-fpt"
@@ -117,7 +119,7 @@ class SecurityInfraTests(TestCase):
         }
         token = AuthCryptoEngine.encrypt_and_sign(payload, ttl_seconds=60)
         request = self.factory.get("/", HTTP_AUTHORIZATION=f"Bearer {token}")
-        
+
         with self.assertRaises(AuthenticationFailed) as cm:
             self.auth.authenticate(request)
         self.assertIn("Session is no longer active", str(cm.exception))
@@ -125,6 +127,7 @@ class SecurityInfraTests(TestCase):
     def test_advanced_jwt_auth_authenticate_header(self):
         header = self.auth.authenticate_header(None)
         self.assertEqual(header, "Bearer")
+
 
 class CoreAPITests(TestCase):
     def test_response_factory_success(self):
@@ -141,6 +144,7 @@ class CoreAPITests(TestCase):
 
     def test_exception_handler_django_validation_error(self):
         from django.core.exceptions import ValidationError as DjangoValidationError
+
         exc = DjangoValidationError({"email": ["Invalid"]})
         response = api_exception_handler(exc, None)
         self.assertEqual(response.status_code, 400)

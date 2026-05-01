@@ -173,6 +173,7 @@ class IdentityChallengeAPIView(APIView):
                     HitEngine.increment_flow_failures(payload["flow_id"])
                     return ResponseFactory.error(
                         message="Invalid credentials.",
+                        code=status.HTTP_401_UNAUTHORIZED,
                         error_code="IDENTITY_INVALID_CREDENTIALS",
                     )
                 return self._resolve_or_step_up(
@@ -202,6 +203,7 @@ class IdentityChallengeAPIView(APIView):
                     HitEngine.increment_flow_failures(payload["flow_id"])
                     return ResponseFactory.error(
                         message="Invalid or expired verification code.",
+                        code=status.HTTP_401_UNAUTHORIZED,
                         error_code="IDENTITY_INVALID_CODE",
                     )
                 return self._resolve_or_step_up(
@@ -214,6 +216,7 @@ class IdentityChallengeAPIView(APIView):
                     HitEngine.increment_flow_failures(payload["flow_id"])
                     return ResponseFactory.error(
                         message="Invalid authenticator code.",
+                        code=status.HTTP_401_UNAUTHORIZED,
                         error_code="IDENTITY_INVALID_CODE",
                     )
                 return self._resolve_or_step_up(
@@ -228,6 +231,7 @@ class IdentityChallengeAPIView(APIView):
                     HitEngine.increment_flow_failures(payload["flow_id"])
                     return ResponseFactory.error(
                         message="Invalid or already used backup code.",
+                        code=status.HTTP_401_UNAUTHORIZED,
                         error_code="IDENTITY_INVALID_CODE",
                     )
                 return self._resolve_or_step_up(

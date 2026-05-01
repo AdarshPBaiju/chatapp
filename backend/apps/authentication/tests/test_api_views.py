@@ -81,13 +81,16 @@ class AuthenticationAPIViewTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
         self.assertEqual(response.data["error_code"], "IDENTITY_INVALID_CREDENTIALS")
 
-    def test_token_verify_success(self):
+    @patch("authentication.core.request_context.build_fingerprint")
+    def test_token_verify_success(self, build_fpt_mock):
+        build_fpt_mock.return_value = "fixed-fpt"
         payload = {
             "sub": str(self.user.id),
             "user_id": str(self.user.id),
             "jti": str(uuid.uuid4()),
             "type": "access",
             "scope": "full",
+            "fpt": "fixed-fpt",
         }
         token = AuthCryptoEngine.encrypt_and_sign(payload, ttl_seconds=60)
 
@@ -95,8 +98,10 @@ class AuthenticationAPIViewTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertTrue(response.data["success"])
 
+    @patch("authentication.core.request_context.build_fingerprint")
     @patch("authentication.identity.interfaces.views.TokenRotateService.refresh_tokens")
-    def test_token_refresh_success(self, refresh_mock):
+    def test_token_refresh_success(self, refresh_mock, build_fpt_mock):
+        build_fpt_mock.return_value = "fixed-fpt"
         refresh_mock.return_value = {
             "status": "full",
             "access": "new-access",
@@ -112,6 +117,7 @@ class AuthenticationAPIViewTests(APITestCase):
             "jti": str(uuid.uuid4()),
             "type": "refresh",
             "sid": "session-1",
+            "fpt": "fixed-fpt",
         }
         token = AuthCryptoEngine.encrypt_and_sign(payload, ttl_seconds=3600)
 
@@ -129,7 +135,7 @@ class CryptoTests(APITestCase):
         # Tamper with the token (change a character in the encrypted part)
         tampered_token = token[:-5] + ("A" if token[-5] != "A" else "B") + token[-4:]
 
-        with self.assertRaises(Exception):
+        with self.assertRaises(ValueError, msg="Signature verification failed"):
             AuthCryptoEngine.decrypt_and_verify(tampered_token)
 
     @override_settings(AUTH_ENGINE_SETTINGS=_auth_settings_override())
@@ -138,5 +144,5 @@ class CryptoTests(APITestCase):
         # Issue token with negative TTL
         token = AuthCryptoEngine.encrypt_and_sign(payload, ttl_seconds=-10)
 
-        with self.assertRaises(Exception):
+        with self.assertRaises(ValueError, msg="Token has expired"):
             AuthCryptoEngine.decrypt_and_verify(token)

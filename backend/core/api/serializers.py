@@ -88,6 +88,13 @@ class FKResolverMixin:
                 )
             return None
 
+        if isinstance(model_class, str):
+            from django.apps import apps
+            model_class = apps.get_model(model_class)
+
+        if not model_class:
+            return value
+
         if isinstance(value, model_class):
             return value
 
