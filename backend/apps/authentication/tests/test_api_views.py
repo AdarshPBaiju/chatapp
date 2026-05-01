@@ -149,7 +149,7 @@ class CryptoTests(APITestCase):
         tampered_token = token[:-5] + ("A" if token[-5] != "A" else "B") + token[-4:]
 
         with TestCase().assertRaisesRegex(
-            ValueError, "Signature verification failed"
+            ValueError, "Invalid or tampered token protocol"
         ):
             AuthCryptoEngine.decrypt_and_verify(tampered_token)
 
@@ -159,5 +159,7 @@ class CryptoTests(APITestCase):
         # Issue token with negative TTL
         token = AuthCryptoEngine.encrypt_and_sign(payload, ttl_seconds=-10)
 
-        with TestCase().assertRaisesRegex(ValueError, "Token has expired"):
+        with TestCase().assertRaisesRegex(
+            ValueError, "The authentication token has expired"
+        ):
             AuthCryptoEngine.decrypt_and_verify(token)
