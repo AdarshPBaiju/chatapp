@@ -93,7 +93,6 @@ class ClientAccountSuspension(UUIDModel):
     )
 
     class Meta:
-        app_label = "users"
         ordering: ClassVar[list[str]] = ["-suspended_at"]
         indexes: ClassVar[list[models.Index]] = [
             models.Index(fields=["client", "status"]),

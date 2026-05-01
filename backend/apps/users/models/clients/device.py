@@ -21,7 +21,6 @@ class ClientDevice(UUIDModel):
     last_used_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        app_label = "users"
         indexes: ClassVar[list[models.Index]] = [
             models.Index(fields=["client", "device_id"]),
             models.Index(fields=["client", "entropy_id"]),

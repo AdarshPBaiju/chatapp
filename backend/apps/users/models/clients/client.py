@@ -47,7 +47,6 @@ class Client(UUIDModel):
     backup_codes = models.JSONField(default=list, blank=True)
 
     class Meta:
-        app_label = "users"
         indexes: ClassVar[list[models.Index]] = [
             models.Index(fields=["user"]),
             models.Index(fields=["full_name"]),
