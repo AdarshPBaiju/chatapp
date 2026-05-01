@@ -5,7 +5,6 @@ from core.api.serializers import FKResolverMixin
 from core.utils import SmartUploadPath, UploadPathConfig
 from users.models import CustomUser
 import uuid
-import pytest
 
 
 class MockModel(models.Model):
@@ -46,9 +45,9 @@ class CoreUtilsTests(TestCase):
         serializer = MockSerializer()
         random_id = str(uuid.uuid4())
         data = {"profile": {"user_id": random_id}}
-        with pytest.raises(serializers.ValidationError) as cm:
+        with self.assertRaises(serializers.ValidationError) as cm:
             serializer.resolve_foreign_keys(data)
-        self.assertIn("user", cm.value.detail)
+        self.assertIn("user", cm.exception.detail)
 
     def test_fk_resolver_cache_hit(self):
         serializer = MockSerializer()
