@@ -105,7 +105,7 @@ ignore = [
 "**/migrations/**" = ["E501", "N805"]
 "**/tests/**" = ["S101", "PLR2004"]
 "**/settings/**" = ["F405", "F403", "RUF067"]
-"backend/scratch/**" = ["T201"]
+"backend/scratch/**" = ["T201", "E402"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["chatapp", "apps", "core"]
