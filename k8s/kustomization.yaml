@@ -16,8 +16,8 @@ resources:
 
 images:
 - name: your-registry/chatapp-backend
-  newName: ghcr.io/AdarshPBaiju/chatapp-backend
-  newTag: sha-fc3216f
+  newName: ghcr.io/adarshpbaiju/chatapp-backend
+  newTag: sha-79b1f58
 
 commonLabels:
   app: chatapp
