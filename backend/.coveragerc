@@ -3,6 +3,7 @@ source =
     users
     authentication
     core
+    apps
     .
 omit =
     *tests*
