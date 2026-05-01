@@ -120,7 +120,7 @@ class AuthenticationAPIViewTests(APITestCase):
             "user_id": str(self.user.id),
             "jti": str(uuid.uuid4()),
             "type": "refresh",
-            "sid": "session-1",
+            "sid": str(uuid.uuid4()), # Must be a valid UUID string
             "fpt": "fixed-fpt",
         }
         token = AuthCryptoEngine.encrypt_and_sign(payload, ttl_seconds=3600)
@@ -139,7 +139,8 @@ class CryptoTests(APITestCase):
         # Tamper with the token (change a character in the encrypted part)
         tampered_token = token[:-5] + ("A" if token[-5] != "A" else "B") + token[-4:]
 
-        with self.assertRaises(ValueError, msg="Signature verification failed"):
+        import pytest
+        with pytest.raises(ValueError, match="Signature verification failed"):
             AuthCryptoEngine.decrypt_and_verify(tampered_token)
 
     @override_settings(AUTH_ENGINE_SETTINGS=_auth_settings_override())
@@ -148,5 +149,6 @@ class CryptoTests(APITestCase):
         # Issue token with negative TTL
         token = AuthCryptoEngine.encrypt_and_sign(payload, ttl_seconds=-10)
 
-        with self.assertRaises(ValueError, msg="Token has expired"):
+        import pytest
+        with pytest.raises(ValueError, match="Token has expired"):
             AuthCryptoEngine.decrypt_and_verify(token)

@@ -292,8 +292,8 @@ class SessionQueryService:
             return True
 
         session = cls.get_active_session(
-            user_id=user_id,
-            session_id=session_id,
+            user_id=str(user_id),
+            session_id=str(session_id),
             access_jti=jti if token_type != "refresh" else None,
             refresh_jti=jti if token_type == "refresh" else None,
             allow_context_fallback=False,
@@ -382,6 +382,7 @@ class AnomalyDetectionService:
         # 3. Sum and Cap
         score = sum(factors.values())
         final_score = min(score, 100)
+
 
         if final_score > 0:
             logger.info(

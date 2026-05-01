@@ -14,6 +14,9 @@ class MockModel(models.Model):
     class Meta:
         app_label = "core"
 
+    def __str__(self) -> str:
+        return self.name
+
 
 class MockSerializer(FKResolverMixin, serializers.Serializer):
     fk_field_mappings = {"user": CustomUser}

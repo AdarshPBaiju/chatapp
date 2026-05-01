@@ -84,11 +84,13 @@ class AuthFlowTests(APITestCase):
             self.recovery_verify_url,
             {
                 "email": "recover@example.com",
-                "otp": otp,
+                "otp_code": otp,
                 "new_password": "NewStrongPass123!",
             },
             format="json",
         )
+        if response.status_code != 200:
+            print(f"DEBUG Recovery Verify Failed: {response.data}")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
         # Verify login with new password
@@ -134,11 +136,15 @@ class AuthFlowTests(APITestCase):
         )
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
 
-        # Extract OTP from mail
+        # Extract OTP from mail (robustly)
         import re
 
-        all_digits = "".join(re.findall(r"\d", mail.outbox[0].body))
-        otp = all_digits[:6]
+        otp_matches = re.findall(r"\b\d{6}\b", mail.outbox[0].body)
+        if not otp_matches:
+            all_digits = "".join(re.findall(r"\d", mail.outbox[0].body))
+            otp = all_digits[:6]
+        else:
+            otp = otp_matches[0]
 
         # Stage 2: Verify OTP and get Signup Token
         response = self.client.post(
