@@ -6,9 +6,9 @@ import django
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings.development")
 django.setup()
 
-from core.auth.token_validator import validate_token_for_request
-from users.models import CustomUser
-from users.services.auth_engine import AuthEngine
+from core.auth.token_validator import validate_token_for_request  # noqa: E402
+from users.models import CustomUser  # noqa: E402
+from users.services.auth_engine import AuthEngine  # noqa: E402
 
 
 def test_restricted_session_validation():

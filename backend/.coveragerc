@@ -1,19 +1,17 @@
 [run]
 source =
-    users
-    authentication
-    core
     apps
-    .
+    core
 omit =
-    *tests*
-    *migrations*
-    manage.py
-    config/*
-    */tests/*
     */migrations/*
-    backend/manage.py
-    backend/config/*
+    */tests/*
+    */admin.py
+    */apps.py
+    */__init__.py
+    */management/*
+    config/*
+    manage.py
+    core/storages.py
 
 [report]
 show_missing = True
