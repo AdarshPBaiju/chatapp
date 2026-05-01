@@ -79,7 +79,11 @@ class FKResolverMixin:
         Resolves a single field value to a model instance using configured mappings.
         """
         mapping = self.fk_field_mappings[field_name]
-        model_class = mapping(context_data) if callable(mapping) else mapping
+        from django.db.models import Model
+        if callable(mapping) and not (isinstance(mapping, type) and issubclass(mapping, Model)):
+            model_class = mapping(context_data)
+        else:
+            model_class = mapping
 
         if not value:
             if not self.fk_allow_null.get(field_name, True):

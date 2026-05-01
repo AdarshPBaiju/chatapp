@@ -1,6 +1,7 @@
 from rest_framework.test import APITestCase
 from rest_framework import status
 from django.core import mail
+from unittest.mock import patch
 from users.models import CustomUser, Client
 from django.core.cache import cache
 
@@ -34,11 +35,15 @@ class AuthFlowTests(APITestCase):
 
         # Extract OTP from mail (6 digits, possibly separated by whitespace/newlines)
         import re
-        # Find all digits and join them, then look for a 6-digit sequence
-        all_digits = "".join(re.findall(r'\d', mail.outbox[0].body))
-        # The OTP is usually the first or most prominent 6-digit block
-        # Given the template, the first 6 digits will be the OTP
-        otp = all_digits[:6]
+
+        # Find all 6-digit numeric blocks in the body
+        otp_matches = re.findall(r"\b\d{6}\b", mail.outbox[0].body)
+        if not otp_matches:
+            # Fallback for split digits
+            all_digits = "".join(re.findall(r"\d", mail.outbox[0].body))
+            otp = all_digits[:6]
+        else:
+            otp = otp_matches[0]
         self.assertEqual(len(otp), 6, "Could not extract 6-digit OTP from email")
 
         # 2. Verify
@@ -69,7 +74,8 @@ class AuthFlowTests(APITestCase):
         self.assertIn("recover@example.com", [m.to[0] for m in mail.outbox])
 
         import re
-        all_digits = "".join(re.findall(r'\d', mail.outbox[-1].body))
+
+        all_digits = "".join(re.findall(r"\d", mail.outbox[-1].body))
         otp = all_digits[:6]
         self.assertEqual(len(otp), 6, "Could not extract 6-digit recovery OTP")
 
@@ -89,17 +95,77 @@ class AuthFlowTests(APITestCase):
         self.assertTrue(user.check_password("NewStrongPass123!"))
 
     def test_registration_conflict_existing_user(self):
-        # Create user first
+        # 1. Create existing active user
         CustomUser.objects.create_user(
-            email="conflict@example.com", password="password"
+            email="conflict@example.com", password="password", is_active=True
         )
 
-        from rest_framework.exceptions import ValidationError
-        from authentication.registration.application.services import RegistrationService
+        # 2. Request signup for same email (Should succeed/noop for security)
+        response = self.client.post(
+            self.reg_init_url, {"email": "conflict@example.com"}, format="json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
 
-        # Attempt to init signup with same email
-        with self.assertRaises(ValidationError) as cm:
-            RegistrationService.initiate_signup(
-                email="conflict@example.com",
+        # 3. Verify OTP for existing email
+        # We mock the OTP validation to succeed so we can test the account existence check
+        with patch(
+            "authentication.security.application.services.OtpValidationService.validate_otp",
+            return_value=True,
+        ):
+            response = self.client.post(
+                self.reg_verify_url,
+                {"email": "conflict@example.com", "otp_code": "123456"},
+                format="json",
             )
-        self.assertIn("already exists", str(cm.exception))
+
+            # Should return 409 Conflict
+            self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
+            self.assertEqual(response.data["error_code"], "REGISTRATION_EMAIL_EXISTS")
+
+    def test_full_registration_and_activation_flow(self):
+        """
+        Deep test covering the full 3-stage registration pipeline.
+        """
+        finalize_url = reverse("signup-finalize")
+
+        # Stage 1: Request Signup
+        response = self.client.post(
+            self.reg_init_url, {"email": "full-flow@example.com"}, format="json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+        # Extract OTP from mail
+        import re
+
+        all_digits = "".join(re.findall(r"\d", mail.outbox[0].body))
+        otp = all_digits[:6]
+
+        # Stage 2: Verify OTP and get Signup Token
+        response = self.client.post(
+            self.reg_verify_url,
+            {"email": "full-flow@example.com", "otp_code": otp},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        signup_token = response.data["data"]["signup_token"]
+        self.assertIsNotNone(signup_token)
+
+        # Stage 3: Finalize Account Creation
+        response = self.client.post(
+            finalize_url,
+            {
+                "signup_token": signup_token,
+                "full_name": "Full Flow User",
+                "password": "StrongPassword123!",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn("access", response.data["data"])
+        self.assertIn("refresh", response.data["data"])
+
+        # Verify database persistence
+        user = CustomUser.objects.get(email="full-flow@example.com")
+        self.assertTrue(user.is_active)
+        self.assertEqual(user.client.full_name, "Full Flow User")

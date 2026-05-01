@@ -185,7 +185,7 @@ class SessionServicesTests(TestCase):
         # Test active check
         is_active = SessionQueryService.is_session_active(
             user_id=str(self.user.id),
-            session_id=str(session_id),
+            session_id=session_id, # Pass the UUID object directly
             jti="a1",
             token_type="access",
         )
