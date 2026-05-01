@@ -169,7 +169,7 @@ class SessionServicesTests(TestCase):
         self.assertLess(dist, 5600)
 
     def test_session_query_active_check(self):
-        session_id = str(uuid.uuid4())
+        session_id = uuid.uuid4()
         SessionManager.persist_session(
             user=self.user,
             session_id=session_id,
@@ -189,7 +189,7 @@ class SessionServicesTests(TestCase):
             jti="a1",
             token_type="access",
         )
-        self.assertTrue(is_active)
+        self.assertTrue(is_active, f"Session {session_id} should be active for user {self.user.id}")
 
         # Test listing
         sessions = SessionQueryService.list_active_sessions(user_id=str(self.user.id))

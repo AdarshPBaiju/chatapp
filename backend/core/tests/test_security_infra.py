@@ -38,8 +38,10 @@ class SecurityInfraTests(TestCase):
         self.auth = AdvancedJWTAuthentication()
 
     @patch("authentication.core.token_validator.build_fingerprint")
-    def test_advanced_jwt_auth_success(self, build_fpt_mock):
-        build_fpt_mock.return_value = "fixed-fpt"
+    @patch("authentication.core.request_context.build_fingerprint")
+    def test_advanced_jwt_auth_success(self, build_fpt_mock_ctx, build_fpt_mock_val):
+        build_fpt_mock_ctx.return_value = "fixed-fpt"
+        build_fpt_mock_val.return_value = "fixed-fpt"
         payload = {
             "sub": str(self.user.id),
             "user_id": str(self.user.id),
@@ -52,7 +54,7 @@ class SecurityInfraTests(TestCase):
         request = self.factory.get("/", HTTP_AUTHORIZATION=f"Bearer {token}")
 
         user, auth_payload = self.auth.authenticate(request)
-        self.assertEqual(user, self.user)
+        self.assertEqual(user.id, self.user.id)
         self.assertEqual(auth_payload["sub"], payload["sub"])
 
     def test_advanced_jwt_auth_no_header(self):
@@ -66,8 +68,10 @@ class SecurityInfraTests(TestCase):
             self.auth.authenticate(request)
 
     @patch("authentication.core.token_validator.build_fingerprint")
-    def test_advanced_jwt_auth_inactive_user(self, build_fpt_mock):
-        build_fpt_mock.return_value = "fixed-fpt"
+    @patch("authentication.core.request_context.build_fingerprint")
+    def test_advanced_jwt_auth_inactive_user(self, build_fpt_mock_ctx, build_fpt_mock_val):
+        build_fpt_mock_ctx.return_value = "fixed-fpt"
+        build_fpt_mock_val.return_value = "fixed-fpt"
         self.user.is_active = False
         self.user.save()
 
@@ -87,8 +91,10 @@ class SecurityInfraTests(TestCase):
         self.assertIn("inactive", str(cm.exception))
 
     @patch("authentication.core.token_validator.build_fingerprint")
-    def test_advanced_jwt_auth_revoke_only_scope(self, build_fpt_mock):
-        build_fpt_mock.return_value = "fixed-fpt"
+    @patch("authentication.core.request_context.build_fingerprint")
+    def test_advanced_jwt_auth_revoke_only_scope(self, build_fpt_mock_ctx, build_fpt_mock_val):
+        build_fpt_mock_ctx.return_value = "fixed-fpt"
+        build_fpt_mock_val.return_value = "fixed-fpt"
         payload = {
             "sub": str(self.user.id),
             "user_id": str(self.user.id),
@@ -104,10 +110,12 @@ class SecurityInfraTests(TestCase):
         self.assertEqual(auth_payload["scope"], "revoke_only")
 
     @patch("authentication.core.token_validator.build_fingerprint")
+    @patch("authentication.core.request_context.build_fingerprint")
     @patch("authentication.core.token_validator.SessionQueryService.is_session_active")
-    def test_advanced_jwt_auth_inactive_session(self, is_active_mock, build_fpt_mock):
+    def test_advanced_jwt_auth_inactive_session(self, is_active_mock, build_fpt_mock_ctx, build_fpt_mock_val):
         is_active_mock.return_value = False
-        build_fpt_mock.return_value = "fixed-fpt"
+        build_fpt_mock_ctx.return_value = "fixed-fpt"
+        build_fpt_mock_val.return_value = "fixed-fpt"
         payload = {
             "sub": str(self.user.id),
             "user_id": str(self.user.id),
