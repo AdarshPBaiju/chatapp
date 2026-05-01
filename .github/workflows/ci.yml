@@ -84,6 +84,12 @@ jobs:
           coverage xml -o coverage.xml
           coverage report --fail-under=70
 
+      - name: coverage-summary
+        if: always()
+        run: |
+          echo "### Test Coverage Summary" >> $GITHUB_STEP_SUMMARY
+          coverage report >> $GITHUB_STEP_SUMMARY
+
       - uses: codecov/codecov-action@v4
         if: always()
         with:
@@ -91,6 +97,7 @@ jobs:
           flags: backend
           fail_ci_if_error: false
           token: ${{ secrets.CODECOV_TOKEN }}
+          slug: AdarshPBaiju/chatapp
 
       - uses: actions/upload-artifact@v4
         if: always()
