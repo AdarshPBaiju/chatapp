@@ -1,6 +1,7 @@
 from rest_framework.test import APITestCase
 from rest_framework import status
 from django.test import override_settings
+from unittest import TestCase
 from users.models import CustomUser, Client
 from authentication.core.crypto import AuthCryptoEngine
 from unittest.mock import patch
@@ -147,9 +148,9 @@ class CryptoTests(APITestCase):
         # Tamper with the token (change a character in the encrypted part)
         tampered_token = token[:-5] + ("A" if token[-5] != "A" else "B") + token[-4:]
 
-        import pytest
-
-        with pytest.raises(ValueError, match="Signature verification failed"):
+        with TestCase().assertRaisesRegex(
+            ValueError, "Signature verification failed"
+        ):
             AuthCryptoEngine.decrypt_and_verify(tampered_token)
 
     @override_settings(AUTH_ENGINE_SETTINGS=_auth_settings_override())
@@ -158,7 +159,5 @@ class CryptoTests(APITestCase):
         # Issue token with negative TTL
         token = AuthCryptoEngine.encrypt_and_sign(payload, ttl_seconds=-10)
 
-        import pytest
-
-        with pytest.raises(ValueError, match="Token has expired"):
+        with TestCase().assertRaisesRegex(ValueError, "Token has expired"):
             AuthCryptoEngine.decrypt_and_verify(token)

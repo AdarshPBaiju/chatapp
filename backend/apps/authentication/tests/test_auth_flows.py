@@ -4,10 +4,20 @@ from django.core import mail
 from unittest.mock import patch
 from users.models import CustomUser, Client
 from django.core.cache import cache
+from copy import deepcopy
+from django.conf import settings
+from django.test import override_settings
 
 from django.urls import reverse
 
 
+def _auth_settings_override() -> dict:
+    auth_settings = deepcopy(settings.AUTH_ENGINE_SETTINGS)
+    auth_settings["OTP_HASH_SECRET"] = "test-otp-secret"
+    return auth_settings
+
+
+@override_settings(AUTH_ENGINE_SETTINGS=_auth_settings_override())
 class AuthFlowTests(APITestCase):
     def setUp(self):
         cache.clear()
@@ -18,6 +28,7 @@ class AuthFlowTests(APITestCase):
         self.recovery_confirm_url = reverse("password-reset-confirm")
 
     def test_registration_flow_success(self):
+        finalize_url = reverse("signup-finalize")
         # 1. Init
         response = self.client.post(
             self.reg_init_url,
@@ -47,13 +58,26 @@ class AuthFlowTests(APITestCase):
             format="json",
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
+        signup_token = response.data["data"]["signup_token"]
+
+        # 3. Finalize
+        response = self.client.post(
+            finalize_url,
+            {
+                "signup_token": signup_token,
+                "full_name": "New User",
+                "password": "StrongPass123!",
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
         user = CustomUser.objects.get(email="newuser@example.com")
         user.refresh_from_db()
         self.assertTrue(user.is_active)
 
     def test_password_recovery_flow_success(self):
         user = CustomUser.objects.create_user(
-            email="recover@example.com", password="old-password"
+            email="recover@example.com", password="old-password", is_active=True
         )
         Client.objects.create(user=user, full_name="Recover User")
 

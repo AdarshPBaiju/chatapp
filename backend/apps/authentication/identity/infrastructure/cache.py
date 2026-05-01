@@ -57,8 +57,28 @@ class RedisSessionStore:
         device_limit: int,
         now_ts: int,
     ) -> str | list[str]:
-        conn = cache.client.get_client()
+        conn = cls._get_connection()
         ttl = max(refresh_expiry_ts - now_ts, 1)
+        if not hasattr(conn, "eval"):
+            sessions_key = f"auth:user:{user_id}:sessions"
+            existing_sessions = conn.get(sessions_key) or []
+            active_sessions = [
+                item for item in existing_sessions
+                if int(item.get("expires_at", 0)) > now_ts
+            ]
+            if device_limit and len(active_sessions) >= device_limit:
+                return [item["session_id"] for item in active_sessions]
+
+            session_record = {
+                **session_meta,
+                "session_id": session_id,
+                "expires_at": refresh_expiry_ts,
+            }
+            active_sessions.append(session_record)
+            conn.set(sessions_key, active_sessions, timeout=ttl)
+            conn.set(f"auth:session:{session_id}", session_meta, timeout=ttl)
+            return "SUCCESS"
+
         res = conn.eval(
             cls.REGISTER_SESSION_LUA,
             2,
@@ -86,8 +106,32 @@ class RedisSessionStore:
         refresh_expiry_ts: int,
         now_ts: int,
     ) -> str:
-        conn = cache.client.get_client()
+        conn = cls._get_connection()
         ttl = max(refresh_expiry_ts - now_ts, 1)
+        if not hasattr(conn, "eval"):
+            sessions_key = f"auth:user:{user_id}:sessions"
+            existing_sessions = conn.get(sessions_key) or []
+            updated = False
+            refreshed_sessions = []
+            for item in existing_sessions:
+                if int(item.get("expires_at", 0)) <= now_ts:
+                    continue
+                if item.get("session_id") == session_id:
+                    refreshed_sessions.append({
+                        **session_meta,
+                        "session_id": session_id,
+                        "expires_at": refresh_expiry_ts,
+                    })
+                    updated = True
+                else:
+                    refreshed_sessions.append(item)
+
+            if updated:
+                conn.set(sessions_key, refreshed_sessions, timeout=ttl)
+                conn.set(f"auth:session:{session_id}", session_meta, timeout=ttl)
+                return "SUCCESS"
+            return "FAILURE"
+
         res = conn.eval(
             cls.UPDATE_SESSION_LUA,
             2,

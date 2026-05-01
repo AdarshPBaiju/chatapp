@@ -1,4 +1,5 @@
 from django.test import TestCase
+from django.core.cache import cache
 from django.utils import timezone
 from datetime import timedelta
 from unittest.mock import patch
@@ -14,6 +15,7 @@ import uuid
 
 class SessionServicesTests(TestCase):
     def setUp(self):
+        cache.clear()
         self.user = CustomUser.objects.create_user(
             email="sessions@example.com", password="password123", is_active=True
         )
