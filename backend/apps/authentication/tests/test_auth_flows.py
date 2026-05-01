@@ -33,18 +33,11 @@ class AuthFlowTests(APITestCase):
         self.assertEqual(len(mail.outbox), 1)
         self.assertIn("newuser@example.com", mail.outbox[0].to)
 
-        # Extract OTP from mail (6 digits, possibly separated by whitespace/newlines)
+        # Extract OTP from mail (robustly, handling whitespace between digits)
         import re
-
-        # Find all 6-digit numeric blocks in the body
-        otp_matches = re.findall(r"\b\d{6}\b", mail.outbox[0].body)
-        if not otp_matches:
-            # Fallback for split digits
-            all_digits = "".join(re.findall(r"\d", mail.outbox[0].body))
-            otp = all_digits[:6]
-        else:
-            otp = otp_matches[0]
-        self.assertEqual(len(otp), 6, "Could not extract 6-digit OTP from email")
+        match = re.search(r"(\d)\s*(\d)\s*(\d)\s*(\d)\s*(\d)\s*(\d)", mail.outbox[0].body)
+        self.assertIsNotNone(match, "Could not extract 6-digit OTP from email")
+        otp = "".join(match.groups())
 
         # 2. Verify
         response = self.client.post(
@@ -74,10 +67,9 @@ class AuthFlowTests(APITestCase):
         self.assertIn("recover@example.com", [m.to[0] for m in mail.outbox])
 
         import re
-
-        all_digits = "".join(re.findall(r"\d", mail.outbox[-1].body))
-        otp = all_digits[:6]
-        self.assertEqual(len(otp), 6, "Could not extract 6-digit recovery OTP")
+        match = re.search(r"(\d)\s*(\d)\s*(\d)\s*(\d)\s*(\d)\s*(\d)", mail.outbox[-1].body)
+        self.assertIsNotNone(match, "Could not extract 6-digit recovery OTP")
+        otp = "".join(match.groups())
 
         # 2. Verify and Reset
         response = self.client.post(
@@ -136,15 +128,11 @@ class AuthFlowTests(APITestCase):
         )
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
 
-        # Extract OTP from mail (robustly)
+        # Extract OTP from mail (robustly, handling whitespace between digits)
         import re
-
-        otp_matches = re.findall(r"\b\d{6}\b", mail.outbox[0].body)
-        if not otp_matches:
-            all_digits = "".join(re.findall(r"\d", mail.outbox[0].body))
-            otp = all_digits[:6]
-        else:
-            otp = otp_matches[0]
+        match = re.search(r"(\d)\s*(\d)\s*(\d)\s*(\d)\s*(\d)\s*(\d)", mail.outbox[0].body)
+        self.assertIsNotNone(match, "Could not extract 6-digit OTP from email")
+        otp = "".join(match.groups())
 
         # Stage 2: Verify OTP and get Signup Token
         response = self.client.post(

@@ -115,7 +115,10 @@ class SessionServicesTests(TestCase):
         current_loc = {"lat": 51.5074, "lon": -0.1278}  # London
 
         class MockRequest:
-            META = {"HTTP_USER_AGENT": "Mozilla/5.0"}
+            def __init__(self, user=None, ip="127.0.0.1"):
+                self.user = user
+                self.META = {"REMOTE_ADDR": ip, "HTTP_USER_AGENT": "Mozilla/5.0"}
+                self.COOKIES = {}
 
         with patch(
             "authentication.sessions.infrastructure.cache.GeoLocationService.calculate_distance",

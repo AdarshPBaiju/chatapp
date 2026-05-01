@@ -78,7 +78,12 @@ class OtpDeliveryService:
         cooldown_key = f"otp_cooldown:{identifier}:{purpose}"
 
         if not ignore_cooldown and cache.get(cooldown_key):
-            remaining = cache.ttl(cooldown_key)
+            # Safe TTL check for LocMemCache compatibility
+            try:
+                remaining = cache.ttl(cooldown_key)
+            except AttributeError:
+                remaining = settings.OTP_RESEND_INTERVAL_SECONDS
+            
             wait_time = max(
                 remaining if isinstance(remaining, int) and remaining > 0 else 0, 1
             )
