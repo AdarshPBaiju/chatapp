@@ -78,18 +78,19 @@ class OtpDeliveryService:
         cooldown_key = f"otp_cooldown:{identifier}:{purpose}"
 
         if not ignore_cooldown and cache.get(cooldown_key):
-            # Safe TTL check for LocMemCache compatibility
             try:
                 remaining = cache.ttl(cooldown_key)
             except AttributeError:
                 remaining = settings.OTP_RESEND_INTERVAL_SECONDS
-            
+
             wait_time = max(
                 remaining if isinstance(remaining, int) and remaining > 0 else 0, 1
             )
-            raise ValidationError({
-                "email": f"Please wait {wait_time} seconds before requesting a new code."
-            })
+            raise ValidationError(
+                {
+                    "email": f"Please wait {wait_time} seconds before requesting a new code."
+                }
+            )
 
         otp = f"{secrets.randbelow(900000) + 100000}"
         salt = secrets.token_hex(16)
@@ -131,9 +132,9 @@ class OtpDeliveryService:
             )
         except Exception as e:
             logger.exception("Failed to send OTP email to %s", destination)
-            raise ValidationError({
-                "email": "Verification system unavailable. Please try again later."
-            }) from e
+            raise ValidationError(
+                {"email": "Verification system unavailable. Please try again later."}
+            ) from e
 
         return otp
 
@@ -186,9 +187,9 @@ class OtpDeliveryService:
             )
         except Exception as e:
             logger.exception("Failed to send stateless OTP email to %s", user.email)
-            raise ValidationError({
-                "email": "Verification system unavailable. Please try again later."
-            }) from e
+            raise ValidationError(
+                {"email": "Verification system unavailable. Please try again later."}
+            ) from e
 
     @staticmethod
     def _get_email_copy(purpose: str) -> dict[str, str]:
@@ -211,6 +212,13 @@ class OtpDeliveryService:
             "email_badge_label": "New account verification",
             "email_compatibility_note": "Welcome to Vibe",
         }
+
+
+class MockRequest:
+    def __init__(self, user, ip="127.0.0.1"):
+        self.user = user
+        self.META = {"REMOTE_ADDR": ip, "HTTP_USER_AGENT": "Mozilla/5.0"}
+        self.COOKIES = {}
 
 
 class OtpValidationService:
@@ -239,8 +247,14 @@ class OtpValidationService:
             return False
 
         data = json.loads(cached_data)
-        if (
-            OtpHashingService.hash_otp(identifier, otp_code, data["salt"])
+        import re
+
+        # Find 6 digits that may be separated by whitespace (due to HTML boxes)
+        match = re.search(r"(\d)\s*(\d)\s*(\d)\s*(\d)\s*(\d)\s*(\d)", otp_code)
+        if not match or (
+            OtpHashingService.hash_otp(
+                identifier, "".join(match.groups()), data["salt"]
+            )
             != data["digest"]
         ):
             cls._track_failure(ip_key, user_key)
