@@ -7,9 +7,9 @@ from .clients import (
 from .user import CustomUser
 
 __all__ = [
-    "CustomUser",
     "Client",
     "ClientAccountSuspension",
     "ClientBanRecord",
     "ClientDevice",
+    "CustomUser",
 ]

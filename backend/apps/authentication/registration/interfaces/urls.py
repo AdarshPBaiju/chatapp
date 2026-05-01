@@ -7,8 +7,14 @@ from authentication.registration.interfaces.views import (
 )
 
 urlpatterns = [
-    path("signup/request/", ClientSignUpRequestAPIView.as_view(), name="signup-request"),
+    path(
+        "signup/request/", ClientSignUpRequestAPIView.as_view(), name="signup-request"
+    ),
     path("signup/verify/", ClientSignUpVerifyAPIView.as_view(), name="signup-verify"),
-    path("signup/finalize/", ClientSignUpFinalizeAPIView.as_view(), name="signup-finalize"),
+    path(
+        "signup/finalize/",
+        ClientSignUpFinalizeAPIView.as_view(),
+        name="signup-finalize",
+    ),
     path("signup/resend/", ClientSignUpResendAPIView.as_view(), name="signup-resend"),
 ]

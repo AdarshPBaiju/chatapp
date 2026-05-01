@@ -102,7 +102,7 @@ class ValidationMixin:
             val = check["value"]
             orig_id = check["instance_id"]
 
-            if ctype in ["unique_case_insensitive", "unique_exact"]:
+            if ctype in {"unique_case_insensitive", "unique_exact"}:
                 lookup = {
                     f"{field}__iexact" if "case_insensitive" in ctype else field: val
                 }

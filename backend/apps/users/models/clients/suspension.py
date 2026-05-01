@@ -113,9 +113,7 @@ class ClientAccountSuspension(UUIDModel):
         """
         if self.status != self.SuspensionStatus.ACTIVE:
             return False
-        if self.ends_at and self.ends_at <= timezone.now():
-            return False
-        return True
+        return not (self.ends_at and self.ends_at <= timezone.now())
 
     def lift(self, lifted_by=None, reason: str = "") -> None:
         """

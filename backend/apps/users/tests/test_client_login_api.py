@@ -120,7 +120,9 @@ class ClientLoginAPITests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertTrue(response.data["success"])
         self.assertTrue(response.data["data"]["is_restricted"])
-        self.assertEqual(response.data["data"]["active_sessions"], [{"session_id": "s1"}])
+        self.assertEqual(
+            response.data["data"]["active_sessions"], [{"session_id": "s1"}]
+        )
 
     def test_identity_init_route_is_registered(self):
         response = self.client.post(

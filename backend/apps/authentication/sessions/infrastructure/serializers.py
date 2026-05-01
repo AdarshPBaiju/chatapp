@@ -16,7 +16,7 @@ class ClientSessionRevokeSerializer(serializers.Serializer):
 
     def validate(self, attrs):
         if not attrs.get("session_id") and not attrs.get("access_jti"):
-            raise serializers.ValidationError(
-                {"detail": "Either session_id or access_jti is required."}
-            )
+            raise serializers.ValidationError({
+                "detail": "Either session_id or access_jti is required."
+            })
         return attrs

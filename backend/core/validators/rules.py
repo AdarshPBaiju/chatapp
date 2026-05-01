@@ -310,7 +310,7 @@ class FileConstraintRule(AtomicValidator):
         if value.size > self.max_size:
             return (
                 self.get_error_message({"limit": self.max_size})
-                or f"File exceeds {self.max_size/1024/1024}MB."
+                or f"File exceeds {self.max_size / 1024 / 1024}MB."
             )
         if self.ext:
             ext = value.name.split(".")[-1].lower()

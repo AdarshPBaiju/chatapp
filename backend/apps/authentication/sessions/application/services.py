@@ -230,7 +230,8 @@ class SessionQueryService:
         from authentication.identity.infrastructure.cache import RedisSessionStore
 
         sessions = (
-            cls._active_sessions_query(user_id)
+            cls
+            ._active_sessions_query(user_id)
             .order_by("-last_seen_at", "-created_at")
             .all()
         )
@@ -328,7 +329,8 @@ class AnomalyDetectionService:
 
         # 1. Impossible Travel Detection
         last_session = (
-            AuthSession.objects.filter(user_id=user_id, is_active=True)
+            AuthSession.objects
+            .filter(user_id=user_id, is_active=True)
             .order_by("-last_seen_at")
             .first()
         )

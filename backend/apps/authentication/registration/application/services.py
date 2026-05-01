@@ -5,7 +5,10 @@ from typing import Any
 from django.core.cache import cache
 from django.db import transaction
 
-from authentication.security.application.services import OtpDeliveryService, OtpValidationService
+from authentication.security.application.services import (
+    OtpDeliveryService,
+    OtpValidationService,
+)
 from users.models import Client, CustomUser
 
 logger = logging.getLogger("users")

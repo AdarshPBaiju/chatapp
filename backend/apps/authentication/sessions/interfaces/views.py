@@ -6,12 +6,22 @@ from drf_spectacular.utils import extend_schema
 from core.api.responses import ResponseFactory
 from core.api.permissions import AllowRevokeOnly
 from authentication.core.request_context import build_auth_request_context
-from authentication.sessions.infrastructure.serializers import ClientSessionRevokeSerializer
-from authentication.sessions.application.services import SessionQueryService, SessionManager
-from authentication.identity.application.services import TokenRotateService, LoginService
+from authentication.sessions.infrastructure.serializers import (
+    ClientSessionRevokeSerializer,
+)
+from authentication.sessions.application.services import (
+    SessionQueryService,
+    SessionManager,
+)
+from authentication.identity.application.services import (
+    TokenRotateService,
+    LoginService,
+)
 
 
-def _build_restricted_payload(*, user_id: str, request, context, session_id: str | None):
+def _build_restricted_payload(
+    *, user_id: str, request, context, session_id: str | None
+):
     restricted_tokens = LoginService.build_restricted_response(
         user_id=user_id,
         context=context,
@@ -203,7 +213,9 @@ class ClientSessionRevokeOthersAPIView(APIView):
         if not current_sid:
             return ResponseFactory.error(message="Current session identity not found.")
 
-        count = SessionManager.revoke_all_sessions(user_id, exclude_session_id=str(current_sid))
+        count = SessionManager.revoke_all_sessions(
+            user_id, exclude_session_id=str(current_sid)
+        )
 
         if request.auth.get("scope") == "revoke_only":
             try:

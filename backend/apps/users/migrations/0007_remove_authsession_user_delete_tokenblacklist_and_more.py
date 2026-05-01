@@ -4,20 +4,19 @@ from django.db import migrations
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('users', '0006_client_backup_codes_client_totp_secret'),
+        ("users", "0006_client_backup_codes_client_totp_secret"),
     ]
 
     operations = [
         migrations.RemoveField(
-            model_name='authsession',
-            name='user',
+            model_name="authsession",
+            name="user",
         ),
         migrations.DeleteModel(
-            name='TokenBlacklist',
+            name="TokenBlacklist",
         ),
         migrations.DeleteModel(
-            name='AuthSession',
+            name="AuthSession",
         ),
     ]

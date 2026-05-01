@@ -66,12 +66,16 @@ class AuthHardeningTests(TestCase):
     def test_registration_otp_not_bypassed_for_non_2fa_profile(self):
         OtpDeliveryService.send_otp(self.user, ignore_cooldown=True)
         req = self.factory.post("/", HTTP_X_FORWARDED_FOR="1.1.1.1")
-        self.assertFalse(OtpValidationService.validate_otp(str(self.user.id), "000000", request=req))
+        self.assertFalse(
+            OtpValidationService.validate_otp(str(self.user.id), "000000", request=req)
+        )
 
     def test_registration_otp_round_trip_uses_hashed_storage(self):
         otp = OtpDeliveryService.send_otp(self.user, ignore_cooldown=True)
         req = self.factory.post("/", HTTP_X_FORWARDED_FOR="2.2.2.2")
-        self.assertTrue(OtpValidationService.validate_otp(str(self.user.id), otp, request=req))
+        self.assertTrue(
+            OtpValidationService.validate_otp(str(self.user.id), otp, request=req)
+        )
         self.assertIsNone(cache.get(f"otp:{self.user.id}:registration"))
 
     def test_fingerprint_includes_device_entropy(self):
@@ -156,7 +160,9 @@ class AuthHardeningTests(TestCase):
         self.assertEqual(sessions[0]["city"], "Bengaluru")
         self.assertEqual(sessions[0]["country_code"], "IN")
 
-    def test_refresh_tokens_returns_restricted_state_when_active_sessions_exceed_limit(self):
+    def test_refresh_tokens_returns_restricted_state_when_active_sessions_exceed_limit(
+        self,
+    ):
         self.user.is_active = True
         self.user.save(update_fields=["is_active"])
         request = self.factory.post(
@@ -224,7 +230,12 @@ class AuthHardeningTests(TestCase):
             device_entropy="entropy-1",
             ip_address="127.0.0.1",
             expires_at=timezone.now() + timedelta(hours=1),
-            location_data={"city": None, "country_code": None, "lat": None, "lon": None},
+            location_data={
+                "city": None,
+                "country_code": None,
+                "lat": None,
+                "lon": None,
+            },
         )
 
         session = AuthSession.objects.get(user=self.user, session_id=session_id)

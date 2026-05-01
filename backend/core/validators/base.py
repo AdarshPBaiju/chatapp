@@ -88,7 +88,7 @@ class AtomicValidator(ABC):
     @abstractmethod
     def validate(
         self, value: Any, context: ValidationContext
-    ) -> None | str | list[str] | ValidationResponse:
+    ) -> str | list[str] | ValidationResponse | None:
         """
         Core validation logic to be implemented by child classes.
         """

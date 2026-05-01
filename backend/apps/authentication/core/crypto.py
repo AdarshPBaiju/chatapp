@@ -98,7 +98,9 @@ class AuthCryptoEngine:
         return encrypted.serialize(compact=True)
 
     @classmethod
-    def decrypt_and_verify(cls, token: str, grace_period_sec: int = 0) -> dict[str, Any]:
+    def decrypt_and_verify(
+        cls, token: str, grace_period_sec: int = 0
+    ) -> dict[str, Any]:
         try:
             jwetoken = jwe.JWE()
             jwetoken.deserialize(token)
@@ -115,7 +117,9 @@ class AuthCryptoEngine:
             error_msg = "Invalid or tampered token protocol"
             raise ValueError(error_msg) from e
 
-        if payload.get("exp", 0) + grace_period_sec < int(datetime.now(UTC).timestamp()):
+        if payload.get("exp", 0) + grace_period_sec < int(
+            datetime.now(UTC).timestamp()
+        ):
             error_msg = "The authentication token has expired"
             raise ValueError(error_msg)
 

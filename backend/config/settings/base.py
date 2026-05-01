@@ -11,7 +11,9 @@ sys.path.insert(0, str(BASE_DIR / "apps"))
 
 SECRET_KEY = config("SECRET_KEY", default="django-insecure-change-me")
 
-DEBUG = config("DEBUG", default=config("DJANGO_ENV", default="") == "development", cast=bool)
+DEBUG = config(
+    "DEBUG", default=config("DJANGO_ENV", default="") == "development", cast=bool
+)
 
 ALLOWED_HOSTS = config(
     "ALLOWED_HOSTS",
@@ -142,14 +144,12 @@ AUTH_ENGINE_SETTINGS = {
     "ACTIVE_KID": config("AUTH_TOKEN_ACTIVE_KID", default="v1"),
     "TOKEN_KEYRING": config(
         "AUTH_TOKEN_KEYRING",
-        default=json.dumps(
-            {
-                "v1": {
-                    "signing_seed": "development-signing-seed",
-                    "encryption_key": "development-encryption-key",
-                }
+        default=json.dumps({
+            "v1": {
+                "signing_seed": "development-signing-seed",
+                "encryption_key": "development-encryption-key",
             }
-        ),
+        }),
         cast=json.loads,
     ),
     "OTP_HASH_SECRET": config("OTP_HASH_SECRET", default="development-otp-secret"),

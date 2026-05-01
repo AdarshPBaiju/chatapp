@@ -4,20 +4,19 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('users', '0005_alter_authsession_city_and_more'),
+        ("users", "0005_alter_authsession_city_and_more"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='client',
-            name='backup_codes',
+            model_name="client",
+            name="backup_codes",
             field=models.JSONField(blank=True, default=list),
         ),
         migrations.AddField(
-            model_name='client',
-            name='totp_secret',
-            field=models.CharField(blank=True, default='', max_length=255),
+            model_name="client",
+            name="totp_secret",
+            field=models.CharField(blank=True, default="", max_length=255),
         ),
     ]

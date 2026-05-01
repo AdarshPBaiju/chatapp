@@ -21,7 +21,8 @@ class ClientProfileSerializer(serializers.Serializer):
     bio = v.string().optional().label("Bio")
 
     profile_picture = (
-        v.file(max_mb=2, exts=["jpg", "jpeg", "png", "webp"])
+        v
+        .file(max_mb=2, exts=["jpg", "jpeg", "png", "webp"])
         .optional()
         .label("Profile Picture")
     )

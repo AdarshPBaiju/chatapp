@@ -4,9 +4,11 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ("users", "0003_rename_users_auths_user_id_9f0675_idx_users_auths_user_id_3e09e8_idx_and_more"),
+        (
+            "users",
+            "0003_rename_users_auths_user_id_9f0675_idx_users_auths_user_id_3e09e8_idx_and_more",
+        ),
     ]
 
     operations = [
@@ -23,11 +25,15 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name="authsession",
             name="latitude",
-            field=models.DecimalField(blank=True, decimal_places=6, max_digits=9, null=True),
+            field=models.DecimalField(
+                blank=True, decimal_places=6, max_digits=9, null=True
+            ),
         ),
         migrations.AddField(
             model_name="authsession",
             name="longitude",
-            field=models.DecimalField(blank=True, decimal_places=6, max_digits=9, null=True),
+            field=models.DecimalField(
+                blank=True, decimal_places=6, max_digits=9, null=True
+            ),
         ),
     ]

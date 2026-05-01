@@ -51,7 +51,8 @@ class ClientLoginSerializer(serializers.Serializer):
     email = v.email().label("Email Address")
     password = v.string().min(1).label("Password")
     session_type = (
-        v.choice([("client", "Client"), ("staff", "Staff")])
+        v
+        .choice([("client", "Client"), ("staff", "Staff")])
         .optional()
         .default("client")
         .label("Session Type")

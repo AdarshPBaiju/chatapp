@@ -2,11 +2,13 @@ import threading
 
 _thread_locals = threading.local()
 
+
 def get_current_session_id() -> str | None:
     """
     Retrieve the session ID associated with the current thread/request.
     """
     return getattr(_thread_locals, "session_id", None)
+
 
 def set_current_session_id(session_id: str | None) -> None:
     """
@@ -14,11 +16,13 @@ def set_current_session_id(session_id: str | None) -> None:
     """
     _thread_locals.session_id = session_id
 
+
 class SessionContextMiddleware:
     """
     Middleware that extracts the session_id (sid) from the authenticated request
     and stores it in thread-local storage for access in signals or services.
     """
+
     def __init__(self, get_response):
         self.get_response = get_response
 

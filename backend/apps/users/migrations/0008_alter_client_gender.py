@@ -4,15 +4,19 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('users', '0007_remove_authsession_user_delete_tokenblacklist_and_more'),
+        ("users", "0007_remove_authsession_user_delete_tokenblacklist_and_more"),
     ]
 
     operations = [
         migrations.AlterField(
-            model_name='client',
-            name='gender',
-            field=models.CharField(blank=True, choices=[('male', 'Male'), ('female', 'Female'), ('other', 'Other')], max_length=10, null=True),
+            model_name="client",
+            name="gender",
+            field=models.CharField(
+                blank=True,
+                choices=[("male", "Male"), ("female", "Female"), ("other", "Other")],
+                max_length=10,
+                null=True,
+            ),
         ),
     ]

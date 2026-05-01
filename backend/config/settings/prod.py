@@ -48,7 +48,7 @@ LOGGING["handlers"]["file"] = {
     "class": "logging.FileHandler",
     "filename": "/app/logs/django.log",
 }
-LOGGING["root"]["handlers"] = LOGGING["root"]["handlers"] + ["file"]
+LOGGING["root"]["handlers"] += ["file"]
 
 # Email Settings
 EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"

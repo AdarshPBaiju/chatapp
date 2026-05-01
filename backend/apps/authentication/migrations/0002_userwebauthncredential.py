@@ -7,29 +7,48 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('authentication', '0001_initial'),
+        ("authentication", "0001_initial"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='UserWebAuthnCredential',
+            name="UserWebAuthnCredential",
             fields=[
-                ('id', models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True, serialize=False)),
-                ('created_at', models.DateTimeField(auto_now_add=True, db_index=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('credential_id', models.BinaryField(unique=True)),
-                ('public_key', models.BinaryField()),
-                ('sign_count', models.IntegerField(default=0)),
-                ('transports', models.JSONField(default=list)),
-                ('label', models.CharField(blank=True, max_length=128)),
-                ('user', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='webauthn_credentials', to=settings.AUTH_USER_MODEL)),
+                (
+                    "id",
+                    models.UUIDField(
+                        default=uuid.uuid4,
+                        editable=False,
+                        primary_key=True,
+                        serialize=False,
+                    ),
+                ),
+                ("created_at", models.DateTimeField(auto_now_add=True, db_index=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                ("credential_id", models.BinaryField(unique=True)),
+                ("public_key", models.BinaryField()),
+                ("sign_count", models.IntegerField(default=0)),
+                ("transports", models.JSONField(default=list)),
+                ("label", models.CharField(blank=True, max_length=128)),
+                (
+                    "user",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="webauthn_credentials",
+                        to=settings.AUTH_USER_MODEL,
+                    ),
+                ),
             ],
             options={
-                'verbose_name': 'WebAuthn Credential',
-                'indexes': [models.Index(fields=['user', 'created_at'], name='authenticat_user_id_281be1_idx')],
+                "verbose_name": "WebAuthn Credential",
+                "indexes": [
+                    models.Index(
+                        fields=["user", "created_at"],
+                        name="authenticat_user_id_281be1_idx",
+                    )
+                ],
             },
         ),
     ]

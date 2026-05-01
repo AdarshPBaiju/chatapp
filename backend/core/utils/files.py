@@ -64,7 +64,7 @@ class SmartUploadPath:
 
     def __call__(self, instance: Any, filename: str) -> str:
         """Generate the upload path based on the configured rules."""
-        ext = filename.split(".")[-1].lower()
+        ext = filename.rsplit(".", maxsplit=1)[-1].lower()
         original_name = filename.rsplit(".", 1)[0]
         safe_name = slugify(original_name) or "file"
         new_uuid = uuid.uuid4()
@@ -115,7 +115,7 @@ class SmartUploadPath:
         identifier = self._resolve_lookup(instance, self.config.field_lookup)
         if not identifier:
             identifier = self.config.public_default
-        path = path / (slugify(identifier) or "unknown")
+        path /= slugify(identifier) or "unknown"
 
         if self.config.use_date_structure:
             path = (
@@ -125,6 +125,6 @@ class SmartUploadPath:
                 / str(today.day).zfill(2)
             )
 
-        path = path / final_filename
+        path /= final_filename
 
         return str(path)

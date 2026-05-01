@@ -137,6 +137,7 @@ class TwoFactorDisableAPIView(views.APIView):
 
         # Security Hardening: Revoke other sessions when MFA is disabled
         from authentication.sessions.application.services import SessionManager
+
         current_sid = request.auth.get("sid") if request.auth else None
         SessionManager.revoke_all_sessions(
             str(request.user.id),

@@ -8,4 +8,4 @@ class UsersConfig(AppConfig):
 
     @staticmethod
     def ready():
-        import users.signals  # noqa: PLC0415, F401
+        import users.signals  # noqa: F401

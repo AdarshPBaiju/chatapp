@@ -13,7 +13,13 @@ class ClientPasswordResetRequestSerializer(serializers.Serializer):
 @auto_configure_fields
 class ClientPasswordResetVerifySerializer(serializers.Serializer):
     email = v.email().label("Email Address")
-    otp_code = v.string().min(6, message="Invalid verification code format.").max(6).label("Verification Code")
+    otp_code = (
+        v
+        .string()
+        .min(6, message="Invalid verification code format.")
+        .max(6)
+        .label("Verification Code")
+    )
 
 
 @auto_configure_fields

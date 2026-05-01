@@ -135,7 +135,9 @@ class TokenRotateService:
                 )
                 # Revoke the entire session family to stop the attacker
                 SessionManager.revoke_session(user_id=user_id, session_id=session_id)
-                raise ValueError("Security breach: Token reuse detected. Session revoked.")
+                raise ValueError(
+                    "Security breach: Token reuse detected. Session revoked."
+                )
 
             TokenBlacklistService.blacklist_tokens([refresh_jti, access_jti])
             raise ValueError("Session context not found or already revoked.")

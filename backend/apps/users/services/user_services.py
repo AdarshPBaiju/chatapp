@@ -51,17 +51,15 @@ class UserService:
         user_type = data.get("user_type", CustomUser.UserType.USER)
 
         if CustomUser.objects.filter(email=email).exists():
-            raise ValidationError(
-                {
-                    "email": [
-                        {
-                            "message": "User with this email already exists.",
-                            "code": "unique_violation",
-                            "severity": "error",
-                        }
-                    ]
-                }
-            )
+            raise ValidationError({
+                "email": [
+                    {
+                        "message": "User with this email already exists.",
+                        "code": "unique_violation",
+                        "severity": "error",
+                    }
+                ]
+            })
 
         user = CustomUser.objects.create_user(
             email=email, password=password, user_type=user_type, is_active=False
@@ -114,5 +112,5 @@ class UserService:
             signup_token=signup_token,
             full_name=full_name,
             password=password,
-            request=request
+            request=request,
         )

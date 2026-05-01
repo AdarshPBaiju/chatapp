@@ -1,6 +1,7 @@
 from django.contrib import admin
 from .models import GlobalConfiguration
 
+
 @admin.register(GlobalConfiguration)
 class GlobalConfigurationAdmin(admin.ModelAdmin):
     list_display = ("key", "value", "updated_at")
