@@ -34,8 +34,8 @@ def _auth_settings_override() -> dict:
     },
 )
 class ClientLoginAPITests(APITestCase):
-    endpoint = "/api/v1/auth/login/"
-    identity_init_endpoint = "/api/v1/auth/init/"
+    endpoint = "/api/v1/auth/identity/login/"
+    identity_init_endpoint = "/api/v1/auth/identity/init/"
 
     def setUp(self):
         self.inactive_user = CustomUser.objects.create_user(
@@ -62,7 +62,7 @@ class ClientLoginAPITests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
         self.assertFalse(response.data["success"])
 
-    @patch("authentication.identity.interfaces.views.UserService.send_otp")
+    @patch("authentication.identity.interfaces.views.OtpDeliveryService.send_otp")
     def test_inactive_user_login_auto_sends_otp(self, send_otp_mock):
         response = self.client.post(
             self.endpoint,
@@ -76,7 +76,7 @@ class ClientLoginAPITests(APITestCase):
         self.assertEqual(response.data["data"]["user_id"], str(self.inactive_user.id))
         send_otp_mock.assert_called_once_with(self.inactive_user, ignore_cooldown=True)
 
-    @patch("authentication.identity.interfaces.views.AuthEngine.issue_tokens")
+    @patch("authentication.identity.interfaces.views.LoginService.issue_tokens")
     def test_active_user_login_returns_full_tokens(self, issue_tokens_mock):
         issue_tokens_mock.return_value = {
             "status": "full",
@@ -99,7 +99,7 @@ class ClientLoginAPITests(APITestCase):
         self.assertEqual(response.data["data"]["access"], "access-token")
         self.assertEqual(response.data["data"]["refresh"], "refresh-token")
 
-    @patch("authentication.identity.interfaces.views.AuthEngine.issue_tokens")
+    @patch("authentication.identity.interfaces.views.LoginService.issue_tokens")
     def test_active_user_login_returns_restricted_payload(self, issue_tokens_mock):
         issue_tokens_mock.return_value = {
             "status": "restricted",
@@ -125,11 +125,11 @@ class ClientLoginAPITests(APITestCase):
         )
 
     def test_identity_init_route_is_registered(self):
+        # Even for missing users, we return 200 with challenge_required to prevent enumeration
         response = self.client.post(
             self.identity_init_endpoint,
             {"email": "missing@example.com"},
             format="json",
         )
-
-        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
-        self.assertEqual(response.data["error_code"], "IDENTITY_USER_NOT_FOUND")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["data"]["status"], "challenge_required")

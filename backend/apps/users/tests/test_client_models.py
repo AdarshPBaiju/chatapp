@@ -61,7 +61,7 @@ class ClientModelTests(TestCase):
             ends_at=timezone.now() - timedelta(hours=1),
         )
         self.assertFalse(suspension.is_active)
-        self.assertEqual(suspension.current_status, "active")
+        self.assertEqual(suspension.current_status, "expired")
 
     def test_client_device_creation(self):
         device = ClientDevice.objects.create(
