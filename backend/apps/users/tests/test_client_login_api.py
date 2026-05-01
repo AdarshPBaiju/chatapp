@@ -9,6 +9,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from users.models import Client, CustomUser
+from django.urls import reverse
 
 
 def _auth_settings_override() -> dict:
@@ -29,7 +30,10 @@ def _auth_settings_override() -> dict:
 )
 class ClientLoginAPITests(APITestCase):
     endpoint = "/api/v1/auth/identity/login/"
-    identity_init_endpoint = "/api/v1/auth/identity/init/"
+    
+    @property
+    def identity_init_endpoint(self):
+        return reverse("identity-init")
 
     def setUp(self):
         self.inactive_user = CustomUser.objects.create_user(

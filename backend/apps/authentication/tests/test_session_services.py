@@ -116,6 +116,14 @@ class SessionServicesTests(TestCase):
             mock_get.assert_not_called()
             self.assertEqual(res["city"], "Mountain View")
 
+    def test_geo_location_fallback(self):
+        from authentication.sessions.infrastructure.cache import GeoLocationService
+        # Test error fallback
+        with patch("requests.get", side_effect=Exception("API Down")):
+            res = GeoLocationService.get_location_from_ip("1.1.1.1")
+            self.assertEqual(res["city"], "")
+            self.assertIsNone(res["lat"])
+
     def test_haversine_calculation(self):
         from authentication.sessions.infrastructure.cache import GeoLocationService
         # NYC to London is roughly 5570km
@@ -134,7 +142,7 @@ class SessionServicesTests(TestCase):
         # Test active check
         is_active = SessionQueryService.is_session_active(
             user_id=str(self.user.id),
-            session_id=session_id,
+            session_id=str(session_id),
             jti="a1",
             token_type="access"
         )

@@ -4,13 +4,15 @@ from django.core import mail
 from users.models import CustomUser, Client
 from django.core.cache import cache
 
+from django.urls import reverse
+
 class AuthFlowTests(APITestCase):
     def setUp(self):
         cache.clear()
-        self.reg_init_url = "/api/v1/auth/registration/init/"
-        self.reg_verify_url = "/api/v1/auth/registration/verify/"
-        self.recovery_init_url = "/api/v1/auth/recovery/init/"
-        self.recovery_verify_url = "/api/v1/auth/recovery/verify/"
+        self.reg_init_url = reverse("registration-init")
+        self.reg_verify_url = reverse("registration-verify")
+        self.recovery_init_url = reverse("recovery-init")
+        self.recovery_verify_url = reverse("recovery-verify")
 
     def test_registration_flow_success(self):
         # 1. Init
