@@ -9,6 +9,7 @@ from authentication.core.crypto import AuthCryptoEngine
 import uuid
 from copy import deepcopy
 from django.conf import settings
+import pytest
 
 
 def _auth_settings_override() -> dict:
@@ -64,12 +65,14 @@ class SecurityInfraTests(TestCase):
 
     def test_advanced_jwt_auth_invalid_token(self):
         request = self.factory.get("/", HTTP_AUTHORIZATION="Bearer invalid-token")
-        with self.assertRaises(AuthenticationFailed):
+        with pytest.raises(AuthenticationFailed):
             self.auth.authenticate(request)
 
     @patch("authentication.core.token_validator.build_fingerprint")
     @patch("authentication.core.request_context.build_fingerprint")
-    def test_advanced_jwt_auth_inactive_user(self, build_fpt_mock_ctx, build_fpt_mock_val):
+    def test_advanced_jwt_auth_inactive_user(
+        self, build_fpt_mock_ctx, build_fpt_mock_val
+    ):
         build_fpt_mock_ctx.return_value = "fixed-fpt"
         build_fpt_mock_val.return_value = "fixed-fpt"
         self.user.is_active = False
@@ -86,13 +89,15 @@ class SecurityInfraTests(TestCase):
         token = AuthCryptoEngine.encrypt_and_sign(payload, ttl_seconds=60)
         request = self.factory.get("/", HTTP_AUTHORIZATION=f"Bearer {token}")
 
-        with self.assertRaises(AuthenticationFailed) as cm:
+        with pytest.raises(AuthenticationFailed) as cm:
             self.auth.authenticate(request)
-        self.assertIn("inactive", str(cm.exception))
+        self.assertIn("inactive", str(cm.value))
 
     @patch("authentication.core.token_validator.build_fingerprint")
     @patch("authentication.core.request_context.build_fingerprint")
-    def test_advanced_jwt_auth_revoke_only_scope(self, build_fpt_mock_ctx, build_fpt_mock_val):
+    def test_advanced_jwt_auth_revoke_only_scope(
+        self, build_fpt_mock_ctx, build_fpt_mock_val
+    ):
         build_fpt_mock_ctx.return_value = "fixed-fpt"
         build_fpt_mock_val.return_value = "fixed-fpt"
         payload = {
@@ -106,13 +111,15 @@ class SecurityInfraTests(TestCase):
         token = AuthCryptoEngine.encrypt_and_sign(payload, ttl_seconds=60)
         request = self.factory.get("/", HTTP_AUTHORIZATION=f"Bearer {token}")
 
-        user, auth_payload = self.auth.authenticate(request)
+        _user, auth_payload = self.auth.authenticate(request)
         self.assertEqual(auth_payload["scope"], "revoke_only")
 
     @patch("authentication.core.token_validator.build_fingerprint")
     @patch("authentication.core.request_context.build_fingerprint")
     @patch("authentication.core.token_validator.SessionQueryService.is_session_active")
-    def test_advanced_jwt_auth_inactive_session(self, is_active_mock, build_fpt_mock_ctx, build_fpt_mock_val):
+    def test_advanced_jwt_auth_inactive_session(
+        self, is_active_mock, build_fpt_mock_ctx, build_fpt_mock_val
+    ):
         is_active_mock.return_value = False
         build_fpt_mock_ctx.return_value = "fixed-fpt"
         build_fpt_mock_val.return_value = "fixed-fpt"
@@ -128,9 +135,9 @@ class SecurityInfraTests(TestCase):
         token = AuthCryptoEngine.encrypt_and_sign(payload, ttl_seconds=60)
         request = self.factory.get("/", HTTP_AUTHORIZATION=f"Bearer {token}")
 
-        with self.assertRaises(AuthenticationFailed) as cm:
+        with pytest.raises(AuthenticationFailed) as cm:
             self.auth.authenticate(request)
-        self.assertIn("Session is no longer active", str(cm.exception))
+        self.assertIn("Session is no longer active", str(cm.value))
 
     def test_advanced_jwt_auth_authenticate_header(self):
         header = self.auth.authenticate_header(None)

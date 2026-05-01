@@ -30,7 +30,7 @@ def _auth_settings_override() -> dict:
 )
 class ClientLoginAPITests(APITestCase):
     endpoint = "/api/v1/auth/identity/login/"
-    
+
     @property
     def identity_init_endpoint(self):
         return reverse("identity-init")
@@ -127,7 +127,7 @@ class ClientLoginAPITests(APITestCase):
     def test_identity_init_route_is_registered(self, init_mock, fake_mock):
         # Setup mocks to prevent Redis/Service dependencies
         fake_mock.return_value = {"hit": "fake-hit", "flow_id": "fake-flow"}
-        
+
         # Even for missing users, we return 200 with challenge_required to prevent enumeration
         response = self.client.post(
             self.identity_init_endpoint,

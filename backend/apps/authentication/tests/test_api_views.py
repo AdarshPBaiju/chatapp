@@ -103,7 +103,9 @@ class AuthenticationAPIViewTests(APITestCase):
     @patch("authentication.core.token_validator.build_fingerprint")
     @patch("authentication.core.request_context.build_fingerprint")
     @patch("authentication.identity.interfaces.views.TokenRotateService.refresh_tokens")
-    def test_token_refresh_success(self, refresh_mock, build_fpt_mock_ctx, build_fpt_mock_val):
+    def test_token_refresh_success(
+        self, refresh_mock, build_fpt_mock_ctx, build_fpt_mock_val
+    ):
         build_fpt_mock_ctx.return_value = "fixed-fpt"
         build_fpt_mock_val.return_value = "fixed-fpt"
         refresh_mock.return_value = {
@@ -120,7 +122,7 @@ class AuthenticationAPIViewTests(APITestCase):
             "user_id": str(self.user.id),
             "jti": str(uuid.uuid4()),
             "type": "refresh",
-            "sid": str(uuid.uuid4()), # Must be a valid UUID string
+            "sid": str(uuid.uuid4()),  # Must be a valid UUID string
             "fpt": "fixed-fpt",
         }
         token = AuthCryptoEngine.encrypt_and_sign(payload, ttl_seconds=3600)
@@ -140,6 +142,7 @@ class CryptoTests(APITestCase):
         tampered_token = token[:-5] + ("A" if token[-5] != "A" else "B") + token[-4:]
 
         import pytest
+
         with pytest.raises(ValueError, match="Signature verification failed"):
             AuthCryptoEngine.decrypt_and_verify(tampered_token)
 
@@ -150,5 +153,6 @@ class CryptoTests(APITestCase):
         token = AuthCryptoEngine.encrypt_and_sign(payload, ttl_seconds=-10)
 
         import pytest
+
         with pytest.raises(ValueError, match="Token has expired"):
             AuthCryptoEngine.decrypt_and_verify(token)

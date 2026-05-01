@@ -383,7 +383,6 @@ class AnomalyDetectionService:
         score = sum(factors.values())
         final_score = min(score, 100)
 
-
         if final_score > 0:
             logger.info(
                 "risk_score_calculated",

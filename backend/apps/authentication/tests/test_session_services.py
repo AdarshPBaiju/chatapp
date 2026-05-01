@@ -185,11 +185,13 @@ class SessionServicesTests(TestCase):
         # Test active check
         is_active = SessionQueryService.is_session_active(
             user_id=str(self.user.id),
-            session_id=session_id, # Pass the UUID object directly
+            session_id=session_id,  # Pass the UUID object directly
             jti="a1",
             token_type="access",
         )
-        self.assertTrue(is_active, f"Session {session_id} should be active for user {self.user.id}")
+        self.assertTrue(
+            is_active, f"Session {session_id} should be active for user {self.user.id}"
+        )
 
         # Test listing
         sessions = SessionQueryService.list_active_sessions(user_id=str(self.user.id))

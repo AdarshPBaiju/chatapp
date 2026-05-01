@@ -80,7 +80,10 @@ class FKResolverMixin:
         """
         mapping = self.fk_field_mappings[field_name]
         from django.db.models import Model
-        if callable(mapping) and not (isinstance(mapping, type) and issubclass(mapping, Model)):
+
+        if callable(mapping) and not (
+            isinstance(mapping, type) and issubclass(mapping, Model)
+        ):
             model_class = mapping(context_data)
         else:
             model_class = mapping
@@ -94,6 +97,7 @@ class FKResolverMixin:
 
         if isinstance(model_class, str):
             from django.apps import apps
+
             model_class = apps.get_model(model_class)
 
         if not isinstance(model_class, type):
