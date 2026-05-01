@@ -81,9 +81,11 @@ class AuthenticationAPIViewTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
         self.assertEqual(response.data["error_code"], "IDENTITY_INVALID_CREDENTIALS")
 
+    @patch("authentication.core.token_validator.build_fingerprint")
     @patch("authentication.core.request_context.build_fingerprint")
-    def test_token_verify_success(self, build_fpt_mock):
-        build_fpt_mock.return_value = "fixed-fpt"
+    def test_token_verify_success(self, build_fpt_mock_ctx, build_fpt_mock_val):
+        build_fpt_mock_ctx.return_value = "fixed-fpt"
+        build_fpt_mock_val.return_value = "fixed-fpt"
         payload = {
             "sub": str(self.user.id),
             "user_id": str(self.user.id),
@@ -98,10 +100,12 @@ class AuthenticationAPIViewTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertTrue(response.data["success"])
 
+    @patch("authentication.core.token_validator.build_fingerprint")
     @patch("authentication.core.request_context.build_fingerprint")
     @patch("authentication.identity.interfaces.views.TokenRotateService.refresh_tokens")
-    def test_token_refresh_success(self, refresh_mock, build_fpt_mock):
-        build_fpt_mock.return_value = "fixed-fpt"
+    def test_token_refresh_success(self, refresh_mock, build_fpt_mock_ctx, build_fpt_mock_val):
+        build_fpt_mock_ctx.return_value = "fixed-fpt"
+        build_fpt_mock_val.return_value = "fixed-fpt"
         refresh_mock.return_value = {
             "status": "full",
             "access": "new-access",

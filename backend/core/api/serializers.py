@@ -92,7 +92,7 @@ class FKResolverMixin:
             from django.apps import apps
             model_class = apps.get_model(model_class)
 
-        if not model_class:
+        if not isinstance(model_class, type):
             return value
 
         if isinstance(value, model_class):

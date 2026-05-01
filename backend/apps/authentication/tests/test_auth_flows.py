@@ -26,24 +26,29 @@ class AuthFlowTests(APITestCase):
             },
             format="json",
         )
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
 
         # Check mail was sent
         self.assertEqual(len(mail.outbox), 1)
         self.assertIn("newuser@example.com", mail.outbox[0].to)
 
-        # Check OTP in cache
-        user = CustomUser.objects.get(email="newuser@example.com")
-        otp = cache.get(f"otp:{user.id}:registration")
-        self.assertIsNotNone(otp)
+        # Extract OTP from mail (6 digits, possibly separated by whitespace/newlines)
+        import re
+        # Find all digits and join them, then look for a 6-digit sequence
+        all_digits = "".join(re.findall(r'\d', mail.outbox[0].body))
+        # The OTP is usually the first or most prominent 6-digit block
+        # Given the template, the first 6 digits will be the OTP
+        otp = all_digits[:6]
+        self.assertEqual(len(otp), 6, "Could not extract 6-digit OTP from email")
 
         # 2. Verify
         response = self.client.post(
             self.reg_verify_url,
-            {"email": "newuser@example.com", "otp": otp},
+            {"email": "newuser@example.com", "otp_code": otp},
             format="json",
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
+        user = CustomUser.objects.get(email="newuser@example.com")
         user.refresh_from_db()
         self.assertTrue(user.is_active)
 
@@ -63,8 +68,10 @@ class AuthFlowTests(APITestCase):
         self.assertGreaterEqual(len(mail.outbox), 1)
         self.assertIn("recover@example.com", [m.to[0] for m in mail.outbox])
 
-        otp = cache.get(f"otp:{user.id}:recovery")
-        self.assertIsNotNone(otp)
+        import re
+        all_digits = "".join(re.findall(r'\d', mail.outbox[-1].body))
+        otp = all_digits[:6]
+        self.assertEqual(len(otp), 6, "Could not extract 6-digit recovery OTP")
 
         # 2. Verify and Reset
         response = self.client.post(
@@ -90,11 +97,9 @@ class AuthFlowTests(APITestCase):
         from rest_framework.exceptions import ValidationError
         from authentication.registration.application.services import RegistrationService
 
-        # Attempt to init registration with same email
+        # Attempt to init signup with same email
         with self.assertRaises(ValidationError) as cm:
-            RegistrationService.initiate_registration(
+            RegistrationService.initiate_signup(
                 email="conflict@example.com",
-                password="new-password",
-                full_name="Conflict Guy",
             )
         self.assertIn("already exists", str(cm.exception))
