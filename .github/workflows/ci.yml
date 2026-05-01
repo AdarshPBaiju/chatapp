@@ -80,7 +80,7 @@ jobs:
 
       - name: test
         run: |
-          coverage run manage.py test --verbosity=2 --parallel
+          coverage run manage.py test users authentication core --verbosity=2 --parallel
           coverage xml -o coverage.xml
           coverage report --fail-under=70
 

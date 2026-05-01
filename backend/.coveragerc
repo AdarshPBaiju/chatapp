@@ -1,7 +1,9 @@
 [run]
 source =
+    users
+    authentication
+    core
     .
-    apps
 omit =
     *tests*
     *migrations*
