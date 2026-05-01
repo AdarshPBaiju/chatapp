@@ -34,8 +34,8 @@ def _auth_settings_override() -> dict:
     },
 )
 class ClientLoginAPITests(APITestCase):
-    endpoint = "/api/v1/client/login/"
-    identity_init_endpoint = "/api/v1/client/identity/init/"
+    endpoint = "/api/v1/auth/login/"
+    identity_init_endpoint = "/api/v1/auth/init/"
 
     def setUp(self):
         self.inactive_user = CustomUser.objects.create_user(
@@ -62,7 +62,7 @@ class ClientLoginAPITests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
         self.assertFalse(response.data["success"])
 
-    @patch("users.api.v1.client.views.auth.login.UserService.send_otp")
+    @patch("authentication.identity.interfaces.views.UserService.send_otp")
     def test_inactive_user_login_auto_sends_otp(self, send_otp_mock):
         response = self.client.post(
             self.endpoint,
@@ -76,7 +76,7 @@ class ClientLoginAPITests(APITestCase):
         self.assertEqual(response.data["data"]["user_id"], str(self.inactive_user.id))
         send_otp_mock.assert_called_once_with(self.inactive_user, ignore_cooldown=True)
 
-    @patch("users.api.v1.client.views.auth.login.AuthEngine.issue_tokens")
+    @patch("authentication.identity.interfaces.views.AuthEngine.issue_tokens")
     def test_active_user_login_returns_full_tokens(self, issue_tokens_mock):
         issue_tokens_mock.return_value = {
             "status": "full",
@@ -99,7 +99,7 @@ class ClientLoginAPITests(APITestCase):
         self.assertEqual(response.data["data"]["access"], "access-token")
         self.assertEqual(response.data["data"]["refresh"], "refresh-token")
 
-    @patch("users.api.v1.client.views.auth.login.AuthEngine.issue_tokens")
+    @patch("authentication.identity.interfaces.views.AuthEngine.issue_tokens")
     def test_active_user_login_returns_restricted_payload(self, issue_tokens_mock):
         issue_tokens_mock.return_value = {
             "status": "restricted",

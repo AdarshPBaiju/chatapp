@@ -115,6 +115,15 @@ class ClientAccountSuspension(UUIDModel):
             return False
         return not (self.ends_at and self.ends_at <= timezone.now())
 
+    @property
+    def current_status(self) -> str:
+        """Returns the real-time status, accounting for time passage."""
+        if self.status != self.SuspensionStatus.ACTIVE:
+            return self.status
+        if self.ends_at and self.ends_at <= timezone.now():
+            return "expired"
+        return "active"
+
     def lift(self, lifted_by=None, reason: str = "") -> None:
         """
         Manually lift (revoke) an active suspension before its end date.

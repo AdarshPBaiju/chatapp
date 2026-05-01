@@ -59,10 +59,8 @@ class Client(UUIDModel):
     def is_suspended(self):
         """Check if the client currently has an active suspension."""
         return self.suspensions.filter(
-            status="active",
-            ends_at__gt=timezone.now()
-            if self.suspensions.filter(ends_at__isnull=False)
-            else True,
+            models.Q(status="active")
+            & (models.Q(ends_at__gt=timezone.now()) | models.Q(ends_at__isnull=True))
         ).exists()
 
     @property
