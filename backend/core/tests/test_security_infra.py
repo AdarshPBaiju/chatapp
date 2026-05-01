@@ -23,30 +23,35 @@ def _auth_settings_override() -> dict:
     return auth_settings
 
 
-@override_settings(AUTH_ENGINE_SETTINGS=_auth_settings_override())
+@override_settings(
+    AUTH_ENGINE_SETTINGS=_auth_settings_override(),
+)
 class SecurityInfraTests(TestCase):
     def setUp(self):
-        self.factory = RequestFactory()
         self.user = CustomUser.objects.create_user(
             email="security@example.com", password="password123", is_active=True
         )
-        Client.objects.create(user=self.user, full_name="Security Tester")
+        self.client_obj = Client.objects.create(user=self.user, full_name="Security Tester")
+        self.factory = RequestFactory()
         self.auth = AdvancedJWTAuthentication()
 
-    def test_advanced_jwt_auth_success(self):
+    @patch("core.api.authentication.build_fingerprint")
+    def test_advanced_jwt_auth_success(self, build_fpt_mock):
+        build_fpt_mock.return_value = "fixed-fpt"
         payload = {
             "sub": str(self.user.id),
             "user_id": str(self.user.id),
             "jti": str(uuid.uuid4()),
             "type": "access",
             "scope": "full",
+            "fpt": "fixed-fpt",
         }
         token = AuthCryptoEngine.encrypt_and_sign(payload, ttl_seconds=60)
         request = self.factory.get("/", HTTP_AUTHORIZATION=f"Bearer {token}")
-
+        
         user, auth_payload = self.auth.authenticate(request)
         self.assertEqual(user, self.user)
-        self.assertEqual(auth_payload["sub"], str(self.user.id))
+        self.assertEqual(auth_payload["sub"], payload["sub"])
 
     def test_advanced_jwt_auth_no_header(self):
         request = self.factory.get("/")
@@ -58,31 +63,37 @@ class SecurityInfraTests(TestCase):
         with self.assertRaises(AuthenticationFailed):
             self.auth.authenticate(request)
 
-    def test_advanced_jwt_auth_inactive_user(self):
+    @patch("core.api.authentication.build_fingerprint")
+    def test_advanced_jwt_auth_inactive_user(self, build_fpt_mock):
+        build_fpt_mock.return_value = "fixed-fpt"
         self.user.is_active = False
         self.user.save()
-
+        
         payload = {
             "sub": str(self.user.id),
             "user_id": str(self.user.id),
             "jti": str(uuid.uuid4()),
             "type": "access",
             "scope": "full",
+            "fpt": "fixed-fpt",
         }
         token = AuthCryptoEngine.encrypt_and_sign(payload, ttl_seconds=60)
         request = self.factory.get("/", HTTP_AUTHORIZATION=f"Bearer {token}")
-
+        
         with self.assertRaises(AuthenticationFailed) as cm:
             self.auth.authenticate(request)
         self.assertIn("inactive", str(cm.exception))
 
-    def test_advanced_jwt_auth_revoke_only_scope(self):
+    @patch("core.api.authentication.build_fingerprint")
+    def test_advanced_jwt_auth_revoke_only_scope(self, build_fpt_mock):
+        build_fpt_mock.return_value = "fixed-fpt"
         payload = {
             "sub": str(self.user.id),
             "user_id": str(self.user.id),
             "jti": str(uuid.uuid4()),
             "type": "access",
             "scope": "revoke_only",
+            "fpt": "fixed-fpt",
         }
         token = AuthCryptoEngine.encrypt_and_sign(payload, ttl_seconds=60)
         request = self.factory.get("/", HTTP_AUTHORIZATION=f"Bearer {token}")
@@ -90,9 +101,11 @@ class SecurityInfraTests(TestCase):
         user, auth_payload = self.auth.authenticate(request)
         self.assertEqual(auth_payload["scope"], "revoke_only")
 
+    @patch("core.api.authentication.build_fingerprint")
     @patch("core.api.authentication.SessionQueryService.is_session_active")
-    def test_advanced_jwt_auth_inactive_session(self, is_active_mock):
+    def test_advanced_jwt_auth_inactive_session(self, is_active_mock, build_fpt_mock):
         is_active_mock.return_value = False
+        build_fpt_mock.return_value = "fixed-fpt"
         payload = {
             "sub": str(self.user.id),
             "user_id": str(self.user.id),
@@ -100,6 +113,7 @@ class SecurityInfraTests(TestCase):
             "jti": str(uuid.uuid4()),
             "type": "access",
             "scope": "full",
+            "fpt": "fixed-fpt",
         }
         token = AuthCryptoEngine.encrypt_and_sign(payload, ttl_seconds=60)
         request = self.factory.get("/", HTTP_AUTHORIZATION=f"Bearer {token}")

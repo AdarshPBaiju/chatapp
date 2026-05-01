@@ -59,15 +59,13 @@ class CoreUtilsTests(TestCase):
             serializer.resolve_foreign_keys(data)
 
     def test_smart_upload_path_prepend_uuid(self):
-        config = UploadPathConfig(
-            base_path="test", field_lookup="id", filename_mode="prepend_uuid"
-        )
+        config = UploadPathConfig(base_path="test", filename_mode="prepend_uuid")
         sup = SmartUploadPath(config)
-        instance = type("Obj", (), {"id": "123"})()
-        path = sup(instance, "image.png")
-        self.assertTrue(path.startswith("test/123/"))
+        path = sup(self.user, "image.png")
+        filename = path.split("/")[-1]
+        self.assertTrue(filename.endswith("_image.png"))
+        self.assertEqual(len(filename.split("_")[0]), 8)  # Short UUID hex
         self.assertTrue(path.endswith("_image.png"))
-        self.assertIn("-", path)  # UUID part
 
     def test_smart_upload_path_keep_original(self):
         config = UploadPathConfig(
