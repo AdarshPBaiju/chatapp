@@ -44,7 +44,7 @@ export type PendingVerification = {
   resend_interval: number;
 };
 
-export type AuthStatus = "anonymous" | "pending_verification" | "restricted" | "full" | "identity_flow";
+export type AuthStatus = "anonymous" | "pending_verification" | "restricted" | "full" | "identity_flow" | "offline";
 
 export type AuthPhase = 
   | "IDENTIFY" 

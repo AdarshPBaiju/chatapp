@@ -1,6 +1,5 @@
 import { Navigate, createBrowserRouter } from "react-router-dom";
 
-import { useAuthStore } from "@/modules/auth/state/authState";
 import { AuthPage } from "@/modules/auth/pages/AuthPage";
 import { SettingsPage } from "@/pages/SettingsPage";
 import { ErrorPage } from "@/pages/ErrorPage";
@@ -11,23 +10,11 @@ import { ProfileSection } from "@/features/settings/ui/ProfileSection";
 import { SecuritySection } from "@/features/settings/ui/SecuritySection";
 import { ActiveSessionsSection } from "@/features/settings/ui/ActiveSessionsSection";
 
-function RootRedirect() {
-  const status = useAuthStore((state) => state.status);
-
-  if (status === "full") return <Navigate to="/settings" replace />;
-  if (status === "restricted") return <Navigate to="/auth?mode=restricted" replace />;
-  if (status === "pending_verification") return <Navigate to="/auth?mode=verify" replace />;
-  return <Navigate to="/auth?mode=login" replace />;
-}
-
-function FullAuthGuard({ children }: { children: JSX.Element }) {
-  const status = useAuthStore((state) => state.status);
-  if (status === "restricted") return <Navigate to="/auth?mode=restricted" replace />;
-  if (status !== "full") {
-    return <Navigate to="/auth?mode=login" replace />;
-  }
-  return children;
-}
+import { 
+  AuthenticatedGuard, 
+  GuestGuard, 
+  RootRedirect 
+} from "@/shared/auth/guards";
 
 export const appRouter = createBrowserRouter([
   { 
@@ -38,7 +25,11 @@ export const appRouter = createBrowserRouter([
   { path: "/app", element: <Navigate to="/settings" replace /> },
   { path: "/account", element: <Navigate to="/settings" replace /> },
   {
-    element: <AuthShell />,
+    element: (
+      <GuestGuard>
+        <AuthShell />
+      </GuestGuard>
+    ),
     errorElement: <ErrorPage />,
     children: [
       { path: "/auth", element: <AuthPage /> },
@@ -54,9 +45,9 @@ export const appRouter = createBrowserRouter([
     path: "/settings",
     errorElement: <ErrorPage />,
     element: (
-      <FullAuthGuard>
+      <AuthenticatedGuard>
         <SettingsPage />
-      </FullAuthGuard>
+      </AuthenticatedGuard>
     ),
     children: [
       { path: "profile", element: <ProfileSection /> },

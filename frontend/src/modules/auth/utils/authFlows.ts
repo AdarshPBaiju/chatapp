@@ -4,7 +4,6 @@ import { useIdentityMachine } from "@/modules/auth/state/authMachine";
 import { authStorage } from "@/shared/lib/storage";
 import { readApiErrorCode } from "@/shared/lib/apiResponse";
 import { getErrorMessage } from "@/shared/lib/errorHelper";
-import { tokenManager } from "@/shared/auth/tokenManager";
 import { sessionEngine } from "@/shared/auth/sessionEngine";
 import { refreshToken as apiRefreshToken } from "@/modules/auth/api/authApi";
 import {
@@ -248,18 +247,12 @@ export async function runBootstrapRefresh(): Promise<void> {
     } catch (error: any) {
       const isAxiosErr = error?.isAxiosError;
       const status = error?.response?.status;
+      
       if (isAxiosErr && (!status || status >= 500 || status === 429)) {
-        if (!isRestricted && tokenManager.getAccess()) {
-          useAuthStore.getState().setFull({
-            access: tokenManager.getAccess()!,
-            refresh: authStorage.getRefresh()!,
-            access_exp: tokenManager.getAccessExp() ?? (Math.floor(Date.now() / 1000) + 3600),
-            refresh_exp: authStorage.getRefreshExp() ?? 0,
-            user: authStorage.getUser() ?? undefined,
-          });
-        }
+        useAuthStore.getState().setOffline();
         return;
       }
+      
       useAuthStore.getState().setAnonymous();
     }
   })();

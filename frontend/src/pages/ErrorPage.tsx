@@ -2,8 +2,10 @@ import { useRouteError, isRouteErrorResponse, useNavigate } from "react-router-d
 import { motion } from "framer-motion";
 import { AlertTriangle, Home, ArrowLeft, RefreshCcw } from "lucide-react";
 import { Button } from "@/shared/ui/FormControls";
+import { useEffect, useState } from "react";
+import { runBootstrapRefresh } from "@/modules/auth/utils/authFlows";
 
-export function ErrorPage() {
+export function ErrorPage({ mode }: { mode?: "offline" | "default" }) {
   const error = useRouteError();
   const navigate = useNavigate();
 
@@ -11,7 +13,29 @@ export function ErrorPage() {
   let message = "Something didn't go quite right on our end. Let's get you back on track.";
   let code = "500";
 
-  if (isRouteErrorResponse(error)) {
+  const [countdown, setCountdown] = useState(10);
+
+  useEffect(() => {
+    if (mode !== "offline") return;
+
+    const timer = setInterval(() => {
+      setCountdown((prev) => {
+        if (prev <= 1) {
+          void runBootstrapRefresh();
+          return 10;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [mode]);
+
+  if (mode === "offline") {
+    title = "Server Connection Lost";
+    message = `We're having trouble reaching our servers right now. Retrying in ${countdown}s...`;
+    code = "OFFLINE";
+  } else if (isRouteErrorResponse(error)) {
     if (error.status === 404) {
       title = "Lost in space?";
       message = "We couldn't find the page you're looking for. It might have moved or never existed.";
@@ -60,7 +84,10 @@ export function ErrorPage() {
           </Button>
           <Button
             variant="outline"
-            onClick={() => window.location.reload()}
+            onClick={() => {
+              setCountdown(10);
+              void runBootstrapRefresh();
+            }}
             className="w-full sm:w-auto px-10"
             leftIcon={<RefreshCcw size={18} />}
           >
