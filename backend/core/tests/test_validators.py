@@ -12,32 +12,27 @@ class ValidatorTests(TestCase):
     def test_required_rule(self):
         rule = RequiredRule()
         # Should pass
-        rule.validate("value", {})
+        self.assertIsNone(rule.validate("value", {}))
         # Should fail
-        with self.assertRaises(ValidationError):
-            rule.validate(None, {})
-        with self.assertRaises(ValidationError):
-            rule.validate("", {})
+        self.assertIsNotNone(rule.validate(None, {}))
+        self.assertIsNotNone(rule.validate("", {}))
 
     def test_email_format_rule(self):
         rule = EmailFormatRule()
         # Should pass
-        rule.validate("test@example.com", {})
+        self.assertIsNone(rule.validate("test@example.com", {}))
         # Should fail
-        with self.assertRaises(ValidationError):
-            rule.validate("invalid-email", {})
+        self.assertIsNotNone(rule.validate("invalid-email", {}))
 
     def test_min_max_length_rule(self):
         rule = MinMaxLengthRule(min_len=3, max_len=5)
         # Should pass
-        rule.validate("abc", {})
-        rule.validate("abcde", {})
+        self.assertIsNone(rule.validate("abc", {}))
+        self.assertIsNone(rule.validate("abcde", {}))
         # Should fail min
-        with self.assertRaises(ValidationError):
-            rule.validate("ab", {})
+        self.assertIsNotNone(rule.validate("ab", {}))
         # Should fail max
-        with self.assertRaises(ValidationError):
-            rule.validate("abcdef", {})
+        self.assertIsNotNone(rule.validate("abcdef", {}))
 
     def test_service_validator_engine(self):
         validator = ServiceValidator()

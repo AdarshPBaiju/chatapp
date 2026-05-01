@@ -37,7 +37,7 @@ class SecurityInfraTests(TestCase):
         self.factory = RequestFactory()
         self.auth = AdvancedJWTAuthentication()
 
-    @patch("authentication.core.request_context.build_fingerprint")
+    @patch("authentication.core.token_validator.build_fingerprint")
     def test_advanced_jwt_auth_success(self, build_fpt_mock):
         build_fpt_mock.return_value = "fixed-fpt"
         payload = {
@@ -65,7 +65,7 @@ class SecurityInfraTests(TestCase):
         with self.assertRaises(AuthenticationFailed):
             self.auth.authenticate(request)
 
-    @patch("authentication.core.request_context.build_fingerprint")
+    @patch("authentication.core.token_validator.build_fingerprint")
     def test_advanced_jwt_auth_inactive_user(self, build_fpt_mock):
         build_fpt_mock.return_value = "fixed-fpt"
         self.user.is_active = False
@@ -86,7 +86,7 @@ class SecurityInfraTests(TestCase):
             self.auth.authenticate(request)
         self.assertIn("inactive", str(cm.exception))
 
-    @patch("authentication.core.request_context.build_fingerprint")
+    @patch("authentication.core.token_validator.build_fingerprint")
     def test_advanced_jwt_auth_revoke_only_scope(self, build_fpt_mock):
         build_fpt_mock.return_value = "fixed-fpt"
         payload = {
@@ -103,7 +103,7 @@ class SecurityInfraTests(TestCase):
         user, auth_payload = self.auth.authenticate(request)
         self.assertEqual(auth_payload["scope"], "revoke_only")
 
-    @patch("authentication.core.request_context.build_fingerprint")
+    @patch("authentication.core.token_validator.build_fingerprint")
     @patch("authentication.core.token_validator.SessionQueryService.is_session_active")
     def test_advanced_jwt_auth_inactive_session(self, is_active_mock, build_fpt_mock):
         is_active_mock.return_value = False
