@@ -31,6 +31,7 @@ type AuthState = {
   setPendingVerification: (payload: PendingVerification) => void;
   setRestricted: (params: SetRestrictedParams) => void;
   setFull: (params: SetFullParams) => void;
+  setOffline: () => void;
   hydrateUser: () => void;
 };
 
@@ -94,6 +95,14 @@ export const useAuthStore = create<AuthState>((set) => ({
       user: resolvedUser,
       pendingVerification: null,
       restrictedSessions: [],
+    });
+  },
+
+  setOffline: () => {
+    const user = authStorage.getUser();
+    set({
+      status: "offline",
+      user: user ?? null,
     });
   },
 

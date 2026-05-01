@@ -35,7 +35,7 @@ def api_exception_handler(exc, context):
         )
         response.data = standard_response.data
     else:
-        logger.exception("In-flight API Error Traceback: %s", exc)
+        logger.error("In-flight API Error: %s", exc)
         return ResponseFactory.error(
             message="Internal Server Error", code=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
