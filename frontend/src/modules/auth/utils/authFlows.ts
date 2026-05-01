@@ -202,7 +202,7 @@ export async function runBootstrapRefresh(): Promise<void> {
   }
 
   bootstrapRefreshPromise = (async () => {
-  // Wire the engine callbacks once at boot.
+    // Wire the engine callbacks once at boot.
     sessionEngine.init(doSessionRefresh, onSessionExpired);
 
     const isRestricted = authStorage.getIsRestricted();
@@ -247,21 +247,17 @@ export async function runBootstrapRefresh(): Promise<void> {
     } catch (error: any) {
       const isAxiosErr = error?.isAxiosError;
       const status = error?.response?.status;
-      
+
       if (isAxiosErr && (!status || status >= 500 || status === 429)) {
         useAuthStore.getState().setOffline();
         return;
       }
-      
+
       useAuthStore.getState().setAnonymous();
     }
   })();
 
-  try {
-    await bootstrapRefreshPromise;
-  } finally {
-    bootstrapRefreshPromise = null;
-  }
+  return bootstrapRefreshPromise;
 }
 
 export async function runSignUpFinalizeFlow(params: {
