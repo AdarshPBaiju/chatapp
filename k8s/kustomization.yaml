@@ -13,11 +13,27 @@ resources:
 - kafka.yaml
 - backend.yaml
 - celery.yaml
+- go-auth.yaml
+- go-enrichment.yaml
+- go-risk.yaml
+- frontend.yaml
 
 images:
 - name: your-registry/chatapp-backend
   newName: ghcr.io/adarshpbaiju/chatapp-backend
   newTag: sha-79b1f58
+- name: your-registry/chatapp-go-auth
+  newName: ghcr.io/adarshpbaiju/chatapp-go-auth
+  newTag: latest
+- name: your-registry/chatapp-go-enrichment
+  newName: ghcr.io/adarshpbaiju/chatapp-go-enrichment
+  newTag: latest
+- name: your-registry/chatapp-go-risk
+  newName: ghcr.io/adarshpbaiju/chatapp-go-risk
+  newTag: latest
+- name: your-registry/chatapp-frontend
+  newName: ghcr.io/adarshpbaiju/chatapp-frontend
+  newTag: latest
 
 commonLabels:
   app: chatapp
@@ -31,4 +47,8 @@ configMapGenerator:
   - REDIS_PORT=6379
   - MINIO_HOST=minio-service
   - MINIO_PORT=9000
+  - KAFKA_BOOTSTRAP_SERVERS=kafka-service:9092
+  - GO_AUTH_URL=http://go-auth-service:8080
+  - GO_ENRICHMENT_URL=http://go-enrichment-service:8081
+  - GO_RISK_URL=http://go-risk-service:8082
   name: chatapp-config

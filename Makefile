@@ -24,6 +24,11 @@ help:
 	@echo "  make dev-logs             - Follow all dev logs"
 	@echo "  make dev-logs-<service>   - Follow logs for a specific dev service"
 	@echo "  make dev-backend          - Shortcut for backend logs"
+	@echo "  make dev-frontend         - Shortcut for frontend logs"
+	@echo "  make dev-go-auth          - Shortcut for Go Auth logs"
+	@echo "  make dev-go-enrichment    - Shortcut for Go Enrichment logs"
+	@echo "  make dev-go-risk          - Shortcut for Go Risk logs"
+	@echo "  make dev-go-all           - Shortcut for all Go service logs"
 	@echo "  make dev-shell            - Open shell in backend container"
 	@echo "  make dev-migrate          - Run migrations in dev"
 	@echo "  make dev-makemigrations   - Create migrations in dev"
@@ -36,6 +41,11 @@ help:
 	@echo "  make prod-teardown        - Stop and remove prod volumes"
 	@echo "  make prod-logs            - Follow all prod logs"
 	@echo "  make prod-logs-<service>  - Follow logs for a specific prod service"
+	@echo "  make prod-frontend        - Shortcut for production frontend logs"
+	@echo "  make prod-go-auth         - Shortcut for production Go Auth logs"
+	@echo "  make prod-go-enrichment   - Shortcut for production Go Enrichment logs"
+	@echo "  make prod-go-risk         - Shortcut for production Go Risk logs"
+	@echo "  make prod-go-all          - Shortcut for all production Go service logs"
 	@echo "  make prod-backend         - Shortcut for backend logs"
 	@echo ""
 	@echo "Global Commands:"
@@ -86,6 +96,30 @@ dev-logs-%:
 dev-backend:
 	$(DEV_CMD) logs -f backend
 
+dev-frontend:
+	$(DEV_CMD) logs -f frontend
+
+dev-backend:
+	$(DEV_CMD) logs -f backend
+
+dev-gateway:
+	$(DEV_CMD) logs -f gateway
+
+dev-logs:
+	$(DEV_CMD) logs -f
+
+dev-go-auth:
+	$(DEV_CMD) logs -f go-auth
+
+dev-go-enrichment:
+	$(DEV_CMD) logs -f go-enrichment
+
+dev-go-risk:
+	$(DEV_CMD) logs -f go-risk
+
+dev-go-all:
+	$(DEV_CMD) logs -f go-auth go-enrichment go-risk
+
 dev-shell:
 	$(DEV_CMD) exec backend bash
 
@@ -119,3 +153,18 @@ prod-logs-%:
 
 prod-backend:
 	$(PROD_CMD) logs -f backend
+
+prod-frontend:
+	$(PROD_CMD) logs -f frontend
+
+prod-go-auth:
+	$(PROD_CMD) logs -f go-auth
+
+prod-go-enrichment:
+	$(PROD_CMD) logs -f go-enrichment
+
+prod-go-risk:
+	$(PROD_CMD) logs -f go-risk
+
+prod-go-all:
+	$(PROD_CMD) logs -f go-auth go-enrichment go-risk

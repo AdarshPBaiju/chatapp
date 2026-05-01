@@ -5,13 +5,17 @@ on:
     branches: ["**"]
     paths:
       - "backend/**"
+      - "services/go/**"
       - "pyproject.toml"
+      - "go.mod"
       - ".github/workflows/ci.yml"
   pull_request:
     branches: ["**"]
     paths:
       - "backend/**"
+      - "services/go/**"
       - "pyproject.toml"
+      - "go.mod"
       - ".github/workflows/ci.yml"
 
 concurrency:
@@ -25,7 +29,8 @@ env:
   DJANGO_SETTINGS_MODULE: config.settings.ci
 
 jobs:
-  check:
+  django:
+    name: django-tests
     runs-on: ubuntu-latest
 
     services:
@@ -87,7 +92,7 @@ jobs:
       - name: coverage-summary
         if: always()
         run: |
-          echo "### Test Coverage Summary" >> $GITHUB_STEP_SUMMARY
+          echo "### Django Test Coverage Summary" >> $GITHUB_STEP_SUMMARY
           coverage report >> $GITHUB_STEP_SUMMARY
 
       - uses: codecov/codecov-action@v4
@@ -99,9 +104,46 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
           slug: AdarshPBaiju/chatapp
 
-      - uses: actions/upload-artifact@v4
+  go:
+    name: go-tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/go
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: setup-go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+          cache: true
+          cache-dependency-path: services/go/go.sum
+
+      - name: install-deps
+        run: go mod download
+
+      - name: build
+        run: go build ./...
+
+      - name: test
+        run: go test -v -race ./...
+
+      - name: test-coverage
+        run: go test -v -coverprofile=coverage.out ./...
+
+      - name: coverage-summary
+        if: always()
+        run: |
+          echo "### Go Test Coverage Summary" >> $GITHUB_STEP_SUMMARY
+          go tool cover -func=coverage.out >> $GITHUB_STEP_SUMMARY
+
+      - uses: codecov/codecov-action@v4
         if: always()
         with:
-          name: coverage-report
-          path: backend/coverage.xml
-          retention-days: 14
+          files: services/go/coverage.out
+          flags: go
+          fail_ci_if_error: false
+          token: ${{ secrets.CODECOV_TOKEN }}
+          slug: AdarshPBaiju/chatapp

@@ -1,5 +1,5 @@
 from django.test import TestCase, RequestFactory, override_settings
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 from users.models import CustomUser, Client
 from rest_framework.exceptions import AuthenticationFailed, ValidationError
 from core.api.authentication import AdvancedJWTAuthentication
@@ -21,6 +21,18 @@ def _auth_settings_override() -> dict:
     }
     auth_settings["ACTIVE_KID"] = "v1"
     return auth_settings
+
+
+def _go_auth_settings_override(**overrides) -> dict:
+    settings_dict = {
+        "ENABLED": False,
+        "VERIFY_URL": "http://go-auth:8080/api/v1/verify",
+        "INTERNAL_SERVICE_SECRET": "test-internal-secret",
+        "TIMEOUT_SECONDS": 2.0,
+        "FALLBACK_TO_LOCAL": True,
+    }
+    settings_dict.update(overrides)
+    return settings_dict
 
 
 @override_settings(
@@ -141,6 +153,102 @@ class SecurityInfraTests(TestCase):
     def test_advanced_jwt_auth_authenticate_header(self):
         header = self.auth.authenticate_header(None)
         self.assertEqual(header, "Bearer")
+
+    @override_settings(
+        GO_AUTH_SETTINGS=_go_auth_settings_override(ENABLED=True),
+    )
+    @patch("authentication.core.token_validator.requests.post")
+    def test_advanced_jwt_auth_uses_go_auth_when_available(self, post_mock):
+        payload = {
+            "sub": str(self.user.id),
+            "user_id": str(self.user.id),
+            "jti": str(uuid.uuid4()),
+            "type": "access",
+            "scope": "full",
+            "fpt": "remote-fpt",
+        }
+        response = Mock()
+        response.status_code = 200
+        response.json.return_value = {
+            "status": "ok",
+            "message": "verified",
+            "data": {"payload": payload},
+        }
+        post_mock.return_value = response
+
+        request = self.factory.get("/", HTTP_AUTHORIZATION="Bearer remote-token")
+
+        with patch(
+            "authentication.core.token_validator.AuthCryptoEngine.decrypt_and_verify"
+        ) as decrypt_mock:
+            user, auth_payload = self.auth.authenticate(request)
+
+        self.assertEqual(user.id, self.user.id)
+        self.assertEqual(auth_payload["user_id"], str(self.user.id))
+        decrypt_mock.assert_not_called()
+        post_mock.assert_called_once()
+
+    @override_settings(
+        GO_AUTH_SETTINGS=_go_auth_settings_override(ENABLED=True),
+    )
+    @patch("authentication.core.token_validator.build_fingerprint")
+    @patch("authentication.core.request_context.build_fingerprint")
+    @patch("authentication.core.token_validator.requests.post")
+    def test_advanced_jwt_auth_falls_back_when_go_auth_not_implemented(
+        self,
+        post_mock,
+        build_fpt_mock_ctx,
+        build_fpt_mock_val,
+    ):
+        build_fpt_mock_ctx.return_value = "fixed-fpt"
+        build_fpt_mock_val.return_value = "fixed-fpt"
+        response = Mock()
+        response.status_code = 501
+        response.json.return_value = {
+            "status": "error",
+            "message": "not implemented",
+            "error_code": "GO_AUTH_VERIFY_NOT_IMPLEMENTED",
+        }
+        post_mock.return_value = response
+
+        payload = {
+            "sub": str(self.user.id),
+            "user_id": str(self.user.id),
+            "jti": str(uuid.uuid4()),
+            "type": "access",
+            "scope": "full",
+            "fpt": "fixed-fpt",
+        }
+        token = AuthCryptoEngine.encrypt_and_sign(payload, ttl_seconds=60)
+        request = self.factory.get("/", HTTP_AUTHORIZATION=f"Bearer {token}")
+
+        user, auth_payload = self.auth.authenticate(request)
+
+        self.assertEqual(user.id, self.user.id)
+        self.assertEqual(auth_payload["sub"], payload["sub"])
+        post_mock.assert_called_once()
+
+    @override_settings(
+        GO_AUTH_SETTINGS=_go_auth_settings_override(ENABLED=True),
+    )
+    @patch("authentication.core.token_validator.requests.post")
+    def test_advanced_jwt_auth_raises_go_validation_failure(self, post_mock):
+        response = Mock()
+        response.status_code = 401
+        response.json.return_value = {
+            "status": "error",
+            "message": "Token context mismatch.",
+            "error_code": "AUTH_TOKEN_TAMPERED",
+        }
+        post_mock.return_value = response
+
+        request = self.factory.get("/", HTTP_AUTHORIZATION="Bearer remote-token")
+
+        with self.assertRaises(AuthenticationFailed) as cm:
+            self.auth.authenticate(request)
+
+        self.assertIn("Token context mismatch", str(cm.exception))
+        post_mock.assert_called_once()
 
 
 class CoreAPITests(TestCase):

@@ -1,0 +1,51 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: go-enrichment
+  namespace: chatapp
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: go-enrichment
+  template:
+    metadata:
+      labels:
+        app: go-enrichment
+    spec:
+      containers:
+      - name: go-enrichment
+        image: ghcr.io/adarshpbaiju/chatapp-go-enrichment:latest
+        ports:
+        - containerPort: 8081
+        envFrom:
+        - configMapRef:
+            name: chatapp-config
+        - secretRef:
+            name: chatapp-secret
+        resources:
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8081
+          initialDelaySeconds: 5
+          periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: go-enrichment-service
+  namespace: chatapp
+spec:
+  selector:
+    app: go-enrichment
+  ports:
+    - protocol: TCP
+      port: 8081
+      targetPort: 8081

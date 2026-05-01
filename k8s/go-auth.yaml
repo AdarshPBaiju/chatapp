@@ -1,0 +1,51 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: go-auth
+  namespace: chatapp
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: go-auth
+  template:
+    metadata:
+      labels:
+        app: go-auth
+    spec:
+      containers:
+      - name: go-auth
+        image: ghcr.io/adarshpbaiju/chatapp-go-auth:latest
+        ports:
+        - containerPort: 8080
+        envFrom:
+        - configMapRef:
+            name: chatapp-config
+        - secretRef:
+            name: chatapp-secret
+        resources:
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: go-auth-service
+  namespace: chatapp
+spec:
+  selector:
+    app: go-auth
+  ports:
+    - protocol: TCP
+      port: 8080
+      targetPort: 8080

@@ -11,6 +11,9 @@ app.config_from_object("django.conf:settings", namespace="CELERY")
 app.autodiscover_tasks()
 
 
+from core.utils.debug import debug_print  # noqa: E402
+
+
 @app.task(bind=True)
 def debug_task(self):
-    print(f"Request: {self.request!r}")
+    debug_print(f"Executing debug task: {self.request!r}", prefix="CELERY")

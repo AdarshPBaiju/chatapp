@@ -65,6 +65,58 @@ services:
     restart: unless-stopped
     command: uvicorn config.asgi:application --host 0.0.0.0 --port 8000 --workers 4
 
+  go-auth:
+    image: chatapp-go-auth:latest
+    environment:
+      DJANGO_ENV: production
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+        reservations:
+          memory: 128M
+      replicas: 2
+    restart: unless-stopped
+
+  go-enrichment:
+    image: chatapp-go-enrichment:latest
+    environment:
+      DJANGO_ENV: production
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+        reservations:
+          memory: 128M
+      replicas: 1
+    restart: unless-stopped
+
+  go-risk:
+    image: chatapp-go-risk:latest
+    environment:
+      DJANGO_ENV: production
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+        reservations:
+          memory: 128M
+      replicas: 1
+    restart: unless-stopped
+
+  frontend:
+    image: chatapp-frontend:latest
+    ports:
+      - "80:3000"
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+        reservations:
+          memory: 128M
+      replicas: 2
+    restart: unless-stopped
+
   celery:
     image: chatapp-backend:latest
     environment:

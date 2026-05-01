@@ -17,7 +17,7 @@ DEBUG = config(
 
 ALLOWED_HOSTS = config(
     "ALLOWED_HOSTS",
-    default="localhost,127.0.0.1",
+    default="localhost,127.0.0.1,backend,frontend",
     cast=lambda v: [s.strip() for s in v.split(",")],
 )
 
@@ -175,6 +175,14 @@ AUTH_ENGINE_SETTINGS = {
     ),
 }
 
+GO_AUTH_SETTINGS = {
+    "ENABLED": config("GO_AUTH_ENABLED", default=False, cast=bool),
+    "VERIFY_URL": config("GO_AUTH_VERIFY_URL", default="http://go-auth:8080/api/v1/verify"),
+    "INTERNAL_SERVICE_SECRET": config("GO_INTERNAL_SERVICE_SECRET", default=""),
+    "TIMEOUT_SECONDS": config("GO_AUTH_TIMEOUT_SECONDS", default=2.0, cast=float),
+    "FALLBACK_TO_LOCAL": config("GO_AUTH_FALLBACK_TO_LOCAL", default=True, cast=bool),
+}
+
 SPECTACULAR_SETTINGS = {
     "TITLE": "Production Chatapp API",
     "DESCRIPTION": "Advanced Authentication and Messaging Service",
@@ -185,7 +193,7 @@ SPECTACULAR_SETTINGS = {
 
 CORS_ALLOWED_ORIGINS = config(
     "CORS_ALLOWED_ORIGINS",
-    default="http://localhost:3000,http://127.0.0.1:3000",
+    default="http://localhost:3000,http://127.0.0.1:3000,http://frontend:3000",
     cast=lambda v: [s.strip() for s in v.split(",")],
 )
 CORS_ALLOWED_ORIGIN_REGEXES = config(
