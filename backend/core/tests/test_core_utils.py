@@ -16,10 +16,8 @@ class MockModel(models.Model):
 
 
 class MockSerializer(FKResolverMixin, serializers.Serializer):
-    user_id = serializers.UUIDField(required=False)
-
     fk_field_mappings = {"user": CustomUser}
-    fk_field_sources = {"user": "user_id"}
+    fk_field_sources = {"user": "profile.user_id"}
 
 
 class CoreUtilsTests(TestCase):
@@ -28,23 +26,29 @@ class CoreUtilsTests(TestCase):
             email="utils@example.com", password="password123"
         )
 
+    def test_fk_resolver_mixin_nested_success(self):
+        serializer = MockSerializer()
+        data = {"profile": {"user_id": str(self.user.id)}}
+        resolved = serializer.resolve_foreign_keys(data)
+        self.assertEqual(resolved["profile"]["user_id"], self.user)
+
     def test_fk_resolver_mixin_success(self):
         serializer = MockSerializer()
-        data = {"user_id": str(self.user.id)}
+        data = {"profile": {"user_id": str(self.user.id)}}
         resolved = serializer.resolve_foreign_keys(data)
-        self.assertEqual(resolved["user_id"], self.user)
+        self.assertEqual(resolved["profile"]["user_id"], self.user)
 
     def test_fk_resolver_mixin_not_found(self):
         serializer = MockSerializer()
         random_id = str(uuid.uuid4())
-        data = {"user_id": random_id}
+        data = {"profile": {"user_id": random_id}}
         with self.assertRaises(serializers.ValidationError) as cm:
             serializer.resolve_foreign_keys(data)
         self.assertIn("user", cm.exception.detail)
 
     def test_fk_resolver_cache_hit(self):
         serializer = MockSerializer()
-        data = {"user_id": str(self.user.id)}
+        data = {"profile": {"user_id": str(self.user.id)}}
 
         # First call hits DB
         with self.assertNumQueries(1):

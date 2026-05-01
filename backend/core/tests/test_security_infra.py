@@ -1,8 +1,10 @@
 from django.test import TestCase, RequestFactory, override_settings
 from users.models import CustomUser, Client
+from rest_framework.exceptions import AuthenticationFailed, ValidationError
 from core.api.authentication import AdvancedJWTAuthentication
+from core.api.responses import ResponseFactory
+from core.api.exceptions import api_exception_handler
 from authentication.core.crypto import AuthCryptoEngine
-from rest_framework.exceptions import AuthenticationFailed
 import uuid
 from copy import deepcopy
 from django.conf import settings
@@ -72,3 +74,29 @@ class SecurityInfraTests(TestCase):
         with self.assertRaises(AuthenticationFailed) as cm:
             self.auth.authenticate(request)
         self.assertIn("inactive", str(cm.exception))
+
+class CoreAPITests(TestCase):
+    def test_response_factory_success(self):
+        response = ResponseFactory.success(message="Yay", data={"key": "val"})
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.data["success"])
+        self.assertEqual(response.data["data"]["key"], "val")
+
+    def test_response_factory_error(self):
+        response = ResponseFactory.error(message="Noo", errors={"field": "err"})
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(response.data["success"])
+        self.assertEqual(response.data["errors"]["field"], "err")
+
+    def test_exception_handler_django_validation_error(self):
+        from django.core.exceptions import ValidationError as DjangoValidationError
+        exc = DjangoValidationError({"email": ["Invalid"]})
+        response = api_exception_handler(exc, None)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.data["errors"]["email"], ["Invalid"])
+
+    def test_exception_handler_drf_error(self):
+        exc = ValidationError({"detail": "DRF Error"})
+        response = api_exception_handler(exc, None)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.data["message"], "DRF Error")

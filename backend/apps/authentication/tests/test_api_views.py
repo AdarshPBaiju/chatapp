@@ -118,3 +118,25 @@ class AuthenticationAPIViewTests(APITestCase):
         response = self.client.post(self.refresh_url, {"refresh": token}, format="json")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["data"]["access"], "new-access")
+
+
+class CryptoTests(APITestCase):
+    @override_settings(AUTH_ENGINE_SETTINGS=_auth_settings_override())
+    def test_crypto_tampering_detection(self):
+        payload = {"sub": "123"}
+        token = AuthCryptoEngine.encrypt_and_sign(payload, ttl_seconds=60)
+
+        # Tamper with the token (change a character in the encrypted part)
+        tampered_token = token[:-5] + ("A" if token[-5] != "A" else "B") + token[-4:]
+
+        with self.assertRaises(Exception):
+            AuthCryptoEngine.decrypt_and_verify(tampered_token)
+
+    @override_settings(AUTH_ENGINE_SETTINGS=_auth_settings_override())
+    def test_crypto_expired_token(self):
+        payload = {"sub": "123"}
+        # Issue token with negative TTL
+        token = AuthCryptoEngine.encrypt_and_sign(payload, ttl_seconds=-10)
+
+        with self.assertRaises(Exception):
+            AuthCryptoEngine.decrypt_and_verify(token)
