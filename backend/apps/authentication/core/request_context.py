@@ -26,9 +26,20 @@ class AuthRequestContext:
 CLIENT_HINT_BRAND_PATTERN = re.compile(r'"([^"]+)"\s*;\s*v="[^"]+"')
 
 
+def _get_header(request: Any, name: str, default: str = "") -> str:
+    headers = getattr(request, "headers", None)
+    if headers is not None:
+        value = headers.get(name, default)
+        return value if value is not None else default
+
+    meta_key = f"HTTP_{name.upper().replace('-', '_')}"
+    value = getattr(request, "META", {}).get(meta_key, default)
+    return value if value is not None else default
+
+
 def _resolve_browser_family(request: Any, user_agent: str) -> str:
     ua = parse(user_agent or "")
-    client_hints = request.headers.get("Sec-CH-UA", "")
+    client_hints = _get_header(request, "Sec-CH-UA", "")
     if client_hints:
         brands = {
             brand.strip()
@@ -72,7 +83,7 @@ def generate_device_entropy() -> str:
 def build_fingerprint(request: Any, device_entropy: str = "") -> str:
     ua_norm = _normalize_user_agent(request)
     lang = request.META.get("HTTP_ACCEPT_LANGUAGE", "")[:50]
-    timezone_offset = request.headers.get("X-Timezone-Offset", "0")
+    timezone_offset = _get_header(request, "X-Timezone-Offset", "0")
     payload = f"{ua_norm}:{lang}:{timezone_offset}:{device_entropy}"
     return hashlib.sha3_256(payload.encode("utf-8")).hexdigest()
 
@@ -86,7 +97,7 @@ def build_auth_request_context(request: Any) -> AuthRequestContext:
         fingerprint=fingerprint,
         device_entropy=device_entropy,
         accept_language=request.META.get("HTTP_ACCEPT_LANGUAGE", "")[:50],
-        timezone_offset=request.headers.get("X-Timezone-Offset", "0"),
+        timezone_offset=_get_header(request, "X-Timezone-Offset", "0"),
     )
 
 

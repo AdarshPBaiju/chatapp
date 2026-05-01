@@ -15,6 +15,7 @@ class AuthFlowTests(APITestCase):
         self.reg_verify_url = reverse("signup-verify")
         self.recovery_init_url = reverse("password-reset-request")
         self.recovery_verify_url = reverse("password-reset-verify")
+        self.recovery_confirm_url = reverse("password-reset-confirm")
 
     def test_registration_flow_success(self):
         # 1. Init
@@ -71,21 +72,34 @@ class AuthFlowTests(APITestCase):
         self.assertIsNotNone(match, "Could not extract 6-digit recovery OTP")
         otp = "".join(match.groups())
 
-        # 2. Verify and Reset
+        # 2. Verify
         response = self.client.post(
             self.recovery_verify_url,
             {
                 "email": "recover@example.com",
                 "otp_code": otp,
-                "new_password": "NewStrongPass123!",
             },
             format="json",
         )
         if response.status_code != 200:
             print(f"DEBUG Recovery Verify Failed: {response.data}")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
+        reset_token = response.data["data"]["reset_token"]
+
+        # 3. Confirm password reset
+        response = self.client.post(
+            self.recovery_confirm_url,
+            {
+                "reset_token": reset_token,
+                "password": "NewStrongPass123!",
+                "confirm_password": "NewStrongPass123!",
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
 
         # Verify login with new password
+        user.refresh_from_db()
         self.assertTrue(user.check_password("NewStrongPass123!"))
 
     def test_registration_conflict_existing_user(self):

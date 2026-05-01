@@ -283,6 +283,9 @@ class SessionQueryService:
             GraceJTIService,
         )
 
+        user_id = str(user_id)
+        session_id = str(session_id)
+
         if TokenBlacklistService.is_blacklisted(jti):
             return False
         if partner_jti and TokenBlacklistService.is_blacklisted(partner_jti):

@@ -100,14 +100,21 @@ class AuthenticationAPIViewTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertTrue(response.data["success"])
 
-    @patch("authentication.core.token_validator.build_fingerprint")
-    @patch("authentication.core.request_context.build_fingerprint")
+    @patch("authentication.identity.interfaces.views.validate_token_for_request")
     @patch("authentication.identity.interfaces.views.TokenRotateService.refresh_tokens")
-    def test_token_refresh_success(
-        self, refresh_mock, build_fpt_mock_ctx, build_fpt_mock_val
-    ):
-        build_fpt_mock_ctx.return_value = "fixed-fpt"
-        build_fpt_mock_val.return_value = "fixed-fpt"
+    def test_token_refresh_success(self, refresh_mock, validate_token_mock):
+        session_id = str(uuid.uuid4())
+        jti = str(uuid.uuid4())
+        validate_token_mock.return_value = {
+            "sub": str(self.user.id),
+            "user_id": str(self.user.id),
+            "jti": jti,
+            "partner_jti": str(uuid.uuid4()),
+            "type": "refresh",
+            "sid": session_id,
+            "scope": "full",
+            "fpt": "fixed-fpt",
+        }
         refresh_mock.return_value = {
             "status": "full",
             "access": "new-access",
@@ -116,13 +123,12 @@ class AuthenticationAPIViewTests(APITestCase):
             "refresh_exp": 456,
         }
 
-        # Valid refresh token payload
         payload = {
             "sub": str(self.user.id),
             "user_id": str(self.user.id),
-            "jti": str(uuid.uuid4()),
+            "jti": jti,
             "type": "refresh",
-            "sid": str(uuid.uuid4()),  # Must be a valid UUID string
+            "sid": session_id,
             "fpt": "fixed-fpt",
         }
         token = AuthCryptoEngine.encrypt_and_sign(payload, ttl_seconds=3600)
