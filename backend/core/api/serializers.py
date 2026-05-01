@@ -81,7 +81,7 @@ class FKResolverMixin:
         mapping = self.fk_field_mappings[field_name]
         model_class = mapping(context_data) if callable(mapping) else mapping
 
-        if value is None or value == "":
+        if not value:
             if not self.fk_allow_null.get(field_name, True):
                 raise serializers.ValidationError(
                     self._get_err_msg(field_name, "required")

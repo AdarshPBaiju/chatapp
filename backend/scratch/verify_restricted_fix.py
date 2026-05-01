@@ -1,16 +1,15 @@
 import os
-import django
-from datetime import timedelta
-from django.utils import timezone as dj_timezone
 import uuid
+import django
 
 # Setup Django
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings.development")
 django.setup()
 
-from users.models import CustomUser, AuthSession
-from users.services.auth_engine import AuthEngine
-from core.auth.token_validator import validate_token_for_request
+from core.auth.token_validator import validate_token_for_request  # noqa: E402
+from users.models import CustomUser  # noqa: E402
+from users.services.auth_engine import AuthEngine  # noqa: E402
+
 
 def test_restricted_session_validation():
     print("--- Testing Restricted Session Validation ---")
@@ -30,14 +29,14 @@ def test_restricted_session_validation():
     session_id = str(uuid.uuid4())
     access_jti = str(uuid.uuid4())
     refresh_jti = str(uuid.uuid4())
-    
+
     print(f"Creating Restricted tokens for session_id: {session_id}")
     restricted_resp = AuthEngine._build_restricted_response(
         user_id=str(user.id),
         context=MockContext(),
         access_jti=access_jti,
         refresh_jti=refresh_jti,
-        session_id=session_id
+        session_id=session_id,
     )
 
     access_token = restricted_resp["access"]
@@ -51,15 +50,11 @@ def test_restricted_session_validation():
             META = {
                 "HTTP_X_TIMEZONE_OFFSET": "0",
                 "REMOTE_ADDR": "127.0.0.1",
-                "HTTP_USER_AGENT": "Mock Agent"
+                "HTTP_USER_AGENT": "Mock Agent",
             }
             COOKIES = {"device_entropy": "mock-entropy"}
-            
-        payload = validate_token_for_request(
-            MockRequest(),
-            access_token,
-            check_session=True
-        )
+
+        _ = validate_token_for_request(MockRequest(), access_token, check_session=True)
         print("SUCCESS: Restricted token validated without DB record.")
     except Exception as e:
         print(f"FAILURE: {e}")
@@ -70,22 +65,20 @@ def test_restricted_session_validation():
     try:
         # Resolve user since validate_token normally happens in middleware
         refresh_payload = validate_token_for_request(
-            MockRequest(),
-            refresh_token,
-            expected_type="refresh",
-            check_session=True
+            MockRequest(), refresh_token, expected_type="refresh", check_session=True
         )
-        
+
         # In the real API, view gets the user from payload
         new_tokens = AuthEngine.refresh_tokens(user, refresh_payload, MockRequest())
-        
+
         if new_tokens["status"] == "restricted":
             print("SUCCESS: Restricted token rotated and preserved status.")
         else:
             print(f"FAILURE: Status changed to {new_tokens['status']}")
-            
+
     except Exception as e:
         print(f"FAILURE during refresh: {e}")
+
 
 if __name__ == "__main__":
     test_restricted_session_validation()

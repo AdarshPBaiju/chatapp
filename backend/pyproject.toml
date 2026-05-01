@@ -105,13 +105,15 @@ ignore = [
     "PLR0914", # too many local variables
     "PLC0415", # import outside toplevel
     "DJ001",   # avoid null=True on string-based fields (Suppressed for API stability)
+    "E402",    # module level import not at top of file
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"__init__.py" = ["F401"]
+"__init__.py" = ["F401", "RUF067"]
 "**/migrations/**" = ["E501", "N805"]
 "**/tests/**" = ["S101", "PLR2004"]
-"**/settings/**" = ["F405", "F403"]
+"**/settings/**" = ["F405", "F403", "RUF067"]
+"scratch/**" = ["T201"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["chatapp", "apps", "core"]

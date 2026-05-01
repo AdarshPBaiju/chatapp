@@ -97,13 +97,15 @@ ignore = [
     "ARG003", # unused class method argument
     "G004",   # logging statement uses f-string
     "BLE001", # blind exception catch
+    "E402",    # module level import not at top of file
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"__init__.py" = ["F401"]
+"__init__.py" = ["F401", "RUF067"]
 "**/migrations/**" = ["E501", "N805"]
 "**/tests/**" = ["S101", "PLR2004"]
-"**/settings/**" = ["F405", "F403"]
+"**/settings/**" = ["F405", "F403", "RUF067"]
+"backend/scratch/**" = ["T201"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["chatapp", "apps", "core"]
