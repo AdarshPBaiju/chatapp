@@ -57,8 +57,8 @@ func main() {
 
 			// 2. Publish to Kafka for persistence and global delivery
 			producer.Publish(context.Background(), messaging.Event{
-				Topic:   "chat.raw",
-				Key:     msg.Target, // Assuming Target is RoomID or UserID
+				Topic:   "chat.inbound",
+				Key:     msg.Target, // Partition by Target (RoomID/UserID)
 				Type:    "CHAT_MESSAGE",
 				Payload: msg.Payload,
 			})
@@ -74,7 +74,23 @@ func main() {
 
 	go hub.Run(ctx)
 
-	// 5. Register HTTP Routes
+	// 5. Initialize Delivery Consumer (Phase 2.2 Completion)
+	deliveryConsumer := messaging.NewConsumer(strings.Split(kafkaBrokers, ","), "go-chat-group", "chat.delivery")
+	defer deliveryConsumer.Close()
+
+	go func() {
+		err := deliveryConsumer.Consume(ctx, func(event messaging.Event) error {
+			// Key is the target UserID
+			data, _ := json.Marshal(event)
+			hub.SendToUser(event.Key, data)
+			return nil
+		})
+		if err != nil && ctx.Err() == nil {
+			debug.Print("GO-CHAT", "Delivery Consumer error: "+err.Error())
+		}
+	}()
+
+	// 6. Register HTTP Routes
 	http.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
 		userID := r.URL.Query().Get("user_id")
 		if userID == "" {

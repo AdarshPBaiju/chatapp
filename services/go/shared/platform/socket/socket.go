@@ -116,6 +116,19 @@ func (h *Hub) Run(ctx context.Context) {
 	}
 }
 
+func (h *Hub) SendToUser(userID string, payload []byte) {
+	h.mu.RLock()
+	client, ok := h.userToConn[userID]
+	h.mu.RUnlock()
+
+	if ok {
+		select {
+		case client.Send <- payload:
+		default:
+		}
+	}
+}
+
 // subscribeToCluster listens for messages intended for users on this node
 func (h *Hub) subscribeToCluster(ctx context.Context) {
 	topic := "cluster:msg:" + h.NodeID

@@ -130,7 +130,8 @@ services:
 
       echo 'Creating topics...'
       kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic security_events --partitions 3 --replication-factor 1
-      kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic chat.raw --partitions 6 --replication-factor 1
+      kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic chat.inbound --partitions 6 --replication-factor 1
+      kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic chat.delivery --partitions 6 --replication-factor 1
       kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic user_events --partitions 3 --replication-factor 1
       kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic enrichment_events --partitions 3 --replication-factor 1
       echo 'All Kafka topics ready.'
