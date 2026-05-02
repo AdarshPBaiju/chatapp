@@ -4,73 +4,65 @@ import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/shared/lib/utils";
 import { socket } from "@/shared/api/socket";
 
-// Mock data for UI development (contacts/rooms will come from API in Phase 2.3)
-const MOCK_CHATS = [
-  { id: "room-1", name: "Sarah Miller", lastMsg: "See you at 8?", time: "12:45 PM", unread: 2, online: true },
-  { id: "room-2", name: "Design Team", lastMsg: "The new icons are ready", time: "11:20 AM", unread: 0, online: false },
-  { id: "room-3", name: "David Chen", lastMsg: "Did you check the file?", time: "Yesterday", unread: 0, online: true },
-];
-
-interface LocalMessage {
-  id: string;
-  content: string;
-  isMine: boolean;
-  timestamp: number;
-  status: "sending" | "sent";
-}
+import { useChatStore } from "../state/chatStore";
 
 export function ChatPage() {
-  const [selectedChat, setSelectedChat] = useState<string | null>(null);
+  const { 
+    activeRoomId, 
+    setActiveRoom, 
+    messages: allMessages, 
+    rooms, 
+    sendMessage,
+    markAsRead,
+    fetchRooms,
+    isLoading
+  } = useChatStore();
+  
   const [input, setInput] = useState("");
-  const [localMessages, setLocalMessages] = useState<Record<string, LocalMessage[]>>({});
-  const [isConnected, setIsConnected] = useState(() => socket.isConnected);
+  const isConnected = socket.isConnected;
   const feedRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const readObserver = useRef<IntersectionObserver | null>(null);
 
-  // Track socket connection status
+  // Initial Data Fetch
   useEffect(() => {
-    const handleStatus = (s: { connected: boolean }) => setIsConnected(s.connected);
-    socket.on("status", handleStatus);
+    fetchRooms();
+  }, [fetchRooms]);
 
-    // Listen for incoming messages
-    const handleMessage = (data: any) => {
-      const roomId = data.room_id;
-      if (!roomId) return;
-      setLocalMessages(prev => ({
-        ...prev,
-        [roomId]: [
-          ...(prev[roomId] || []),
-          { id: data.id, content: data.content, isMine: false, timestamp: Date.now(), status: "sent" }
-        ]
-      }));
-    };
-    socket.on("chat_message", handleMessage);
+  const chatList = Object.values(rooms).sort((a, b) => {
+    const timeA = a.last_message ? new Date(a.last_message.created_at).getTime() : 0;
+    const timeB = b.last_message ? new Date(b.last_message.created_at).getTime() : 0;
+    return timeB - timeA;
+  });
 
-    // Listen for ACKs to confirm sent messages
-    const handleAck = (data: any) => {
-      if (!selectedChat) return;
-      setLocalMessages(prev => ({
-        ...prev,
-        [selectedChat]: (prev[selectedChat] || []).map(m =>
-          m.id === data.original_id ? { ...m, status: "sent" } : m
-        )
-      }));
-    };
-    socket.on("message_ack", handleAck);
+  // Setup Viewport Observer for Read Receipts
+  useEffect(() => {
+    readObserver.current = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            const seqId = entry.target.getAttribute("data-seq");
+            const isMine = entry.target.getAttribute("data-mine") === "true";
+            const status = entry.target.getAttribute("data-status");
+            
+            if (seqId && !isMine && status !== "read" && activeRoomId) {
+              markAsRead(activeRoomId, parseInt(seqId));
+            }
+          }
+        });
+      },
+      { threshold: 0.5 }
+    );
 
-    return () => {
-      socket.off("status", handleStatus);
-      socket.off("chat_message", handleMessage);
-      socket.off("message_ack", handleAck);
-    };
-  }, [selectedChat]);
+    return () => readObserver.current?.disconnect();
+  }, [activeRoomId, markAsRead]);
 
   // Auto-scroll on new messages
   useEffect(() => {
     if (feedRef.current) {
       feedRef.current.scrollTop = feedRef.current.scrollHeight;
     }
-  }, [localMessages, selectedChat]);
+  }, [allMessages, activeRoomId]);
 
   // Auto-resize textarea
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -81,36 +73,16 @@ export function ChatPage() {
 
   const handleSend = useCallback(() => {
     const content = input.trim();
-    if (!content || !selectedChat) return;
+    if (!content || !activeRoomId) return;
 
-    const tempId = `temp-${Date.now()}`;
-    const newMessage: LocalMessage = {
-      id: tempId,
-      content,
-      isMine: true,
-      timestamp: Date.now(),
-      status: "sending",
-    };
-
-    // Optimistic UI update
-    setLocalMessages(prev => ({
-      ...prev,
-      [selectedChat]: [...(prev[selectedChat] || []), newMessage],
-    }));
-
-    // Send via WebSocket
-    socket.send("chat_message", {
-      id: tempId,
-      room_id: selectedChat,
-      content,
-    });
+    sendMessage(activeRoomId, content);
 
     // Clear input
     setInput("");
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto";
     }
-  }, [input, selectedChat]);
+  }, [input, activeRoomId, sendMessage]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -119,8 +91,9 @@ export function ChatPage() {
     }
   };
 
-  const currentChat = MOCK_CHATS.find(c => c.id === selectedChat);
-  const messages = selectedChat ? (localMessages[selectedChat] || []) : [];
+  const currentChat = activeRoomId ? rooms[activeRoomId] : null;
+  const roomMessages = activeRoomId ? (rooms[activeRoomId]?.messageIds || []) : [];
+  const messages = roomMessages.map(id => allMessages[id]).filter(Boolean);
 
   const formatTime = (ts: number) => new Date(ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
@@ -130,7 +103,7 @@ export function ChatPage() {
       {/* 1. Conversations Sidebar */}
       <aside className={cn(
         "w-full lg:w-[350px] border-r border-border flex flex-col bg-card/10 backdrop-blur-sm transition-all",
-        selectedChat && "hidden lg:flex"
+        activeRoomId && "hidden lg:flex"
       )}>
         {/* Sidebar Header */}
         <div className="p-6 pb-2">
@@ -161,39 +134,48 @@ export function ChatPage() {
 
         {/* Chat List */}
         <div className="flex-1 overflow-y-auto custom-scrollbar p-3 space-y-1">
-          {MOCK_CHATS.map((chat) => (
+          {isLoading && (
+            <div className="flex flex-col gap-2 p-3">
+              {[1, 2, 3].map(i => (
+                <div key={i} className="h-16 w-full rounded-2xl bg-muted animate-pulse" />
+              ))}
+            </div>
+          )}
+          
+          {chatList.map((chat) => (
             <div
               key={chat.id}
-              onClick={() => setSelectedChat(chat.id)}
+              onClick={() => setActiveRoom(chat.id)}
               className={cn(
                 "group flex items-center gap-4 p-3 rounded-2xl cursor-pointer transition-all duration-200",
-                selectedChat === chat.id ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20" : "hover:bg-muted/50"
+                activeRoomId === chat.id ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20" : "hover:bg-muted/50"
               )}
             >
               <div className="relative shrink-0">
                 <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center overflow-hidden border border-border/10">
-                  <span className="font-bold text-lg">{chat.name.charAt(0)}</span>
+                  {chat.avatar ? (
+                    <img src={chat.avatar} alt={chat.name} className="h-full w-full object-cover" />
+                  ) : (
+                    <span className="font-bold text-lg">{chat.name.charAt(0)}</span>
+                  )}
                 </div>
-                {chat.online && (
-                  <div className="absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full border-2 border-background bg-green-500" />
-                )}
               </div>
 
               <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between mb-0.5">
                   <p className="font-bold text-sm truncate">{chat.name}</p>
-                  <p className={cn("text-[10px]", selectedChat === chat.id ? "text-primary-foreground/70" : "text-muted-foreground")}>
-                    {chat.time}
+                  <p className={cn("text-[10px]", activeRoomId === chat.id ? "text-primary-foreground/70" : "text-muted-foreground")}>
+                    {chat.last_message ? new Date(chat.last_message.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ""}
                   </p>
                 </div>
-                <p className={cn("text-xs truncate", selectedChat === chat.id ? "text-primary-foreground/80" : "text-muted-foreground")}>
-                  {chat.lastMsg}
+                <p className={cn("text-xs truncate", activeRoomId === chat.id ? "text-primary-foreground/80" : "text-muted-foreground")}>
+                  {chat.last_message?.content || "No messages yet"}
                 </p>
               </div>
 
-              {chat.unread > 0 && selectedChat !== chat.id && (
+              {chat.unread_count > 0 && activeRoomId !== chat.id && (
                 <div className="h-5 min-w-[20px] px-1.5 rounded-full bg-primary text-primary-foreground text-[10px] font-bold flex items-center justify-center">
-                  {chat.unread}
+                  {chat.unread_count}
                 </div>
               )}
             </div>
@@ -204,12 +186,12 @@ export function ChatPage() {
       {/* 2. Main Chat Room Area */}
       <main className={cn(
         "flex-1 flex flex-col bg-background relative",
-        !selectedChat && "hidden lg:flex"
+        !activeRoomId && "hidden lg:flex"
       )}>
         <AnimatePresence mode="wait">
-          {selectedChat ? (
+          {activeRoomId ? (
             <motion.div
-              key={selectedChat}
+              key={activeRoomId}
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -20 }}
@@ -218,7 +200,7 @@ export function ChatPage() {
               {/* Chat Header */}
               <header className="h-[72px] border-b border-border px-6 flex items-center justify-between bg-background/50 backdrop-blur-md sticky top-0 z-10">
                 <div className="flex items-center gap-4">
-                  <button onClick={() => setSelectedChat(null)} className="lg:hidden h-9 w-9 rounded-xl bg-muted flex items-center justify-center mr-2">
+                  <button onClick={() => setActiveRoom(null)} className="lg:hidden h-9 w-9 rounded-xl bg-muted flex items-center justify-center mr-2">
                     <ArrowLeft size={18} />
                   </button>
                   <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center font-bold">
@@ -256,35 +238,53 @@ export function ChatPage() {
                   </div>
                 )}
 
-                {messages.map((msg) => (
-                  <motion.div
-                    key={msg.id}
-                    initial={{ opacity: 0, y: 10, scale: 0.97 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    transition={{ duration: 0.2, ease: "easeOut" }}
-                    className={cn("flex flex-col gap-1 max-w-[80%]", msg.isMine && "ml-auto items-end")}
-                  >
-                    <div className={cn(
-                      "p-4 rounded-2xl text-sm shadow-sm",
-                      msg.isMine
-                        ? "bg-primary text-primary-foreground rounded-br-sm shadow-lg shadow-primary/20"
-                        : "bg-muted rounded-tl-sm"
-                    )}>
-                      {msg.content}
-                    </div>
-                    <div className="flex items-center gap-1 px-1">
-                      <span className="text-[9px] text-muted-foreground">{formatTime(msg.timestamp)}</span>
-                      {msg.isMine && (
-                        <span className={cn(
-                          "text-[9px] font-medium transition-colors",
-                          msg.status === "sending" ? "text-muted-foreground/50" : "text-primary"
-                        )}>
-                          {msg.status === "sending" ? "Sending..." : "✓"}
-                        </span>
-                      )}
-                    </div>
-                  </motion.div>
-                ))}
+                {messages.map((msg) => {
+                  const isMine = msg.sender_id === "me"; // Placeholder for current user ID
+                  return (
+                    <motion.div
+                      key={msg.id}
+                      data-seq={msg.sequence_id}
+                      data-mine={isMine}
+                      data-status={msg.status}
+                      ref={(el) => {
+                        if (el) readObserver.current?.observe(el);
+                      }}
+                      initial={{ opacity: 0, y: 10, scale: 0.97 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      transition={{ duration: 0.2, ease: "easeOut" }}
+                      className={cn("flex flex-col gap-1 max-w-[80%]", isMine && "ml-auto items-end")}
+                    >
+                      <div className={cn(
+                        "p-4 rounded-2xl text-sm shadow-sm",
+                        isMine
+                          ? "bg-primary text-primary-foreground rounded-br-sm shadow-lg shadow-primary/20"
+                          : "bg-muted rounded-tl-sm"
+                      )}>
+                        {msg.content}
+                      </div>
+                      <div className="flex items-center gap-1 px-1">
+                        <span className="text-[9px] text-muted-foreground">{formatTime(msg.sent_at)}</span>
+                        {isMine && (
+                          <div className="flex items-center ml-1">
+                            {msg.status === "sending" ? (
+                              <span className="text-[9px] text-muted-foreground/50 italic">sending...</span>
+                            ) : (
+                              <div className={cn(
+                                "flex items-center transition-colors duration-300",
+                                msg.status === "read" ? "text-blue-400" : "text-muted-foreground"
+                              )}>
+                                <span className="text-[10px] leading-none">✓</span>
+                                {(msg.status === "delivered" || msg.status === "read") && (
+                                  <span className="text-[10px] leading-none -ml-0.5">✓</span>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </motion.div>
+                  );
+                })}
               </div>
 
               {/* Message Input */}

@@ -4,7 +4,7 @@ from django.db import models
 from django.core.management.base import BaseCommand
 from django.conf import settings
 from confluent_kafka import Consumer, Producer, KafkaException
-from apps.chat.models import Room, Message, MessageReceipt, RoomMembership
+from chat.models import Room, Message, MessageReceipt, RoomMembership
 from users.models import Client
 from django.db import transaction
 
