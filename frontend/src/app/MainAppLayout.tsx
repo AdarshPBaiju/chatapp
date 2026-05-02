@@ -9,9 +9,9 @@ import { fetchProfile } from "@/features/settings/api";
 import { UserProfile } from "@/features/settings/types";
 
 const NAV_ITEMS = [
-  { id: "chats", label: "Chats", icon: MessageCircle, path: "/app/chats" },
-  { id: "contacts", label: "Contacts", icon: Users, path: "/app/contacts" },
-  { id: "settings", label: "Settings", icon: Settings, path: "/app/settings" },
+  { id: "chats", label: "Chats", icon: MessageCircle, path: "/chats" },
+  { id: "contacts", label: "Contacts", icon: Users, path: "/contacts" },
+  { id: "settings", label: "Settings", icon: Settings, path: "/settings" },
 ];
 
 export function MainAppLayout() {
@@ -20,7 +20,7 @@ export function MainAppLayout() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
 
   // Extract the root app feature (chats, contacts, settings) for transition keys
-  const currentAppSection = location.pathname.split('/')[2] || "app-root";
+  const currentAppSection = location.pathname.split('/')[1] || "home";
 
   useEffect(() => {
     fetchProfile().then(d => { if (d.success && d.data) setProfile(d.data); });
@@ -92,7 +92,7 @@ export function MainAppLayout() {
             </div>
           </button>
           
-          <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center overflow-hidden shrink-0 border border-border/50 cursor-pointer transition-transform hover:scale-105" onClick={() => navigate("/app/settings/profile")}>
+          <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center overflow-hidden shrink-0 border border-border/50 cursor-pointer transition-transform hover:scale-105" onClick={() => navigate("/settings/profile")}>
             {profile?.profile_picture
               ? <img src={profile.profile_picture} className="h-full w-full object-cover" />
               : <div className="text-primary font-bold text-sm uppercase">{profile?.full_name?.charAt(0) || "U"}</div>}

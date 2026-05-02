@@ -5,9 +5,9 @@ import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/shared/lib/utils";
 
 const tabs = [
-  { id: "contacts", label: "My Contacts", icon: Users, path: "/app/contacts", exact: true, desc: "Your verified social network" },
-  { id: "requests", label: "Requests", icon: Clock, path: "/app/contacts/requests", exact: false, desc: "Incoming friend requests" },
-  { id: "discovery", label: "Discovery", icon: Search, path: "/app/contacts/discovery", exact: false, desc: "Find new people to connect" },
+  { id: "contacts", label: "My Contacts", icon: Users, path: "/contacts", exact: true, desc: "Your verified social network" },
+  { id: "requests", label: "Requests", icon: Clock, path: "/contacts/requests", exact: false, desc: "Incoming friend requests" },
+  { id: "discovery", label: "Discovery", icon: Search, path: "/contacts/discovery", exact: false, desc: "Find new people to connect" },
 ] as const;
 
 export function ContactsLayout() {
@@ -17,7 +17,7 @@ export function ContactsLayout() {
 
   // Sync mobile menu state with route depth
   useEffect(() => {
-    const isRootContacts = location.pathname === "/app/contacts" || location.pathname === "/app/contacts/";
+    const isRootContacts = location.pathname === "/contacts" || location.pathname === "/contacts/";
     setIsMobileMenu(isRootContacts);
   }, [location.pathname]);
 
@@ -94,7 +94,7 @@ export function ContactsLayout() {
         {/* Sub-page Header (Mobile only) */}
         <div className="flex items-center gap-3 border-b border-border bg-background p-4 lg:hidden">
           <button
-            onClick={() => navigate("/app/contacts")}
+            onClick={() => navigate("/contacts")}
             className="flex h-9 w-9 items-center justify-center rounded-xl bg-muted text-muted-foreground hover:bg-primary hover:text-primary-foreground transition-all cursor-pointer"
           >
             <ArrowLeft size={18} />

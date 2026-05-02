@@ -23,7 +23,7 @@ export function SessionGatePage() {
   }, []);
 
   useEffect(() => {
-    if (status === "full") navigate("/app/chats");
+    if (status === "full") navigate("/chats");
   }, [status, navigate]);
 
   async function onRevoke(sessionId: string) {

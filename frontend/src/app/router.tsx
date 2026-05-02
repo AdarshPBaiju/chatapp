@@ -18,22 +18,14 @@ import { UserProfilePage } from "@/features/contacts/ui/UserProfilePage";
 import { MainAppLayout } from "@/app/MainAppLayout";
 import { SettingsLayout } from "@/pages/SettingsPage";
 
-import { 
-  AuthenticatedGuard, 
-  GuestGuard, 
-  RootRedirect 
+import {
+  AuthenticatedGuard,
+  GuestGuard,
+  RootRedirect
 } from "@/shared/auth/guards";
 
 export const appRouter = createBrowserRouter([
-  { 
-    path: "/", 
-    element: <RootRedirect />,
-    errorElement: <ErrorPage />,
-  },
-  { path: "/app", element: <Navigate to="/app/chats" replace /> },
-  { path: "/account", element: <Navigate to="/app/settings/profile" replace /> },
-  { path: "/settings", element: <Navigate to="/app/settings/profile" replace /> },
-  { path: "/contacts", element: <Navigate to="/app/contacts" replace /> },
+  // Auth Routes
   {
     element: (
       <GuestGuard>
@@ -43,16 +35,12 @@ export const appRouter = createBrowserRouter([
     errorElement: <ErrorPage />,
     children: [
       { path: "/auth", element: <AuthPage /> },
-      // Support legacy paths by redirecting to params
-      { path: "/auth/login", element: <Navigate to="/auth?mode=login" replace /> },
-      { path: "/auth/join", element: <Navigate to="/auth?mode=signup" replace /> },
-      { path: "/auth/verify", element: <Navigate to="/auth?mode=verify" replace /> },
-      { path: "/auth/forgot-password", element: <Navigate to="/auth?mode=recovery" replace /> },
-      { path: "/auth/active-sessions", element: <Navigate to="/auth?mode=restricted" replace /> },
     ],
   },
+  
+  // App Routes (Root Level)
   {
-    path: "/app",
+    path: "/",
     errorElement: <ErrorPage />,
     element: (
       <AuthenticatedGuard>
@@ -60,7 +48,7 @@ export const appRouter = createBrowserRouter([
       </AuthenticatedGuard>
     ),
     children: [
-      { index: true, element: <Navigate to="/app/chats" replace /> },
+      { index: true, element: <RootRedirect /> },
       { path: "chats", element: <div className="flex h-full w-full items-center justify-center p-20 text-center font-bold text-muted-foreground/30 uppercase tracking-widest text-xs">Chats • Coming Soon</div> },
       {
         path: "contacts",
@@ -81,9 +69,13 @@ export const appRouter = createBrowserRouter([
           { path: "security", element: <SecuritySection /> },
           { path: "devices", element: <ActiveSessionsSection /> },
           { path: "notifications", element: <div className="p-20 text-center font-bold text-muted-foreground/30 uppercase tracking-widest text-xs">Access Restricted • Coming Soon</div> },
-          { index: true, element: <Navigate to="/app/settings/profile" replace /> },
+          { index: true, element: <Navigate to="/settings/profile" replace /> },
         ],
       },
     ],
   },
+
+  // Global Redirects for ease of use
+  { path: "/login", element: <Navigate to="/auth?mode=login" replace /> },
+  { path: "/signup", element: <Navigate to="/auth?mode=signup" replace /> },
 ]);

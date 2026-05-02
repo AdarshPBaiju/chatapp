@@ -157,7 +157,7 @@ export function SignUpPage() {
         password: values.password,
         confirm_password: values.confirmPassword,
       });
-      navigate(result.is_restricted ? "/auth?mode=restricted" : "/app/chats");
+      navigate(result.is_restricted ? "/auth?mode=restricted" : "/chats");
     } catch (err) {
       const msg = getErrorMessage(err, "Failed to complete setup.");
       toast.error(msg);

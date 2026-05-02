@@ -52,7 +52,7 @@ export function ContactsPage() {
             Your network of verified connections.
           </p>
         </div>
-        <Button onClick={() => navigate("/app/contacts/discovery")} compact className="h-10 px-4 rounded-xl">
+        <Button onClick={() => navigate("/contacts/discovery")} compact className="h-10 px-4 rounded-xl">
            <Plus size={18} className="mr-2" />
            Find People
         </Button>
@@ -94,7 +94,7 @@ export function ContactsPage() {
                 variant="outline" 
                 compact
                 className="mt-2 rounded-xl h-9"
-                onClick={() => navigate("/app/contacts/discovery")}
+                onClick={() => navigate("/contacts/discovery")}
             >
                 Discover Users
             </Button>

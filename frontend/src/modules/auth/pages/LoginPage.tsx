@@ -86,7 +86,7 @@ export function LoginPage() {
 
   // ─── Navigation on auth state change ───
   useEffect(() => {
-    if (authStatus === "full") navigate("/app/chats");
+    if (authStatus === "full") navigate("/chats");
     else if (authStatus === "restricted") navigate("/auth?mode=restricted");
     else if (authStatus === "pending_verification") navigate("/auth?mode=verify");
   }, [authStatus, navigate]);

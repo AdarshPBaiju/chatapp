@@ -43,7 +43,7 @@ export function ContactCard({ user, onActionComplete }: ContactCardProps) {
             : "bg-muted/30 border-border hover:bg-muted/50"
     )}>
       <div className="flex items-center gap-4">
-        <Link to={`/app/contacts/profile/${user.id}`} className="flex items-center gap-4 flex-1 min-w-0">
+        <Link to={`/contacts/profile/${user.id}`} className="flex items-center gap-4 flex-1 min-w-0">
           <div className={cn(
             "h-12 w-12 rounded-xl flex items-center justify-center overflow-hidden shrink-0 border",
             user.contact_status === "blocked" ? "bg-destructive/10 border-destructive/10" : "bg-primary/10 border-primary/5"

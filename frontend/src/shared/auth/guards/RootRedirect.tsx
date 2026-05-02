@@ -6,7 +6,7 @@ export function RootRedirect() {
   const status = useAuthStore((state) => state.status);
 
   if (status === "offline") return <ErrorPage mode="offline" />;
-  if (status === "full") return <Navigate to="/settings" replace />;
+  if (status === "full") return <Navigate to="/chats" replace />;
   if (status === "restricted") return <Navigate to="/auth?mode=restricted" replace />;
   if (status === "pending_verification") return <Navigate to="/auth?mode=verify" replace />;
   return <Navigate to="/auth?mode=login" replace />;

@@ -8,11 +8,11 @@ import { UserProfile } from "@/features/settings/types";
 import { cn } from "@/shared/lib/utils";
 
 const tabs = [
-  { id: "profile", label: "Profile", icon: User, path: "/app/settings/profile", desc: "Your identity & contact details" },
-  { id: "privacy", label: "Privacy", icon: Shield, path: "/app/settings/privacy", desc: "Invitation & visibility control" },
-  { id: "security", label: "Security", icon: Lock, path: "/app/settings/security", desc: "Protection & access control" },
-  { id: "devices", label: "Devices", icon: Activity, path: "/app/settings/devices", desc: "Active logins & session safety" },
-  { id: "notifications", label: "Alerts", icon: Bell, path: "/app/settings/notifications", desc: "System & message updates" },
+  { id: "profile", label: "Profile", icon: User, path: "/settings/profile", desc: "Your identity & contact details" },
+  { id: "privacy", label: "Privacy", icon: Shield, path: "/settings/privacy", desc: "Invitation & visibility control" },
+  { id: "security", label: "Security", icon: Lock, path: "/settings/security", desc: "Protection & access control" },
+  { id: "devices", label: "Devices", icon: Activity, path: "/settings/devices", desc: "Active logins & session safety" },
+  { id: "notifications", label: "Alerts", icon: Bell, path: "/settings/notifications", desc: "System & message updates" },
 ] as const;
 
 export function SettingsLayout() {
@@ -27,12 +27,15 @@ export function SettingsLayout() {
 
   // Sync mobile menu state with route depth
   useEffect(() => {
-    const isRootSettings = location.pathname === "/app/settings" || location.pathname === "/app/settings/";
+    const isRootSettings = location.pathname === "/settings" || location.pathname === "/settings/";
     setIsMobileMenu(isRootSettings);
+  }, [location.pathname]);
 
+  useEffect(() => {
+    const isRootSettings = location.pathname === "/settings" || location.pathname === "/settings/";
     // On desktop, auto-redirect /settings to /settings/profile
     if (isRootSettings && window.innerWidth >= 1024) {
-      navigate("/app/settings/profile", { replace: true });
+      navigate("/settings/profile", { replace: true });
     }
   }, [location.pathname, navigate]);
 
@@ -52,7 +55,7 @@ export function SettingsLayout() {
           <div className="p-6 pb-4">
             <div className="mb-5 flex items-center gap-3">
               <button
-                onClick={() => navigate("/app/settings/profile")}
+                onClick={() => navigate("/settings/profile")}
                 className="group flex h-8 w-8 items-center justify-center rounded-lg bg-muted transition-colors hover:bg-primary hover:text-primary-foreground cursor-pointer"
               >
                 <ArrowLeft size={16} />
@@ -131,7 +134,7 @@ export function SettingsLayout() {
         {/* Sub-page Header (Mobile only) */}
         <div className="flex items-center gap-3 border-b border-border bg-background p-4 lg:hidden">
           <button
-            onClick={() => navigate("/app/settings")}
+            onClick={() => navigate("/settings")}
             className="flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-primary hover:text-primary-foreground transition-colors cursor-pointer"
           >
             <ArrowLeft size={18} />
