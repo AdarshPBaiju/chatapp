@@ -6,6 +6,7 @@ from core.validators import (
     ServiceValidator,
 )
 from rest_framework.serializers import ValidationError
+import pytest
 
 
 class ValidatorTests(TestCase):
@@ -47,8 +48,8 @@ class ValidatorTests(TestCase):
 
         # Invalid data
         data = {"name": "J", "email": "bad-email"}
-        with self.assertRaises(ValidationError) as cm:
+        with pytest.raises(ValidationError) as cm:
             validator.run(data, schema)
 
-        self.assertIn("name", cm.exception.detail)
-        self.assertIn("email", cm.exception.detail)
+        self.assertIn("name", cm.value.detail)
+        self.assertIn("email", cm.value.detail)

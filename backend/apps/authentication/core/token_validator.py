@@ -113,7 +113,7 @@ ERROR_CODE_EXCEPTION_MAP: dict[str, type[TokenValidationError]] = {
 def _fallback_or_raise(fallback_to_local: bool, message: str) -> None:
     if fallback_to_local:
         debug_print(f"Falling back to local validation: {message}", prefix="FALLBACK")
-        return None
+        return
     raise TokenValidationError(message)
 
 

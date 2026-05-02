@@ -47,7 +47,10 @@ class AuthFlowTests(APITestCase):
 
         # Extract OTP from mail (robustly, handling whitespace between digits)
         import re
-        match = re.search(r"(\d)\s*(\d)\s*(\d)\s*(\d)\s*(\d)\s*(\d)", mail.outbox[0].body)
+
+        match = re.search(
+            r"(\d)\s*(\d)\s*(\d)\s*(\d)\s*(\d)\s*(\d)", mail.outbox[0].body
+        )
         self.assertIsNotNone(match, "Could not extract 6-digit OTP from email")
         otp = "".join(match.groups())
 
@@ -92,7 +95,10 @@ class AuthFlowTests(APITestCase):
         self.assertIn("recover@example.com", [m.to[0] for m in mail.outbox])
 
         import re
-        match = re.search(r"(\d)\s*(\d)\s*(\d)\s*(\d)\s*(\d)\s*(\d)", mail.outbox[-1].body)
+
+        match = re.search(
+            r"(\d)\s*(\d)\s*(\d)\s*(\d)\s*(\d)\s*(\d)", mail.outbox[-1].body
+        )
         self.assertIsNotNone(match, "Could not extract 6-digit recovery OTP")
         otp = "".join(match.groups())
 
@@ -168,7 +174,10 @@ class AuthFlowTests(APITestCase):
 
         # Extract OTP from mail (robustly, handling whitespace between digits)
         import re
-        match = re.search(r"(\d)\s*(\d)\s*(\d)\s*(\d)\s*(\d)\s*(\d)", mail.outbox[0].body)
+
+        match = re.search(
+            r"(\d)\s*(\d)\s*(\d)\s*(\d)\s*(\d)\s*(\d)", mail.outbox[0].body
+        )
         self.assertIsNotNone(match, "Could not extract 6-digit OTP from email")
         otp = "".join(match.groups())
 

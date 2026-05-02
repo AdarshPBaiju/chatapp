@@ -63,7 +63,8 @@ class RedisSessionStore:
             sessions_key = f"auth:user:{user_id}:sessions"
             existing_sessions = conn.get(sessions_key) or []
             active_sessions = [
-                item for item in existing_sessions
+                item
+                for item in existing_sessions
                 if int(item.get("expires_at", 0)) > now_ts
             ]
             if device_limit and len(active_sessions) >= device_limit:

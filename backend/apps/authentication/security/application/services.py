@@ -86,11 +86,9 @@ class OtpDeliveryService:
             wait_time = max(
                 remaining if isinstance(remaining, int) and remaining > 0 else 0, 1
             )
-            raise ValidationError(
-                {
-                    "email": f"Please wait {wait_time} seconds before requesting a new code."
-                }
-            )
+            raise ValidationError({
+                "email": f"Please wait {wait_time} seconds before requesting a new code."
+            })
 
         otp = f"{secrets.randbelow(900000) + 100000}"
         salt = secrets.token_hex(16)
@@ -132,9 +130,9 @@ class OtpDeliveryService:
             )
         except Exception as e:
             logger.exception("Failed to send OTP email to %s", destination)
-            raise ValidationError(
-                {"email": "Verification system unavailable. Please try again later."}
-            ) from e
+            raise ValidationError({
+                "email": "Verification system unavailable. Please try again later."
+            }) from e
 
         return otp
 
@@ -187,9 +185,9 @@ class OtpDeliveryService:
             )
         except Exception as e:
             logger.exception("Failed to send stateless OTP email to %s", user.email)
-            raise ValidationError(
-                {"email": "Verification system unavailable. Please try again later."}
-            ) from e
+            raise ValidationError({
+                "email": "Verification system unavailable. Please try again later."
+            }) from e
 
     @staticmethod
     def _get_email_copy(purpose: str) -> dict[str, str]:

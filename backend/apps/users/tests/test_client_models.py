@@ -8,6 +8,7 @@ from users.models import (
     ClientAccountSuspension,
     ClientDevice,
 )
+import pytest
 
 
 class ClientModelTests(TestCase):
@@ -138,7 +139,7 @@ class ClientModelTests(TestCase):
             client=self.client_obj,
             status=ClientAccountSuspension.SuspensionStatus.LIFTED,
         )
-        with self.assertRaises(InactiveSuspensionError):
+        with pytest.raises(InactiveSuspensionError):
             suspension.lift(reason="Already lifted")
 
     def test_suspension_extend_inactive_error(self):
@@ -148,5 +149,5 @@ class ClientModelTests(TestCase):
             client=self.client_obj,
             status=ClientAccountSuspension.SuspensionStatus.EXPIRED,
         )
-        with self.assertRaises(InactiveSuspensionError):
+        with pytest.raises(InactiveSuspensionError):
             suspension.extend(timezone.now() + timedelta(days=1))

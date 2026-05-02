@@ -11,7 +11,7 @@ app.config_from_object("django.conf:settings", namespace="CELERY")
 app.autodiscover_tasks()
 
 
-from core.utils.debug import debug_print  # noqa: E402
+from core.utils.debug import debug_print
 
 
 @app.task(bind=True)

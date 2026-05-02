@@ -177,7 +177,9 @@ AUTH_ENGINE_SETTINGS = {
 
 GO_AUTH_SETTINGS = {
     "ENABLED": config("GO_AUTH_ENABLED", default=False, cast=bool),
-    "VERIFY_URL": config("GO_AUTH_VERIFY_URL", default="http://go-auth:8080/api/v1/verify"),
+    "VERIFY_URL": config(
+        "GO_AUTH_VERIFY_URL", default="http://go-auth:8080/api/v1/verify"
+    ),
     "INTERNAL_SERVICE_SECRET": config("GO_INTERNAL_SERVICE_SECRET", default=""),
     "TIMEOUT_SECONDS": config("GO_AUTH_TIMEOUT_SECONDS", default=2.0, cast=float),
     "FALLBACK_TO_LOCAL": config("GO_AUTH_FALLBACK_TO_LOCAL", default=True, cast=bool),
