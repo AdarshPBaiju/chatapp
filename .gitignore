@@ -147,3 +147,5 @@ media/
 logs/
 *.log
 .env.prod
+# Documentation
+/docs
