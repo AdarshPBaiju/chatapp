@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"net/http"
 	"time"
@@ -8,6 +9,7 @@ import (
 	authconfig "chatapp/services/go/go-auth/internal/config"
 	"chatapp/services/go/go-auth/internal/handler"
 	"chatapp/services/go/go-auth/internal/service"
+	"chatapp/services/go/shared/platform/debug"
 	"chatapp/services/go/shared/platform/httpx"
 	"chatapp/services/go/shared/platform/server"
 )
@@ -47,6 +49,6 @@ func main() {
 	mux.Handle("POST /api/v1/verify", httpx.RequireInternalSecret(cfg.Service.InternalServiceSecret, rateLimitedHandler))
 
 	srv := server.New(cfg.Service, mux)
-	log.Printf("%s listening on :%s", cfg.Service.Name, cfg.Service.Port)
+	debug.Print("GO-AUTH", fmt.Sprintf("%s listening on :%s", cfg.Service.Name, cfg.Service.Port))
 	log.Fatal(srv.ListenAndServe())
 }

@@ -10,11 +10,13 @@ import (
 	sharedconfig "chatapp/services/go/shared/platform/config"
 )
 
+// TokenMaterial holds the keys used for signing and encrypting authentication tokens.
 type TokenMaterial struct {
 	SigningSeed   string `json:"signing_seed"`
 	EncryptionKey string `json:"encryption_key"`
 }
 
+// Config is the top-level configuration for the go-auth service.
 type Config struct {
 	Service               sharedconfig.ServiceConfig
 	ActiveKID             string
@@ -25,6 +27,7 @@ type Config struct {
 	RiskURL               string
 }
 
+// Load reads the go-auth configuration from environment variables and defaults.
 func Load() (Config, error) {
 	keyringRaw := envOrDefault("AUTH_TOKEN_KEYRING", `{"v1":{"signing_seed":"development-signing-seed","encryption_key":"development-encryption-key"}}`)
 	var keyring map[string]TokenMaterial

@@ -11,6 +11,7 @@ const (
 	defaultWriteTimeout = 10 * time.Second
 )
 
+// ServiceConfig holds the base configuration for a Go service.
 type ServiceConfig struct {
 	Name                  string
 	Port                  string
@@ -21,6 +22,7 @@ type ServiceConfig struct {
 	WriteTimeout          time.Duration
 }
 
+// Load reads service configuration from environment variables.
 func Load(serviceName, defaultPort string) ServiceConfig {
 	return ServiceConfig{
 		Name:                  envOrDefault("SERVICE_NAME", serviceName),

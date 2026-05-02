@@ -11,6 +11,7 @@ import (
 	"log"
 	"time"
 
+	"chatapp/services/go/shared/platform/debug"
 	"chatapp/services/go/shared/platform/httpx"
 	"chatapp/services/go/shared/platform/messaging"
 	authconfig "chatapp/services/go/go-auth/internal/config"
@@ -26,6 +27,7 @@ import (
 	"net/http"
 )
 
+// ValidationError represents a client-side validation error with a message and error code.
 type ValidationError struct {
 	Message   string
 	ErrorCode string
@@ -35,6 +37,7 @@ func (e *ValidationError) Error() string {
 	return e.Message
 }
 
+// Verifier handles authentication token verification and security checks.
 type Verifier struct {
 	cfg        authconfig.Config
 	redis      *redis.Client
@@ -43,6 +46,7 @@ type Verifier struct {
 	producer   *messaging.Producer
 }
 
+// New initializes a new Verifier with the given configuration.
 func New(cfg authconfig.Config) (*Verifier, error) {
 	redisOpts, err := redis.ParseURL(cfg.Service.RedisURL)
 	if err != nil {
@@ -70,10 +74,12 @@ func New(cfg authconfig.Config) (*Verifier, error) {
 	}, nil
 }
 
+// Redis returns the underlying Redis client.
 func (v *Verifier) Redis() *redis.Client {
 	return v.redis
 }
 
+// Close releases resources held by the Verifier.
 func (v *Verifier) Close() {
 	if v.redis != nil {
 		_ = v.redis.Close()
@@ -86,6 +92,7 @@ func (v *Verifier) Close() {
 	}
 }
 
+// Verify validates the given token and performs security checks.
 func (v *Verifier) Verify(ctx context.Context, req authtypes.VerifyRequest) (*authtypes.VerifyResponseData, error) {
 	if req.Token == "" {
 		return nil, &ValidationError{
@@ -124,7 +131,7 @@ func (v *Verifier) Verify(ctx context.Context, req authtypes.VerifyRequest) (*au
 	if subjectID != "" {
 		payload["user_id"] = subjectID
 	}
-	log.Printf("[Auth] Verifying token for User: %s (JTI: %s)", subjectID, jti)
+	debug.Print("GO-AUTH", fmt.Sprintf("Verifying token for User: %s (JTI: %s)", subjectID, jti))
 
 	// High-Performance Parallel Execution
 	g, gCtx := errgroup.WithContext(ctx)
@@ -202,10 +209,10 @@ func (v *Verifier) Verify(ctx context.Context, req authtypes.VerifyRequest) (*au
 	}
 
 	riskScore := v.calculateRiskScore(ctx, currentLoc, lastSessionLoc, lastSeenAt)
-	log.Printf("[Auth] Verification complete. Risk: %d | Location: %+v", riskScore, currentLoc)
+	debug.Print("GO-AUTH", fmt.Sprintf("Verification complete. Risk: %d | Location: %+v", riskScore, currentLoc))
 
 	// Fire-and-forget security event to Kafka
-	_ = v.producer.Publish(ctx, messaging.Event{
+	err = v.producer.Publish(ctx, messaging.Event{
 		Topic: "security_events",
 		Key:   subjectID,
 		Type:  "auth.verified",
@@ -217,6 +224,9 @@ func (v *Verifier) Verify(ctx context.Context, req authtypes.VerifyRequest) (*au
 			"ip":         req.RequestContext.IPAddress,
 		},
 	})
+	if err != nil {
+		debug.Print("GO-AUTH", fmt.Sprintf("Failed to publish security event: %v", err))
+	}
 
 	return &authtypes.VerifyResponseData{
 		Payload:   payload,
@@ -481,8 +491,14 @@ func (v *Verifier) getGeoLocation(ctx context.Context, ip string) *authtypes.Loc
 		return nil
 	}
 
-	payload, _ := json.Marshal(map[string]string{"ip": ip})
-	req, _ := http.NewRequestWithContext(ctx, "POST", v.cfg.EnrichmentURL+"/api/v1/enrich/ip", bytes.NewBuffer(payload))
+	payload, err := json.Marshal(map[string]string{"ip": ip})
+	if err != nil {
+		return nil
+	}
+	req, err := http.NewRequestWithContext(ctx, "POST", v.cfg.EnrichmentURL+"/api/v1/enrich/ip", bytes.NewBuffer(payload))
+	if err != nil {
+		return nil
+	}
 	req.Header.Set("X-Internal-Service-Secret", v.cfg.Service.InternalServiceSecret)
 	req.Header.Set("Content-Type", "application/json")
 
@@ -505,7 +521,10 @@ func (v *Verifier) getGeoLocation(ctx context.Context, ip string) *authtypes.Loc
 		return nil
 	}
 
-	b, _ := json.Marshal(apiResp.Data)
+	b, err := json.Marshal(apiResp.Data)
+	if err != nil {
+		return nil
+	}
 	var loc authtypes.Location
 	if err := json.Unmarshal(b, &loc); err != nil {
 		return nil
@@ -519,13 +538,19 @@ func (v *Verifier) calculateRiskScore(ctx context.Context, current, last *authty
 		return 0
 	}
 
-	payload, _ := json.Marshal(map[string]any{
+	payload, err := json.Marshal(map[string]any{
 		"current_location": current,
 		"last_location":    last,
 		"last_seen_at":     lastSeenAt,
 	})
+	if err != nil {
+		return 0
+	}
 
-	req, _ := http.NewRequestWithContext(ctx, "POST", v.cfg.RiskURL+"/api/v1/score/login", bytes.NewBuffer(payload))
+	req, err := http.NewRequestWithContext(ctx, "POST", v.cfg.RiskURL+"/api/v1/score/login", bytes.NewBuffer(payload))
+	if err != nil {
+		return 0
+	}
 	req.Header.Set("X-Internal-Service-Secret", v.cfg.Service.InternalServiceSecret)
 	req.Header.Set("Content-Type", "application/json")
 

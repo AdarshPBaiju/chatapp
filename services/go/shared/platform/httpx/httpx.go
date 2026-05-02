@@ -2,14 +2,16 @@ package httpx
 
 import (
 	"encoding/json"
-	"log"
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
 
+	"chatapp/services/go/shared/platform/debug"
 	"github.com/redis/go-redis/v9"
 )
 
+// APIResponse is the standard JSON response format for all Go services.
 type APIResponse struct {
 	Status    string      `json:"status"`
 	Message   string      `json:"message"`
@@ -27,12 +29,16 @@ func (rw *responseWriter) WriteHeader(code int) {
 	rw.ResponseWriter.WriteHeader(code)
 }
 
+// WriteJSON sends a JSON response with the given status code.
 func WriteJSON(w http.ResponseWriter, statusCode int, payload APIResponse) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(statusCode)
-	_ = json.NewEncoder(w).Encode(payload)
+	if err := json.NewEncoder(w).Encode(payload); err != nil {
+		log.Printf("Failed to encode JSON response: %v", err)
+	}
 }
 
+// LoggingMiddleware logs the details of each incoming HTTP request.
 func LoggingMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
@@ -40,7 +46,7 @@ func LoggingMiddleware(next http.Handler) http.Handler {
 		next.ServeHTTP(rw, r)
 		duration := time.Since(start)
 
-		log.Printf(
+		debug.Print("SYSTEM", fmt.Sprintf(
 			"[%s] %s %s | Status: %d | Duration: %v | IP: %s",
 			r.Method,
 			r.URL.Path,
@@ -48,10 +54,11 @@ func LoggingMiddleware(next http.Handler) http.Handler {
 			rw.statusCode,
 			duration,
 			r.RemoteAddr,
-		)
+		))
 	})
 }
 
+// RequireInternalSecret enforces that the request contains the correct X-Internal-Service-Secret header.
 func RequireInternalSecret(expected string, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if expected == "" {
@@ -77,6 +84,7 @@ func RequireInternalSecret(expected string, next http.Handler) http.Handler {
 	})
 }
 
+// RateLimitMiddleware applies a Redis-backed rate limit to the handler.
 func RateLimitMiddleware(rdb *redis.Client, limit int, window time.Duration, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if rdb == nil {

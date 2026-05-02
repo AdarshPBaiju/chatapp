@@ -9,6 +9,7 @@ import (
 	"chatapp/services/go/shared/platform/httpx"
 )
 
+// New creates a new http.Server with standard middleware and configuration.
 func New(cfg config.ServiceConfig, handler http.Handler) *http.Server {
 	loggedHandler := httpx.LoggingMiddleware(handler)
 

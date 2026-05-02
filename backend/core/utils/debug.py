@@ -9,7 +9,7 @@ def debug_print(message: str, prefix: str = "SYSTEM") -> None:
     """
     if settings.DEBUG:
         # High-contrast color palette
-        COLOR_MAP = {
+        color_map = {
             "GO-AUTH": "\033[95m",  # Magenta
             "RISK": "\033[91m",  # Red
             "ENRICH": "\033[93m",  # Yellow
@@ -20,18 +20,18 @@ def debug_print(message: str, prefix: str = "SYSTEM") -> None:
         }
 
         # Pick color based on prefix or default to Cyan
-        COLOR = COLOR_MAP.get(prefix.upper(), "\033[96m")
-        BOLD = "\033[1m"
-        GRAY = "\033[90m"
-        RESET = "\033[0m"
+        color = color_map.get(prefix.upper(), "\033[96m")
+        bold = "\033[1m"
+        gray = "\033[90m"
+        reset = "\033[0m"
 
         timestamp = datetime.now().strftime("%H:%M:%S.%f")[:-3]
         icon = "🔌"  # High-speed connectivity icon
 
         # Using fixed-width padding for the prefix to ensure vertical alignment
         output = (
-            f"{GRAY}[{timestamp}]{RESET} "
-            f"{COLOR}{BOLD}{icon} {prefix:<10}:{RESET} "
+            f"{gray}[{timestamp}]{reset} "
+            f"{color}{bold}{icon} {prefix:<10}:{reset} "
             f"{message}"
         )
         print(output, flush=True)
