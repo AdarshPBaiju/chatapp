@@ -14,6 +14,7 @@ import { ContactsPage } from "@/features/contacts/ui/ContactsPage";
 import { RequestsPage } from "@/features/contacts/ui/RequestsPage";
 import { DiscoverySearch } from "@/features/contacts/ui/DiscoverySearch";
 import { UserProfilePage } from "@/features/contacts/ui/UserProfilePage";
+import { ChatPage } from "@/features/chat/ui/ChatPage";
 
 import { MainAppLayout } from "@/app/MainAppLayout";
 import { SettingsLayout } from "@/pages/SettingsPage";
@@ -49,7 +50,7 @@ export const appRouter = createBrowserRouter([
     ),
     children: [
       { index: true, element: <RootRedirect /> },
-      { path: "chats", element: <div className="flex h-full w-full items-center justify-center p-20 text-center font-bold text-muted-foreground/30 uppercase tracking-widest text-xs">Chats • Coming Soon</div> },
+      { path: "chats", element: <ChatPage /> },
       {
         path: "contacts",
         element: <ContactsLayout />,

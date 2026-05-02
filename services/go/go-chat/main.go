@@ -2,16 +2,19 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
 	"github.com/redis/go-redis/v9"
 	"chatapp/services/go/shared/platform/debug"
+	"chatapp/services/go/shared/platform/messaging"
 	"chatapp/services/go/shared/platform/socket"
 )
 
@@ -25,28 +28,54 @@ func main() {
 	if redisURL == "" {
 		redisURL = "redis:6379"
 	}
-	nodeID, _ := os.Hostname() // Use hostname as node identity in the cluster
+	kafkaBrokers := os.Getenv("KAFKA_BOOTSTRAP_SERVERS")
+	if kafkaBrokers == "" {
+		kafkaBrokers = "kafka:29092"
+	}
+	nodeID, _ := os.Hostname()
 
 	addr := flag.String("addr", ":"+port, "http service address")
 	flag.Parse()
 
-	// 2. Initialize Distributed State (Redis)
-	rdb := redis.NewClient(&redis.Options{
-		Addr: redisURL,
-	})
+	// 2. Initialize Infrastructure
+	rdb := redis.NewClient(&redis.Options{Addr: redisURL})
+	producer := messaging.NewProducer(strings.Split(kafkaBrokers, ","))
+	defer producer.Close()
 
-	// 3. Initialize Advanced Socket Hub
-	hub := socket.NewHub("GO-CHAT", nodeID, rdb)
-	
+	// 3. Define Messaging Logic
+	handler := func(client *socket.Client, payload []byte) {
+		var msg socket.Message
+		if err := json.Unmarshal(payload, &msg); err != nil {
+			debug.Print("GO-CHAT", "Error decoding message: "+err.Error())
+			return
+		}
+
+		// Route message
+		if msg.Type == "chat_message" {
+			// 1. Send ACK immediately
+			client.Send <- []byte(`{"type":"message_ack","payload":{"original_id":"` + msg.Target + `","success":true}}`)
+
+			// 2. Publish to Kafka for persistence and global delivery
+			producer.Publish(context.Background(), messaging.Event{
+				Topic:   "chat.raw",
+				Key:     msg.Target, // Assuming Target is RoomID or UserID
+				Type:    "CHAT_MESSAGE",
+				Payload: msg.Payload,
+			})
+			
+			debug.Print("GO-CHAT", "Message queued for delivery: "+msg.Target)
+		}
+	}
+
+	// 4. Initialize Advanced Socket Hub
+	hub := socket.NewHub("GO-CHAT", nodeID, rdb, handler)
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
 	go hub.Run(ctx)
 
-	// 4. Register HTTP Routes
+	// 5. Register HTTP Routes
 	http.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
-		// Elite Auth Handshake (Simplified for template)
-		// In production, we'd extract user_id from JWE token in cookie
 		userID := r.URL.Query().Get("user_id")
 		if userID == "" {
 			userID = "anonymous-" + nodeID
@@ -59,16 +88,11 @@ func main() {
 		w.Write([]byte("OK"))
 	})
 
-	// 5. Start Server with Graceful Shutdown
-	srv := &http.Server{
-		Addr:    *addr,
-		Handler: nil,
-	}
-
+	// 6. Start Server
+	srv := &http.Server{Addr: *addr}
 	go func() {
 		debug.Print("GO-CHAT", "Elite Node operational on "+*addr)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			debug.Print("GO-CHAT", "Critical Failure: "+err.Error())
 			log.Fatal(err)
 		}
 	}()
@@ -82,6 +106,4 @@ func main() {
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		debug.Print("GO-CHAT", "Shutdown error: "+err.Error())
 	}
-
-	debug.Print("GO-CHAT", "Service exited.")
 }

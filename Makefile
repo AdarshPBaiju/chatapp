@@ -117,8 +117,11 @@ dev-go-enrichment:
 dev-go-risk:
 	$(DEV_CMD) logs -f go-risk
 
+dev-go-chat:
+	$(DEV_CMD) logs -f go-chat
+
 dev-go-all:
-	$(DEV_CMD) logs -f go-auth go-enrichment go-risk
+	$(DEV_CMD) logs -f go-auth go-enrichment go-risk go-chat
 
 dev-shell:
 	$(DEV_CMD) exec backend bash
@@ -166,5 +169,8 @@ prod-go-enrichment:
 prod-go-risk:
 	$(PROD_CMD) logs -f go-risk
 
+prod-go-chat:
+	$(PROD_CMD) logs -f go-chat
+
 prod-go-all:
-	$(PROD_CMD) logs -f go-auth go-enrichment go-risk
+	$(PROD_CMD) logs -f go-auth go-enrichment go-risk go-chat

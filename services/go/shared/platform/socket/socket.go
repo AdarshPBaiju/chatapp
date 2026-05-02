@@ -2,7 +2,6 @@ package socket
 
 import (
 	"context"
-	"log"
 	"net/http"
 	"sync"
 	"time"
@@ -11,6 +10,8 @@ import (
 	"github.com/redis/go-redis/v9"
 	"chatapp/services/go/shared/platform/debug"
 )
+
+type MessageHandler func(client *Client, payload []byte)
 
 const (
 	writeWait      = 10 * time.Second
@@ -50,9 +51,10 @@ type Hub struct {
 	Redis      *redis.Client
 	ServiceTag string
 	NodeID     string // Unique ID for this cluster node
+	Handler    MessageHandler
 }
 
-func NewHub(serviceTag, nodeID string, rdb *redis.Client) *Hub {
+func NewHub(serviceTag, nodeID string, rdb *redis.Client, handler MessageHandler) *Hub {
 	return &Hub{
 		clients:    make(map[*Client]bool),
 		userToConn: make(map[string]*Client),
@@ -62,6 +64,7 @@ func NewHub(serviceTag, nodeID string, rdb *redis.Client) *Hub {
 		Redis:      rdb,
 		ServiceTag: serviceTag,
 		NodeID:     nodeID,
+		Handler:    handler,
 	}
 }
 
@@ -152,8 +155,9 @@ func (c *Client) ReadPump() {
 		if err != nil {
 			break
 		}
-		// Logic to handle inbound messages (e.g., publish to Kafka)
-		log.Printf("Received: %s", message)
+		if c.Hub.Handler != nil {
+			c.Hub.Handler(c, message)
+		}
 	}
 }
 

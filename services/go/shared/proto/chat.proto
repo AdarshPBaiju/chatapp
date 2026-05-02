@@ -1,0 +1,54 @@
+syntax = "proto3";
+
+package chat;
+
+option go_package = "chatapp/services/go/shared/proto/chat";
+
+// Message types supported by the gateway
+enum MessageType {
+  UNKNOWN = 0;
+  CHAT_MESSAGE = 1;
+  TYPING_EVENT = 2;
+  READ_RECEIPT = 3;
+  PRESENCE_UPDATE = 4;
+  ACK = 5;
+}
+
+// The generic wrapper for all WebSocket traffic
+message Envelope {
+  MessageType type = 1;
+  bytes payload = 2;
+  string correlation_id = 3;
+  int64 timestamp = 4;
+}
+
+// 1. Core Chat Message
+message ChatMessage {
+  string id = 1;
+  string sender_id = 2;
+  string room_id = 3;
+  string content = 4;
+  int64 sent_at = 5;
+}
+
+// 2. Typing Event
+message TypingEvent {
+  string user_id = 1;
+  string room_id = 2;
+  bool is_typing = 3;
+}
+
+// 3. Read Receipt
+message ReadReceipt {
+  string user_id = 1;
+  string message_id = 2;
+  string room_id = 3;
+  int64 read_at = 4;
+}
+
+// 4. Acknowledgement (ACK)
+message Ack {
+  string original_id = 1;
+  bool success = 2;
+  string error = 3;
+}

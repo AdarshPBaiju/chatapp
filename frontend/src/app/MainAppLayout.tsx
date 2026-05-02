@@ -8,6 +8,7 @@ import { useState, useEffect } from "react";
 import { fetchProfile } from "@/features/settings/api";
 import { UserProfile } from "@/features/settings/types";
 import { socket } from "@/shared/api/socket";
+import { ThemeSwitcher } from "@/shared/ui/ThemeSwitcher";
 
 const NAV_ITEMS = [
   { id: "chats", label: "Chats", icon: MessageCircle, path: "/chats" },
@@ -109,6 +110,8 @@ export function MainAppLayout() {
               <LogOut size={20} />
             </div>
           </button>
+
+          <ThemeSwitcher variant="compact" />
           
           <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center overflow-hidden shrink-0 border border-border/50 cursor-pointer transition-transform hover:scale-105" onClick={() => navigate("/settings/profile")}>
             {profile?.profile_picture

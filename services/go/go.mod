@@ -8,6 +8,7 @@ require (
 	github.com/redis/go-redis/v9 v9.7.0
 	github.com/segmentio/kafka-go v0.4.47
 	golang.org/x/sync v0.9.0
+	github.com/gorilla/websocket v1.5.3
 )
 
 require (

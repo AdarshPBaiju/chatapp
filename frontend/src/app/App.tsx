@@ -5,7 +5,6 @@ import { useAuthBootstrap } from "@/app/bootstrap";
 import { PropsWithChildren, createContext, useContext } from "react";
 import { useAuthStore } from "@/modules/auth/state/authState";
 import { ThemeProvider } from "@/shared/ui/ThemeProvider";
-import { ThemeSwitcher } from "@/shared/ui/ThemeSwitcher";
 
 import { LoadingScreen } from "@/shared/ui/LoadingScreen";
 import { Toaster } from "@/shared/ui/Toast";
@@ -39,7 +38,6 @@ export function AppProviders({ children }: PropsWithChildren) {
       <AuthContext.Provider value={value}>
         <div className="app-root min-h-screen">
           {children}
-          <ThemeSwitcher />
           <Toaster />
           <AlertDialogProvider />
         </div>

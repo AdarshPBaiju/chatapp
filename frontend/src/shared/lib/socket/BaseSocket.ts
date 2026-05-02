@@ -33,6 +33,10 @@ export class BaseSocket {
     }
   }
 
+  public get isConnected(): boolean {
+    return this.socket?.readyState === WebSocket.OPEN;
+  }
+
   public connect() {
     if (this.socket?.readyState === WebSocket.OPEN) return;
 
