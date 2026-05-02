@@ -27,6 +27,7 @@ var colorMap = map[string]string{
 	"FALLBACK": colorOrange,
 	"SYSTEM":  colorCyan,
 	"CELERY":  colorBlue,
+	"GO-CHAT": colorCyan,
 }
 
 // Print diagnostic messages with ANSI colors and timestamps, matching the Python debug_print style.

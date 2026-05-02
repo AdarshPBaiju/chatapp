@@ -7,6 +7,7 @@ import { toast } from "@/shared/ui/Toast";
 import { useState, useEffect } from "react";
 import { fetchProfile } from "@/features/settings/api";
 import { UserProfile } from "@/features/settings/types";
+import { socket } from "@/shared/api/socket";
 
 const NAV_ITEMS = [
   { id: "chats", label: "Chats", icon: MessageCircle, path: "/chats" },
@@ -18,12 +19,22 @@ export function MainAppLayout() {
   const location = useLocation();
   const navigate = useNavigate();
   const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [isConnected, setIsConnected] = useState(false);
 
   // Extract the root app feature (chats, contacts, settings) for transition keys
   const currentAppSection = location.pathname.split('/')[1] || "home";
 
   useEffect(() => {
     fetchProfile().then(d => { if (d.success && d.data) setProfile(d.data); });
+
+    // Connect socket
+    socket.connect();
+    const handleStatus = (status: { connected: boolean }) => setIsConnected(status.connected);
+    socket.on("status", handleStatus);
+
+    return () => {
+      socket.off("status", handleStatus);
+    };
   }, []);
 
   async function handleLogout() {
@@ -41,8 +52,15 @@ export function MainAppLayout() {
         {/* Top Section */}
         <div className="flex flex-col items-center gap-6">
           {/* App Logo / Brand */}
-          <div className="h-10 w-10 rounded-2xl bg-primary flex items-center justify-center text-primary-foreground shadow-lg shadow-primary/20 mb-2">
-            <MessageCircle size={22} className="fill-current" />
+          <div className="relative">
+            <div className="h-10 w-10 rounded-2xl bg-primary flex items-center justify-center text-primary-foreground shadow-lg shadow-primary/20">
+              <MessageCircle size={22} className="fill-current" />
+            </div>
+            {/* Connection Status Indicator */}
+            <div className={cn(
+              "absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-background shadow-sm transition-colors duration-500",
+              isConnected ? "bg-green-500" : "bg-red-500 animate-pulse"
+            )} title={isConnected ? "Online" : "Connecting..."} />
           </div>
 
           {/* Primary Nav Items */}
