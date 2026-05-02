@@ -123,6 +123,9 @@ dev-go-chat:
 dev-go-all:
 	$(DEV_CMD) logs -f go-auth go-enrichment go-risk go-chat
 
+dev-chat-worker:
+	$(DEV_CMD) logs -f chat-worker
+
 dev-shell:
 	$(DEV_CMD) exec backend bash
 

@@ -52,18 +52,54 @@ func main() {
 
 		// Route message
 		if msg.Type == "chat_message" {
-			// 1. Send ACK immediately
-			client.Send <- []byte(`{"type":"message_ack","payload":{"original_id":"` + msg.Target + `","success":true}}`)
+			// 1. Monotonic Sequencing (Phase 2.3 Requirement)
+			// We use Redis INCR to ensure atomic, strictly increasing IDs per room
+			roomID := msg.Target
+			seqID, err := rdb.Incr(context.Background(), "room:seq:"+roomID).Result()
+			if err != nil {
+				debug.Print("GO-CHAT", "Redis Error (Sequencing): "+err.Error())
+				return
+			}
 
-			// 2. Publish to Kafka for persistence and global delivery
+			// 2. Send ACK immediately ("Sent" tick)
+			ack := map[string]any{
+				"type": "message_ack",
+				"payload": map[string]any{
+					"temp_id":     msg.Payload.(map[string]any)["temp_id"],
+					"sequence_id": seqID,
+					"room_id":     roomID,
+					"success":     true,
+				},
+			}
+			ackBytes, _ := json.Marshal(ack)
+			client.Send <- ackBytes
+
+			// 3. Publish to Kafka for persistence and global delivery
 			producer.Publish(context.Background(), messaging.Event{
-				Topic:   "chat.inbound",
-				Key:     msg.Target, // Partition by Target (RoomID/UserID)
-				Type:    "CHAT_MESSAGE",
-				Payload: msg.Payload,
+				Topic: "chat.inbound",
+				Key:   roomID,
+				Type:  "CHAT_MESSAGE",
+				Payload: map[string]any{
+					"content":     msg.Payload.(map[string]any)["content"],
+					"sender_id":   client.UserID,
+					"temp_id":     msg.Payload.(map[string]any)["temp_id"],
+					"sequence_id": seqID,
+				},
 			})
 			
-			debug.Print("GO-CHAT", "Message queued for delivery: "+msg.Target)
+			debug.Print("GO-CHAT", "Message seq:"+string(rune(seqID))+" queued for room: "+roomID)
+		} else if msg.Type == "read_receipt" {
+			// 1. Publish to Kafka for persistence and global sync
+			producer.Publish(context.Background(), messaging.Event{
+				Topic: "chat.inbound",
+				Key:   msg.Target, // RoomID
+				Type:  "READ_RECEIPT",
+				Payload: map[string]any{
+					"client_id":   client.UserID,
+					"sequence_id": msg.Payload.(map[string]any)["sequence_id"],
+				},
+			})
+			debug.Print("GO-CHAT", "Read receipt received for room: "+msg.Target)
 		}
 	}
 

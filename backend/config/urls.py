@@ -32,6 +32,8 @@ urlpatterns = [
     path("api/v1/auth/", include("authentication.api.v1.urls")),
     # Users & Profiles
     path("", include("users.urls")),
+    # Chat & Messaging
+    path("api/chat/", include("chat.urls")),
     # API Documentation
     path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
     path(
