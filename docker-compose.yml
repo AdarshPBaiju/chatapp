@@ -410,11 +410,22 @@ services:
       DB_PASSWORD: ${DB_PASSWORD}
       REDIS_HOST: redis
       REDIS_PORT: 6379
-      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      MINIO_INTERNAL_URL: ${MINIO_INTERNAL_URL}
+      MINIO_EXTERNAL_URL: ${MINIO_EXTERNAL_URL}
+      MINIO_BUCKET_NAME: ${MINIO_BUCKET_NAME}
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY}
       SECRET_KEY: ${SECRET_KEY}
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      ADMIN_URL: ${ADMIN_URL}
+      MAX_DEVICES_PER_USER: ${MAX_DEVICES_PER_USER}
     command: python manage.py consume_chat
     depends_on:
       db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
         condition: service_healthy
       kafka:
         condition: service_healthy

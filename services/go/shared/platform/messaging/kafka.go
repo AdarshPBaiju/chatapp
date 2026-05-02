@@ -28,7 +28,7 @@ func NewProducer(brokers []string) *Producer {
 			Balancer:     &kafka.LeastBytes{},
 			MaxAttempts:  5,
 			WriteTimeout: 10 * time.Second,
-			Async:        true,
+			Async:        false,            // Wait for confirmation to provide honest ACKs
 			BatchSize:    100,              // High-throughput batching
 			BatchTimeout: 10 * time.Millisecond, // Low latency batch flush
 			Compression:  kafka.Zstd,       // Extreme compression ratio

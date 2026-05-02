@@ -20,7 +20,7 @@ type VerifierClient struct {
 type VerifyResponse struct {
 	httpx.APIResponse
 	Data struct {
-		UserID string `json:"user_id"`
+		Payload map[string]any `json:"payload"`
 	} `json:"data"`
 }
 
@@ -63,5 +63,10 @@ func (c *VerifierClient) VerifyToken(ctx context.Context, token string) (string,
 		return "", fmt.Errorf("auth failed: %s", apiResp.Message)
 	}
 
-	return apiResp.Data.UserID, nil
+	userID, ok := apiResp.Data.Payload["user_id"].(string)
+	if !ok {
+		return "", fmt.Errorf("user_id not found in auth payload")
+	}
+
+	return userID, nil
 }

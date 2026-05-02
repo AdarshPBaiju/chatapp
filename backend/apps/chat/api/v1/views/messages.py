@@ -8,6 +8,17 @@ class MessageHistoryAPIView(generics.ListAPIView):
     serializer_class = MessageSerializer
     permission_classes = [permissions.IsAuthenticated]
 
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        room_id = self.kwargs.get("room_id")
+        client = self.request.user.client
+
+        membership = get_object_or_404(
+            RoomMembership, room_id=room_id, client=client, is_active=True
+        )
+        context["room"] = membership.room
+        return context
+
     def get_queryset(self):
         room_id = self.kwargs.get("room_id")
         client = self.request.user.client

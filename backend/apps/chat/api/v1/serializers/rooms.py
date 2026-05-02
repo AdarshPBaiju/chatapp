@@ -11,7 +11,7 @@ class RoomParticipantSerializer(serializers.ModelSerializer):
 
 
 class LastMessageSerializer(serializers.ModelSerializer):
-    sender_id = serializers.ReadOnlyField(source="sender.id")
+    sender_id = serializers.ReadOnlyField(source="sender.user.id")
     sender_name = serializers.ReadOnlyField(source="sender.full_name")
 
     class Meta:

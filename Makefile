@@ -138,6 +138,9 @@ dev-makemigrations:
 dev-gateway:
 	$(DEV_CMD) logs -f gateway
 
+dev-gateway-restart:
+	$(DEV_CMD) restart gateway
+
 # --- Production ---
 prod-build:
 	$(PROD_CMD) build

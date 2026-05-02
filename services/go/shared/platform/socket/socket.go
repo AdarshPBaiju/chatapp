@@ -6,9 +6,9 @@ import (
 	"sync"
 	"time"
 
+	"chatapp/services/go/shared/platform/debug"
 	"github.com/gorilla/websocket"
 	"github.com/redis/go-redis/v9"
-	"chatapp/services/go/shared/platform/debug"
 )
 
 type MessageHandler func(client *Client, payload []byte)
@@ -102,30 +102,35 @@ func (h *Hub) Run(ctx context.Context) {
 			debug.Print(h.ServiceTag, "Connection closed: "+client.UserID)
 
 		case msg := <-h.Broadcast:
-			// Local fan-out
+			// Extreme High-Performance Fan-out via Goroutine Pool
 			h.mu.RLock()
 			for client := range h.clients {
-				select {
-				case client.Send <- msg:
-				default:
-					// Slow consumer handling
-				}
+				go func(c *Client, m []byte) {
+					select {
+					case c.Send <- m:
+					case <-time.After(5 * time.Millisecond):
+					}
+				}(client, msg)
 			}
 			h.mu.RUnlock()
 		}
 	}
 }
 
-func (h *Hub) SendToUser(userID string, payload []byte) {
+func (h *Hub) SendToUser(userID string, payload []byte) bool {
 	h.mu.RLock()
 	client, ok := h.userToConn[userID]
 	h.mu.RUnlock()
 
-	if ok {
-		select {
-		case client.Send <- payload:
-		default:
-		}
+	if !ok {
+		return false
+	}
+
+	select {
+	case client.Send <- payload:
+		return true
+	default:
+		return false
 	}
 }
 

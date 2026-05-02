@@ -4,20 +4,57 @@ import (
 	"context"
 	"encoding/json"
 	"flag"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
 
-	"github.com/redis/go-redis/v9"
 	"chatapp/services/go/shared/platform/auth"
 	"chatapp/services/go/shared/platform/debug"
 	"chatapp/services/go/shared/platform/messaging"
 	"chatapp/services/go/shared/platform/socket"
+	"github.com/redis/go-redis/v9"
 )
+
+type outboundMessage struct {
+	Type    string `json:"type"`
+	Payload any    `json:"payload"`
+}
+
+func sendSocketMessage(client *socket.Client, msgType string, payload any) {
+	data, err := json.Marshal(outboundMessage{Type: msgType, Payload: payload})
+	if err != nil {
+		debug.Print("GO-CHAT", "Socket marshal error: "+err.Error())
+		return
+	}
+
+	select {
+	case client.Send <- data:
+	default:
+		debug.Print("GO-CHAT", "Socket send buffer full for user: "+client.UserID)
+	}
+}
+
+func normalizeDeliveryEventType(eventType string) string {
+	switch strings.ToUpper(eventType) {
+	case "CHAT_DELIVERY":
+		return "chat_delivery"
+	case "CHAT_STATUS":
+		return "chat_status"
+	default:
+		return strings.ToLower(eventType)
+	}
+}
+
+func payloadMap(payload any) (map[string]any, bool) {
+	data, ok := payload.(map[string]any)
+	return data, ok
+}
 
 func main() {
 	// 1. Environment & Configuration
@@ -62,53 +99,92 @@ func main() {
 
 		// Route message
 		if msg.Type == "chat_message" {
-			// 1. Monotonic Sequencing (Phase 2.3 Requirement)
-			// We use Redis INCR to ensure atomic, strictly increasing IDs per room
-			roomID := msg.Target
-			seqID, err := rdb.Incr(context.Background(), "room:seq:"+roomID).Result()
-			if err != nil {
-				debug.Print("GO-CHAT", "Redis Error (Sequencing): "+err.Error())
+			body, ok := payloadMap(msg.Payload)
+			if !ok {
+				sendSocketMessage(client, "message_ack", map[string]any{
+					"success": false,
+					"error":   "Invalid message payload",
+				})
 				return
 			}
 
-			// 2. Send ACK immediately ("Sent" tick)
-			ack := map[string]any{
-				"type": "message_ack",
-				"payload": map[string]any{
-					"temp_id":     msg.Payload.(map[string]any)["temp_id"],
-					"sequence_id": seqID,
-					"room_id":     roomID,
-					"success":     true,
-				},
+			content, _ := body["content"].(string)
+			tempID, _ := body["temp_id"].(string)
+			roomID := msg.Target
+			if roomID == "" || tempID == "" || strings.TrimSpace(content) == "" {
+				sendSocketMessage(client, "message_ack", map[string]any{
+					"temp_id": tempID,
+					"success": false,
+					"error":   "Room, content, and temp_id are required",
+				})
+				return
 			}
-			ackBytes, _ := json.Marshal(ack)
-			client.Send <- ackBytes
 
-			// 3. Publish to Kafka for persistence and global delivery
-			producer.Publish(context.Background(), messaging.Event{
+			// 1. Monotonic Sequencing (Phase 2.3 Requirement)
+			// We use Redis INCR to ensure atomic, strictly increasing IDs per room
+			seqID, err := rdb.Incr(context.Background(), "room:seq:"+roomID).Result()
+			if err != nil {
+				debug.Print("GO-CHAT", "Redis Error (Sequencing): "+err.Error())
+				sendSocketMessage(client, "message_ack", map[string]any{
+					"temp_id": tempID,
+					"success": false,
+					"error":   "Unable to reserve message sequence",
+				})
+				return
+			}
+
+			// 2. Publish to Kafka for persistence and global delivery
+			err = producer.Publish(context.Background(), messaging.Event{
 				Topic: "chat.inbound",
 				Key:   roomID,
 				Type:  "CHAT_MESSAGE",
 				Payload: map[string]any{
-					"content":     msg.Payload.(map[string]any)["content"],
+					"content":     content,
 					"sender_id":   client.UserID,
-					"temp_id":     msg.Payload.(map[string]any)["temp_id"],
+					"temp_id":     tempID,
 					"sequence_id": seqID,
 				},
 			})
-			
-			debug.Print("GO-CHAT", "Message seq:"+string(rune(seqID))+" queued for room: "+roomID)
+
+			if err != nil {
+				debug.Print("GO-CHAT", "Kafka Error: "+err.Error())
+				sendSocketMessage(client, "message_ack", map[string]any{
+					"temp_id": tempID,
+					"success": false,
+					"error":   "Persistence failed",
+				})
+				return
+			}
+
+			// 3. Send successful ACK only if Kafka confirmed
+			sendSocketMessage(client, "message_ack", map[string]any{
+				"temp_id":     tempID,
+				"sequence_id": seqID,
+				"room_id":     roomID,
+				"success":     true,
+			})
+
+			debug.Print("GO-CHAT", "Message seq:"+strconv.FormatInt(seqID, 10)+" persisted and queued for room: "+roomID)
 		} else if msg.Type == "read_receipt" {
+			body, ok := payloadMap(msg.Payload)
+			if !ok {
+				return
+			}
+
 			// 1. Publish to Kafka for persistence and global sync
-			producer.Publish(context.Background(), messaging.Event{
+			err := producer.Publish(context.Background(), messaging.Event{
 				Topic: "chat.inbound",
 				Key:   msg.Target, // RoomID
 				Type:  "READ_RECEIPT",
 				Payload: map[string]any{
 					"client_id":   client.UserID,
-					"sequence_id": msg.Payload.(map[string]any)["sequence_id"],
+					"sequence_id": body["sequence_id"],
 				},
 			})
+			if err != nil {
+				debug.Print("GO-CHAT", "Read receipt publish failed: "+err.Error())
+				return
+			}
 			debug.Print("GO-CHAT", "Read receipt received for room: "+msg.Target)
 		}
 	}
@@ -121,18 +197,33 @@ func main() {
 	go hub.Run(ctx)
 
 	// 5. Initialize Delivery Consumer (Phase 2.2 Completion)
-	deliveryConsumer := messaging.NewConsumer(strings.Split(kafkaBrokers, ","), "go-chat-group", "chat.delivery")
+	deliveryConsumer := messaging.NewConsumer(strings.Split(kafkaBrokers, ","), "go-chat-group-"+nodeID, "chat.delivery")
 	defer deliveryConsumer.Close()
 
 	go func() {
+		debug.Print("GO-CHAT", "Delivery consumer started for node: "+nodeID)
 		err := deliveryConsumer.Consume(ctx, func(event messaging.Event) error {
-			// Key is the target UserID
-			data, _ := json.Marshal(event)
-			hub.SendToUser(event.Key, data)
+			debug.Print("GO-CHAT", fmt.Sprintf("📦 Delivery Event Received: Type=%s, TargetUser=%s", event.Type, event.Key))
+
+			data, err := json.Marshal(outboundMessage{
+				Type:    normalizeDeliveryEventType(event.Type),
+				Payload: event.Payload,
+			})
+			if err != nil {
+				debug.Print("GO-CHAT", "Delivery marshal error: "+err.Error())
+				return nil
+			}
+
+			success := hub.SendToUser(event.Key, data)
+			if success {
+				debug.Print("GO-CHAT", "✅ Successfully delivered to user: "+event.Key)
+			} else {
+				debug.Print("GO-CHAT", "⚠️ User not connected to this node: "+event.Key)
+			}
 			return nil
 		})
-		if err != nil && ctx.Err() == nil {
-			debug.Print("GO-CHAT", "Delivery Consumer error: "+err.Error())
+		if err != nil {
+			debug.Print("GO-CHAT", "❌ Delivery consumer error: "+err.Error())
 		}
 	}()
 
