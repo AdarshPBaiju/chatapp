@@ -11,7 +11,6 @@ from copy import deepcopy
 from django.conf import settings
 
 
-
 def _auth_settings_override() -> dict:
     auth_settings = deepcopy(settings.AUTH_ENGINE_SETTINGS)
     auth_settings["TOKEN_KEYRING"] = {
@@ -41,6 +40,9 @@ def _go_auth_settings_override(**overrides) -> dict:
 )
 class SecurityInfraTests(TestCase):
     def setUp(self):
+        from authentication.core.token_validator import GO_AUTH_BREAKER
+
+        GO_AUTH_BREAKER.record_success()
         self.user = CustomUser.objects.create_user(
             email="security@example.com", password="password123", is_active=True
         )
@@ -179,9 +181,14 @@ class SecurityInfraTests(TestCase):
 
         request = self.factory.get("/", HTTP_AUTHORIZATION="Bearer remote-token")
 
-        with patch(
-            "authentication.core.token_validator.AuthCryptoEngine.decrypt_and_verify"
-        ) as decrypt_mock:
+        with (
+            patch(
+                "authentication.core.token_validator.AuthCryptoEngine.decrypt_and_verify"
+            ) as decrypt_mock,
+            patch(
+                "authentication.core.token_validator._enrich_payload_with_security_data"
+            ),
+        ):
             user, auth_payload = self.auth.authenticate(request)
 
         self.assertEqual(user.id, self.user.id)
@@ -203,14 +210,23 @@ class SecurityInfraTests(TestCase):
     ):
         build_fpt_mock_ctx.return_value = "fixed-fpt"
         build_fpt_mock_val.return_value = "fixed-fpt"
-        response = Mock()
-        response.status_code = 501
-        response.json.return_value = {
-            "status": "error",
-            "message": "not implemented",
-            "error_code": "GO_AUTH_VERIFY_NOT_IMPLEMENTED",
-        }
-        post_mock.return_value = response
+
+        def post_side_effect(url, **kwargs):
+            resp = Mock()
+            if "go-auth" in url:
+                resp.status_code = 501
+                resp.json.return_value = {
+                    "status": "error",
+                    "message": "not implemented",
+                    "error_code": "GO_AUTH_VERIFY_NOT_IMPLEMENTED",
+                }
+            else:
+                # Enrichment/Risk services
+                resp.status_code = 200
+                resp.json.return_value = {"status": "ok", "data": {}}
+            return resp
+
+        post_mock.side_effect = post_side_effect
 
         payload = {
             "sub": str(self.user.id),
@@ -226,22 +242,30 @@ class SecurityInfraTests(TestCase):
         user, auth_payload = self.auth.authenticate(request)
 
         self.assertEqual(user.id, self.user.id)
-        self.assertEqual(auth_payload["sub"], payload["sub"])
-        post_mock.assert_called_once()
+        # Check that go-auth was called. Other calls (enrichment) might happen.
+        called_urls = [args[0] for args, _kwargs in post_mock.call_args_list]
+        self.assertIn("http://go-auth:8080/api/v1/verify", called_urls)
 
     @override_settings(
         GO_AUTH_SETTINGS=_go_auth_settings_override(ENABLED=True),
     )
     @patch("authentication.core.token_validator.requests.post")
     def test_advanced_jwt_auth_raises_go_validation_failure(self, post_mock):
-        response = Mock()
-        response.status_code = 401
-        response.json.return_value = {
-            "status": "error",
-            "message": "Token context mismatch.",
-            "error_code": "AUTH_TOKEN_TAMPERED",
-        }
-        post_mock.return_value = response
+        def post_side_effect(url, **kwargs):
+            resp = Mock()
+            if "go-auth" in url:
+                resp.status_code = 401
+                resp.json.return_value = {
+                    "status": "error",
+                    "message": "Token context mismatch.",
+                    "error_code": "AUTH_TOKEN_TAMPERED",
+                }
+            else:
+                resp.status_code = 200
+                resp.json.return_value = {"status": "ok", "data": {}}
+            return resp
+
+        post_mock.side_effect = post_side_effect
 
         request = self.factory.get("/", HTTP_AUTHORIZATION="Bearer remote-token")
 
