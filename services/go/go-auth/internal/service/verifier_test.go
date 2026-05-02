@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 	"testing"
-	"chatapp/services/go/go-auth/internal/config"
 	"chatapp/services/go/go-auth/internal/types"
 )
 

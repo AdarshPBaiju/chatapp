@@ -34,7 +34,7 @@ func WriteJSON(w http.ResponseWriter, statusCode int, payload APIResponse) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(statusCode)
 	if err := json.NewEncoder(w).Encode(payload); err != nil {
-		log.Printf("Failed to encode JSON response: %v", err)
+		debug.Print("SYSTEM", fmt.Sprintf("Failed to encode JSON response: %v", err))
 	}
 }
 
