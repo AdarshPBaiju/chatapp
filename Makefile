@@ -132,6 +132,9 @@ dev-migrate:
 dev-makemigrations:
 	$(DEV_CMD) exec backend python manage.py makemigrations
 
+dev-gateway:
+	$(DEV_CMD) logs -f gateway
+
 # --- Production ---
 prod-build:
 	$(PROD_CMD) build

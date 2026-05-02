@@ -117,6 +117,27 @@ services:
     networks:
       - chatapp_network
 
+  kafka-init:
+    image: confluentinc/cp-kafka:7.6.0
+    depends_on:
+      kafka:
+        condition: service_healthy
+    entrypoint: [ "/bin/sh", "-c" ]
+    command: |
+      "
+      echo 'Waiting for Kafka...'
+      kafka-topics --bootstrap-server kafka:29092 --list
+
+      echo 'Creating topics...'
+      kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic security_events --partitions 3 --replication-factor 1
+      kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic chat.raw --partitions 6 --replication-factor 1
+      kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic user_events --partitions 3 --replication-factor 1
+      kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic enrichment_events --partitions 3 --replication-factor 1
+      echo 'All Kafka topics ready.'
+      "
+    networks:
+      - chatapp_network
+
   backend:
     build: ./backend
     environment:
