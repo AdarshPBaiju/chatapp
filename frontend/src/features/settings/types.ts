@@ -4,6 +4,7 @@ export type UserProfile = {
   full_name: string;
   bio: string;
   profile_picture: string | null;
+  banner_picture: string | null;
   gender: 'male' | 'female' | 'other' | '';
   phone_number: string | null;
   username: string | null;

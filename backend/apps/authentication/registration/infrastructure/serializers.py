@@ -32,6 +32,12 @@ class ClientSignUpFinalizeSerializer(serializers.Serializer):
     username = v.string().label("Username")
     password = v.string().label("Password")
 
+    def validate_username(self, value):
+        from users.models import Client
+        if Client.objects.filter(username__iexact=value).exists():
+            raise serializers.ValidationError("This username is already taken.")
+        return value
+
 
 @auto_configure_fields
 class ClientRegistrationResendSerializer(serializers.Serializer):

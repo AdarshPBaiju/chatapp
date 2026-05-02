@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Mail, Lock, User, AtSign } from "lucide-react";
+import { Mail, Lock, User, AtSign, Check, AlertCircle } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 import { signUpResend, signUpVerify } from "@/modules/auth/api/authApi";
+import { checkUsernameAvailability } from "@/features/settings/api";
 import { runSignUpFlow, runSignUpFinalizeFlow } from "@/modules/auth/utils/authFlows";
 import { getErrorMessage } from "@/shared/lib/errorHelper";
 import { AuthLayout } from "@/shared/ui/AuthLayout";
@@ -49,6 +50,31 @@ export function SignUpPage() {
     },
     onSubmit: () => { }
   });
+
+  const [usernameStatus, setUsernameStatus] = useState<'checking' | 'available' | 'taken' | null>(null);
+
+  useEffect(() => {
+    if (step === "DETAILS" && values.username && values.username.length >= 3) {
+      setUsernameStatus('checking');
+      const timeoutId = setTimeout(async () => {
+        try {
+          const data = await checkUsernameAvailability(values.username);
+          if (data.success && data.data) {
+            setUsernameStatus(data.data.available ? 'available' : 'taken');
+          } else {
+            setUsernameStatus(null);
+          }
+        } catch {
+          setUsernameStatus(null);
+        }
+      }, 500);
+      return () => clearTimeout(timeoutId);
+    } else {
+      setUsernameStatus(null);
+    }
+  }, [values.username, step]);
+
+
 
   async function handleEmail(e: React.FormEvent) {
     e.preventDefault();
@@ -235,13 +261,18 @@ export function SignUpPage() {
                 {...getFieldProps("fullName")}
                 disabled={loading}
               />
-              <Input
-                type="text"
-                placeholder="Username (e.g. john_doe)"
-                icon={<AtSign size={18} />}
-                {...getFieldProps("username")}
-                disabled={loading}
-              />
+              <div className="space-y-1">
+                <Input
+                  type="text"
+                  placeholder="Username (e.g. john_doe)"
+                  icon={<AtSign size={18} />}
+                  {...getFieldProps("username")}
+                  disabled={loading}
+                />
+                {usernameStatus === 'checking' && <p className="pl-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider animate-pulse">Checking availability...</p>}
+                {usernameStatus === 'available' && <p className="pl-1 text-[10px] font-bold text-green-500 uppercase tracking-wider flex items-center gap-1"><Check size={10} /> Available</p>}
+                {usernameStatus === 'taken' && <p className="pl-1 text-[10px] font-bold text-red-500 uppercase tracking-wider flex items-center gap-1"><AlertCircle size={10} /> Taken</p>}
+              </div>
 
               <Input
                 type="password"

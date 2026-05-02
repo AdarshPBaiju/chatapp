@@ -1,5 +1,5 @@
 from django.urls import path, include
 
 urlpatterns = [
-    path("client/", include("users.api.v1.client.urls")),
+    path("users/client/", include("users.api.v1.client.urls")),
 ]

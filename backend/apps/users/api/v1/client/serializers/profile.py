@@ -28,6 +28,11 @@ class ClientProfileSerializer(serializers.Serializer):
         .optional()
         .label("Profile Picture")
     )
+    banner_picture = (
+        v.file(max_mb=5, exts=["jpg", "jpeg", "png", "webp"])
+        .optional()
+        .label("Banner Picture")
+    )
 
     gender = v.choice(Client.Gender.choices).optional().label("Gender")
     phone_number = v.string().optional().label("Phone Number")
@@ -38,14 +43,26 @@ class ClientProfileSerializer(serializers.Serializer):
         v.list(v.datetime()).access(read=True).label("Username Change History")
     )
     username_change_limit = serializers.SerializerMethodField()
-    who_can_add_me = v.choice(Client.InvitationPolicy.choices).optional().label("Who can add me")
+    who_can_add_me = (
+        v.choice(Client.InvitationPolicy.choices).optional().label("Who can add me")
+    )
     is_two_factor_enabled = v.boolean().access(read=True).label("2FA Status")
 
     def get_username_change_limit(self, obj):
         return GlobalConfiguration.get_value("USERNAME_CHANGE_LIMIT", 0)
 
     def validate_username(self, value):
+        from users.models import Client
+
         instance = getattr(self, "instance", None)
+
+        # Uniqueness check against active usernames
+        qs = Client.objects.filter(username__iexact=value)
+        if instance:
+            qs = qs.exclude(id=instance.id)
+        if qs.exists():
+            raise serializers.ValidationError("This username is already taken.")
+
         if instance and instance.username != value:
             now = timezone.now()
 
@@ -77,6 +94,9 @@ class ClientProfileSerializer(serializers.Serializer):
         """
         Manually handle the update of the Client model instance.
         """
+        if "phone_number" in validated_data and not validated_data["phone_number"]:
+            validated_data["phone_number"] = None
+
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
 

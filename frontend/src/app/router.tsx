@@ -11,6 +11,11 @@ import { PrivacySection } from "@/features/settings/ui/PrivacySection";
 import { SecuritySection } from "@/features/settings/ui/SecuritySection";
 import { ActiveSessionsSection } from "@/features/settings/ui/ActiveSessionsSection";
 
+import { ContactsPage } from "@/features/contacts/ui/ContactsPage";
+import { RequestsPage } from "@/features/contacts/ui/RequestsPage";
+import { DiscoverySearch } from "@/features/contacts/ui/DiscoverySearch";
+import { UserProfilePage } from "@/features/contacts/ui/UserProfilePage";
+
 import { 
   AuthenticatedGuard, 
   GuestGuard, 
@@ -52,6 +57,10 @@ export const appRouter = createBrowserRouter([
     ),
     children: [
       { path: "profile", element: <ProfileSection /> },
+      { path: "contacts", element: <ContactsPage /> },
+      { path: "requests", element: <RequestsPage /> },
+      { path: "discovery", element: <DiscoverySearch /> },
+      { path: "profile/:userId", element: <UserProfilePage /> },
       { path: "privacy", element: <PrivacySection /> },
       { path: "security", element: <SecuritySection /> },
       { path: "devices", element: <ActiveSessionsSection /> },

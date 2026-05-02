@@ -5,6 +5,7 @@ from .clients import (
     ClientDevice,
 )
 from .user import CustomUser
+from .contacts import Contact
 
 __all__ = [
     "Client",
@@ -12,4 +13,5 @@ __all__ = [
     "ClientBanRecord",
     "ClientDevice",
     "CustomUser",
+    "Contact",
 ]

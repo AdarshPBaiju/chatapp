@@ -49,6 +49,16 @@ class Client(UUIDModel):
         ),
         blank=True,
     )
+    banner_picture = models.ImageField(
+        upload_to=SmartUploadPath(
+            UploadPathConfig(
+                base_path="banner_pictures",
+                field_lookup="user.id",
+                filename_mode="prepend_uuid",
+            )
+        ),
+        blank=True,
+    )
     gender = models.CharField(
         max_length=10,
         choices=Gender.choices,
@@ -97,7 +107,6 @@ class Client(UUIDModel):
             old_instance = Client.objects.filter(pk=self.pk).first()
             if old_instance and old_instance.username != self.username:
                 now = timezone.now()
-                
                 cooldown_days = GlobalConfiguration.get_value("USERNAME_CHANGE_COOLDOWN_DAYS", 30)
                 change_limit = GlobalConfiguration.get_value("USERNAME_CHANGE_LIMIT", None)
                 

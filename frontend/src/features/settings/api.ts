@@ -3,14 +3,19 @@ import { ApiEnvelope } from "@/shared/types/api";
 import { UserProfile, TwoFactorSetup, TwoFactorVerification, AuthSession } from "./types";
 
 export async function fetchProfile(): Promise<ApiEnvelope<UserProfile>> {
-  const response = await httpClient.get("client/profile/");
+  const response = await httpClient.get("users/client/profile/");
   return response.data;
 }
 
 export async function updateProfile(data: Partial<UserProfile> | FormData): Promise<ApiEnvelope<UserProfile>> {
-  const response = await httpClient.patch("client/profile/", data, {
+  const response = await httpClient.patch("users/client/profile/", data, {
     headers: data instanceof FormData ? { "Content-Type": "multipart/form-data" } : {},
   });
+  return response.data;
+}
+
+export async function checkUsernameAvailability(username: string): Promise<ApiEnvelope<{ available: boolean }>> {
+  const response = await httpClient.get(`users/client/profile/check-username/?username=${encodeURIComponent(username)}`);
   return response.data;
 }
 
