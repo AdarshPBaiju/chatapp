@@ -9,7 +9,7 @@ from authentication.core.crypto import AuthCryptoEngine
 import uuid
 from copy import deepcopy
 from django.conf import settings
-import pytest
+
 
 
 def _auth_settings_override() -> dict:
@@ -77,7 +77,7 @@ class SecurityInfraTests(TestCase):
 
     def test_advanced_jwt_auth_invalid_token(self):
         request = self.factory.get("/", HTTP_AUTHORIZATION="Bearer invalid-token")
-        with pytest.raises(AuthenticationFailed):
+        with self.assertRaises(AuthenticationFailed):
             self.auth.authenticate(request)
 
     @patch("authentication.core.token_validator.build_fingerprint")
@@ -101,9 +101,9 @@ class SecurityInfraTests(TestCase):
         token = AuthCryptoEngine.encrypt_and_sign(payload, ttl_seconds=60)
         request = self.factory.get("/", HTTP_AUTHORIZATION=f"Bearer {token}")
 
-        with pytest.raises(AuthenticationFailed) as cm:
+        with self.assertRaises(AuthenticationFailed) as cm:
             self.auth.authenticate(request)
-        self.assertIn("inactive", str(cm.value))
+        self.assertIn("inactive", str(cm.exception))
 
     @patch("authentication.core.token_validator.build_fingerprint")
     @patch("authentication.core.request_context.build_fingerprint")
@@ -147,9 +147,9 @@ class SecurityInfraTests(TestCase):
         token = AuthCryptoEngine.encrypt_and_sign(payload, ttl_seconds=60)
         request = self.factory.get("/", HTTP_AUTHORIZATION=f"Bearer {token}")
 
-        with pytest.raises(AuthenticationFailed) as cm:
+        with self.assertRaises(AuthenticationFailed) as cm:
             self.auth.authenticate(request)
-        self.assertIn("Session is no longer active", str(cm.value))
+        self.assertIn("Session is no longer active", str(cm.exception))
 
     def test_advanced_jwt_auth_authenticate_header(self):
         header = self.auth.authenticate_header(None)
@@ -245,10 +245,10 @@ class SecurityInfraTests(TestCase):
 
         request = self.factory.get("/", HTTP_AUTHORIZATION="Bearer remote-token")
 
-        with pytest.raises(AuthenticationFailed) as cm:
+        with self.assertRaises(AuthenticationFailed) as cm:
             self.auth.authenticate(request)
 
-        self.assertIn("Token context mismatch", str(cm.value))
+        self.assertIn("Token context mismatch", str(cm.exception))
         post_mock.assert_called_once()
 
 

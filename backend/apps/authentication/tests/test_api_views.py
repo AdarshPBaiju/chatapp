@@ -7,7 +7,7 @@ from unittest.mock import patch
 from copy import deepcopy
 from django.conf import settings
 import uuid
-import pytest
+
 
 
 def _auth_settings_override() -> dict:
@@ -148,7 +148,7 @@ class CryptoTests(APITestCase):
         # Tamper with the token (change a character in the encrypted part)
         tampered_token = token[:-5] + ("A" if token[-5] != "A" else "B") + token[-4:]
 
-        with pytest.raises(ValueError, match="Invalid or tampered token protocol"):
+        with self.assertRaisesRegex(ValueError, "Invalid or tampered token protocol"):
             AuthCryptoEngine.decrypt_and_verify(tampered_token)
 
     @override_settings(AUTH_ENGINE_SETTINGS=_auth_settings_override())
@@ -157,5 +157,5 @@ class CryptoTests(APITestCase):
         # Issue token with negative TTL
         token = AuthCryptoEngine.encrypt_and_sign(payload, ttl_seconds=-10)
 
-        with pytest.raises(ValueError, match="The authentication token has expired"):
+        with self.assertRaisesRegex(ValueError, "The authentication token has expired"):
             AuthCryptoEngine.decrypt_and_verify(token)

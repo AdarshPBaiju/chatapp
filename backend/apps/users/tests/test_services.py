@@ -2,7 +2,7 @@ from django.test import TestCase
 from unittest.mock import patch
 from users.services.user_services import UserService
 from users.models import CustomUser, Client
-import pytest
+
 
 
 class UserServiceTests(TestCase):
@@ -34,10 +34,10 @@ class UserServiceTests(TestCase):
         }
         from rest_framework.serializers import ValidationError
 
-        with pytest.raises(ValidationError) as cm:
+        with self.assertRaises(ValidationError) as cm:
             UserService.create_user(data)
 
-        self.assertIn("email", cm.value.detail)
+        self.assertIn("email", cm.exception.detail)
 
     @patch("users.services.user_services.RecoveryService.request_password_reset")
     def test_request_password_reset_delegation(self, mock_request):
