@@ -1,4 +1,4 @@
-from .base import *
+from .base import *  # noqa: F403
 
 SECRET_KEY = "ci-only-not-a-real-secret"
 
