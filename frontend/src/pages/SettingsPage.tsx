@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { User, Shield, Activity, Bell, LogOut, ChevronRight, ArrowLeft } from "lucide-react";
+import { User, Shield, Lock, Activity, Bell, LogOut, ChevronRight, ArrowLeft } from "lucide-react";
 import { useNavigate, useLocation, Outlet, NavLink } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -11,7 +11,8 @@ import { toast } from "@/shared/ui/Toast";
 
 const tabs = [
   { id: "profile", label: "Profile", icon: User, path: "/settings/profile", desc: "Your identity & contact details" },
-  { id: "security", label: "Security", icon: Shield, path: "/settings/security", desc: "Protection & access control" },
+  { id: "privacy", label: "Privacy", icon: Shield, path: "/settings/privacy", desc: "Invitation & visibility control" },
+  { id: "security", label: "Security", icon: Lock, path: "/settings/security", desc: "Protection & access control" },
   { id: "devices", label: "Devices", icon: Activity, path: "/settings/devices", desc: "Active logins & session safety" },
   { id: "notifications", label: "Alerts", icon: Bell, path: "/settings/notifications", desc: "System & message updates" },
 ] as const;

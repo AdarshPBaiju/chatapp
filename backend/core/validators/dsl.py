@@ -232,6 +232,13 @@ class V:
         """Factory for Choice (dropdown) fields."""
         return RuleBuilder().required().choices(choices)
 
+    def list(self, child: RuleBuilder | None = None) -> RuleBuilder:
+        """Factory for List fields."""
+        builder = RuleBuilder(serializers.ListField).required()
+        if child:
+            builder._drf_kwargs["child"] = child.to_drf_field()
+        return builder
+
     def required(self) -> RuleBuilder:
         """Basic mandatory RuleBuilder."""
         return RuleBuilder().required()

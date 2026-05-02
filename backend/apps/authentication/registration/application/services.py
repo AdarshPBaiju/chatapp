@@ -61,6 +61,7 @@ class RegistrationService:
         *,
         signup_token: str,
         full_name: str,
+        username: str,
         password: str,
         request: Any | None = None,
     ) -> CustomUser | None:
@@ -78,7 +79,7 @@ class RegistrationService:
             password=password,
             is_active=True,
         )
-        Client.objects.create(user=user, full_name=full_name)
+        Client.objects.create(user=user, full_name=full_name, username=username)
 
         cache.delete(token_key)
         return user

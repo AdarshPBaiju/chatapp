@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { User, Mail, Phone, Camera, Check, Info, AlertCircle } from "lucide-react";
+import { User, Mail, Phone, Camera, Check, Info, AlertCircle, AtSign, Shield } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 import { Button, Input } from "@/shared/ui/FormControls";
@@ -24,12 +24,15 @@ export function ProfileSection() {
       phone_number: "",
       bio: "",
       gender: "" as "male" | "female" | "other" | "",
-      profile_picture: null as File | null
+      profile_picture: null as File | null,
+      username: "",
+      is_email_masked: false
     },
     schema: {
       full_name: v.string().name("Invalid characters in name").required("Legal name is required"),
       phone_number: v.string().min(5, "Invalid phone number"),
       bio: v.string().max(500, "Bio is too long"),
+      username: v.string().min(3, "Too short").max(30, "Too long").required("Username is required"),
       profile_picture: v.file({ maxMb: 2, exts: ["jpg", "jpeg", "png", "webp"] }, "Image must be under 2MB (JPG/PNG)")
     },
     onSubmit: async (formValues) => {
@@ -43,6 +46,8 @@ export function ProfileSection() {
         formData.append("bio", formValues.bio || "");
         formData.append("gender", formValues.gender || "");
         formData.append("phone_number", formValues.phone_number || "");
+        formData.append("username", formValues.username);
+        formData.append("is_email_masked", String(formValues.is_email_masked));
         
         if (formValues.profile_picture) {
           formData.append("profile_picture", formValues.profile_picture);
@@ -89,6 +94,8 @@ export function ProfileSection() {
           phone_number: data.data.phone_number || "",
           bio: data.data.bio || "",
           gender: data.data.gender || "",
+          username: data.data.username || "",
+          is_email_masked: data.data.is_email_masked || false,
           profile_picture: null
         });
       } else if (data.success && !data.data) {
@@ -211,6 +218,61 @@ export function ProfileSection() {
             {...getFieldProps("phone_number")}
             disabled={isSaving}
           />
+        </div>
+
+        <div className="grid md:grid-cols-2 gap-4">
+          <div className="space-y-1">
+            <Input
+              compact
+              label="Public Username"
+              icon={<AtSign size={16} />}
+              placeholder="john_doe"
+              {...getFieldProps("username")}
+              disabled={isSaving}
+            />
+            {initialProfile.username_change_limit === 0 ? (
+              <p className="pl-1 text-[8px] font-bold text-primary uppercase tracking-widest">
+                Unlimited changes enabled
+              </p>
+            ) : initialProfile.username_change_history && initialProfile.username_change_history.length > 0 ? (
+              <p className="pl-1 text-[8px] font-bold text-muted-foreground uppercase tracking-widest">
+                Changes used: {initialProfile.username_change_history.length} / {initialProfile.username_change_limit}
+              </p>
+            ) : null}
+          </div>
+          
+          <div className="bg-muted/30 rounded-2xl p-4 border border-border flex flex-col justify-between">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <Shield size={16} className="text-primary" />
+                <span className="text-[10px] font-bold uppercase tracking-wider text-foreground">Email Masking</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setFieldValue("is_email_masked", !values.is_email_masked)}
+                className={cn(
+                  "relative inline-flex h-5 w-10 items-center rounded-full transition-colors",
+                  values.is_email_masked ? "bg-primary" : "bg-muted-foreground/20"
+                )}
+                disabled={isSaving}
+              >
+                <span
+                  className={cn(
+                    "inline-block h-3 w-3 transform rounded-full bg-white transition-transform",
+                    values.is_email_masked ? "translate-x-6" : "translate-x-1"
+                  )}
+                />
+              </button>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="flex-1 bg-background/50 rounded-lg px-3 py-1.5 border border-border/50">
+                <span className="text-[10px] font-mono text-muted-foreground">
+                  {values.is_email_masked ? initialProfile.masked_email : initialProfile.email}
+                </span>
+              </div>
+              <Info size={14} className="text-muted-foreground/30" />
+            </div>
+          </div>
         </div>
 
         <div className="space-y-2">

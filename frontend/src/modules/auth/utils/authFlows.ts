@@ -263,6 +263,7 @@ export async function runBootstrapRefresh(): Promise<void> {
 export async function runSignUpFinalizeFlow(params: {
   signup_token: string;
   full_name: string;
+  username: string;
   password: string;
   confirm_password: string;
 }): Promise<{ is_restricted: boolean }> {

@@ -103,6 +103,7 @@ class ClientSignUpFinalizeAPIView(APIView):
         user = RegistrationService.finalize_signup(
             signup_token=serializer.validated_data["signup_token"],
             full_name=serializer.validated_data["full_name"],
+            username=serializer.validated_data["username"],
             password=serializer.validated_data["password"],
             request=request,
         )

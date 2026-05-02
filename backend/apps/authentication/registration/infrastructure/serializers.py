@@ -29,6 +29,7 @@ class ClientSignUpVerifyResponseSerializer(serializers.Serializer):
 class ClientSignUpFinalizeSerializer(serializers.Serializer):
     signup_token = v.string().label("Signup Token")
     full_name = v.string().label("Full Name")
+    username = v.string().label("Username")
     password = v.string().label("Password")
 
 

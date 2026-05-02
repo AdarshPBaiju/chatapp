@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Mail, Lock, User } from "lucide-react";
+import { Mail, Lock, User, AtSign } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 import { signUpResend, signUpVerify } from "@/modules/auth/api/authApi";
@@ -34,6 +34,7 @@ export function SignUpPage() {
       email: "",
       otpCode: "",
       fullName: "",
+      username: "",
       password: "",
       confirmPassword: "",
       agree: true
@@ -42,6 +43,7 @@ export function SignUpPage() {
       email: v.string().email().required("Email is required"),
       otpCode: v.string().min(6, "Must be 6 digits").required("Code is required"),
       fullName: v.string().required("Full name is required"),
+      username: v.string().min(3, "Too short").max(30, "Too long").required("Username is required"),
       password: v.string().min(8, "Minimum 8 characters").required("Password is required"),
       confirmPassword: v.string().matches("password", "Passwords do not match").required("Confirmation is required")
     },
@@ -125,6 +127,7 @@ export function SignUpPage() {
       const result = await runSignUpFinalizeFlow({
         signup_token: signupToken,
         full_name: values.fullName.trim(),
+        username: values.username.trim(),
         password: values.password,
         confirm_password: values.confirmPassword,
       });
@@ -230,6 +233,13 @@ export function SignUpPage() {
                 placeholder="Full name"
                 icon={<User size={18} />}
                 {...getFieldProps("fullName")}
+                disabled={loading}
+              />
+              <Input
+                type="text"
+                placeholder="Username (e.g. john_doe)"
+                icon={<AtSign size={18} />}
+                {...getFieldProps("username")}
                 disabled={loading}
               />
 

@@ -7,6 +7,7 @@ import { AuthShell } from "@/shared/ui/AuthShell";
 
 // Features ui components for nested routing
 import { ProfileSection } from "@/features/settings/ui/ProfileSection";
+import { PrivacySection } from "@/features/settings/ui/PrivacySection";
 import { SecuritySection } from "@/features/settings/ui/SecuritySection";
 import { ActiveSessionsSection } from "@/features/settings/ui/ActiveSessionsSection";
 
@@ -51,6 +52,7 @@ export const appRouter = createBrowserRouter([
     ),
     children: [
       { path: "profile", element: <ProfileSection /> },
+      { path: "privacy", element: <PrivacySection /> },
       { path: "security", element: <SecuritySection /> },
       { path: "devices", element: <ActiveSessionsSection /> },
       { path: "notifications", element: <div className="p-20 text-center font-bold text-muted-foreground/30 uppercase tracking-widest text-xs">Access Restricted • Coming Soon</div> },

@@ -54,6 +54,7 @@ export async function signUpVerify(payload: {
 export async function signUpFinalize(payload: {
   signup_token: string;
   full_name: string;
+  username: string;
   password: string;
   confirm_password: string;
 }): Promise<OTPValidationResponse> {

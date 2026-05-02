@@ -6,6 +6,12 @@ export type UserProfile = {
   profile_picture: string | null;
   gender: 'male' | 'female' | 'other' | '';
   phone_number: string | null;
+  username: string | null;
+  is_email_masked: boolean;
+  masked_email: string | null;
+  username_change_history: string[];
+  username_change_limit: number;
+  who_can_add_me: "everyone" | "contacts" | "request";
   is_two_factor_enabled: boolean;
 };
 
