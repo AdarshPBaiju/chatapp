@@ -30,7 +30,7 @@ export function OtpPage() {
       try {
         await runOtpValidationFlow(pending.user_id, formValues.otpCode);
         const status = useAuthStore.getState().status;
-        if (status === "full") navigate("/settings/profile");
+        if (status === "full") navigate("/app/chats");
         else if (status === "restricted") navigate("/auth?mode=restricted");
       } catch (e) {
         setErrors({ otpCode: getErrorMessage(e, "Invalid code") });

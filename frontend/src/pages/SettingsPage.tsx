@@ -1,26 +1,21 @@
 import { useState, useEffect } from "react";
-import { User, Shield, Lock, Activity, Bell, Users, Clock, Search, LogOut, ChevronRight, ArrowLeft } from "lucide-react";
+import { User, Shield, Lock, Activity, Bell, ChevronRight, ArrowLeft } from "lucide-react";
 import { useNavigate, useLocation, Outlet, NavLink } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 
-import { logoutFlow } from "@/features/sessions/flows";
 import { fetchProfile } from "@/features/settings/api";
 import { UserProfile } from "@/features/settings/types";
 import { cn } from "@/shared/lib/utils";
-import { toast } from "@/shared/ui/Toast";
 
 const tabs = [
-  { id: "profile", label: "Profile", icon: User, path: "/settings/profile", desc: "Your identity & contact details" },
-  { id: "contacts", label: "Contacts", icon: Users, path: "/settings/contacts", desc: "Your verified social network" },
-  { id: "requests", label: "Requests", icon: Clock, path: "/settings/requests", desc: "Incoming friend requests" },
-  { id: "discovery", label: "Discovery", icon: Search, path: "/settings/discovery", desc: "Find new people to connect" },
-  { id: "privacy", label: "Privacy", icon: Shield, path: "/settings/privacy", desc: "Invitation & visibility control" },
-  { id: "security", label: "Security", icon: Lock, path: "/settings/security", desc: "Protection & access control" },
-  { id: "devices", label: "Devices", icon: Activity, path: "/settings/devices", desc: "Active logins & session safety" },
-  { id: "notifications", label: "Alerts", icon: Bell, path: "/settings/notifications", desc: "System & message updates" },
+  { id: "profile", label: "Profile", icon: User, path: "/app/settings/profile", desc: "Your identity & contact details" },
+  { id: "privacy", label: "Privacy", icon: Shield, path: "/app/settings/privacy", desc: "Invitation & visibility control" },
+  { id: "security", label: "Security", icon: Lock, path: "/app/settings/security", desc: "Protection & access control" },
+  { id: "devices", label: "Devices", icon: Activity, path: "/app/settings/devices", desc: "Active logins & session safety" },
+  { id: "notifications", label: "Alerts", icon: Bell, path: "/app/settings/notifications", desc: "System & message updates" },
 ] as const;
 
-export function SettingsPage() {
+export function SettingsLayout() {
   const navigate = useNavigate();
   const location = useLocation();
   const [isMobileMenu, setIsMobileMenu] = useState(true);
@@ -32,29 +27,23 @@ export function SettingsPage() {
 
   // Sync mobile menu state with route depth
   useEffect(() => {
-    const isRootSettings = location.pathname === "/settings" || location.pathname === "/settings/";
+    const isRootSettings = location.pathname === "/app/settings" || location.pathname === "/app/settings/";
     setIsMobileMenu(isRootSettings);
 
     // On desktop, auto-redirect /settings to /settings/profile
     if (isRootSettings && window.innerWidth >= 1024) {
-      navigate("/settings/profile", { replace: true });
+      navigate("/app/settings/profile", { replace: true });
     }
   }, [location.pathname, navigate]);
-
-  async function handleLogout() {
-    await logoutFlow();
-    toast.info("Logged out successfully.");
-    navigate("/auth/login");
-  }
 
   const activeTab = tabs.find(t => location.pathname.startsWith(t.path)) || tabs[0];
 
   return (
-    <div className="flex h-[100dvh] overflow-hidden bg-background font-sans text-foreground selection:bg-primary selection:text-primary-foreground">
+    <div className="flex h-full w-full overflow-hidden bg-background font-sans text-foreground selection:bg-primary selection:text-primary-foreground">
       {/* Sidebar - Desktop (Integrated) & Mobile (List) */}
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-40 w-full border-r border-border bg-background transition-all duration-500 lg:static lg:h-full lg:w-[260px] lg:translate-x-0",
+          "absolute inset-y-0 left-0 z-40 w-full border-r border-border bg-background/50 backdrop-blur-xl transition-all duration-500 lg:static lg:h-full lg:w-[280px] lg:translate-x-0 lg:bg-background",
           !isMobileMenu && "-translate-x-full lg:translate-x-0"
         )}
       >
@@ -63,7 +52,7 @@ export function SettingsPage() {
           <div className="p-6 pb-4">
             <div className="mb-5 flex items-center gap-3">
               <button
-                onClick={() => navigate("/settings/profile")}
+                onClick={() => navigate("/app/settings/profile")}
                 className="group flex h-8 w-8 items-center justify-center rounded-lg bg-muted transition-colors hover:bg-primary hover:text-primary-foreground cursor-pointer"
               >
                 <ArrowLeft size={16} />
@@ -128,32 +117,21 @@ export function SettingsPage() {
             })}
           </nav>
 
-          {/* Logout Section */}
-          <div className="mt-auto p-3 border-t border-border/50">
-            <button
-              onClick={handleLogout}
-              className="group flex w-full items-center gap-3 rounded-xl p-3 text-destructive transition-all hover:bg-destructive/5 cursor-pointer"
-            >
-              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-destructive/5 text-destructive transition-colors group-hover:bg-destructive/10">
-                <LogOut size={18} />
-              </div>
-              <span className="text-xs font-bold tracking-tight">Logout</span>
-            </button>
-          </div>
+
         </div>
       </aside>
 
       {/* Main Content Area */}
       <main
         className={cn(
-          "fixed inset-0 z-50 flex h-full w-full flex-col bg-background transition-all duration-500 lg:static lg:z-auto lg:h-full lg:flex-1 lg:translate-x-0",
+          "absolute inset-0 z-50 flex h-full w-full flex-col bg-background transition-all duration-500 lg:static lg:z-auto lg:h-full lg:flex-1 lg:translate-x-0",
           isMobileMenu && "translate-x-full lg:translate-x-0"
         )}
       >
         {/* Sub-page Header (Mobile only) */}
         <div className="flex items-center gap-3 border-b border-border bg-background p-4 lg:hidden">
           <button
-            onClick={() => navigate("/settings")}
+            onClick={() => navigate("/app/settings")}
             className="flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-primary hover:text-primary-foreground transition-colors cursor-pointer"
           >
             <ArrowLeft size={18} />
