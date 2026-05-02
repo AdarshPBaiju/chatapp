@@ -33,7 +33,7 @@ urlpatterns = [
     # Users & Profiles
     path("", include("users.urls")),
     # Chat & Messaging
-    path("api/chat/", include("chat.urls")),
+    path("api/v1/chat/", include("chat.urls")),
     # API Documentation
     path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
     path(

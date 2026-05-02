@@ -58,3 +58,10 @@ services:
     volumes:
       - ./frontend:/app
       - /app/node_modules
+
+  chat-worker:
+    environment:
+      DJANGO_ENV: development
+    volumes:
+      - ./backend:/app
+      - /app/__pycache__

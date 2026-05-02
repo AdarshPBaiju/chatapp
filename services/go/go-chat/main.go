@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/redis/go-redis/v9"
+	"chatapp/services/go/shared/platform/auth"
 	"chatapp/services/go/shared/platform/debug"
 	"chatapp/services/go/shared/platform/messaging"
 	"chatapp/services/go/shared/platform/socket"
@@ -38,7 +39,16 @@ func main() {
 	flag.Parse()
 
 	// 2. Initialize Infrastructure
-	rdb := redis.NewClient(&redis.Options{Addr: redisURL})
+	var rdb *redis.Client
+	if strings.HasPrefix(redisURL, "redis://") {
+		opts, err := redis.ParseURL(redisURL)
+		if err != nil {
+			log.Fatalf("failed to parse redis url: %v", err)
+		}
+		rdb = redis.NewClient(opts)
+	} else {
+		rdb = redis.NewClient(&redis.Options{Addr: redisURL})
+	}
 	producer := messaging.NewProducer(strings.Split(kafkaBrokers, ","))
 	defer producer.Close()
 
@@ -126,12 +136,30 @@ func main() {
 		}
 	}()
 
-	// 6. Register HTTP Routes
+	// 6. Initialize Auth Verifier
+	authBaseURL := os.Getenv("GO_AUTH_URL")
+	if authBaseURL == "" {
+		authBaseURL = "http://go-auth:8080"
+	}
+	internalSecret := os.Getenv("INTERNAL_SERVICE_SECRET")
+	authVerifier := auth.NewVerifierClient(authBaseURL, internalSecret)
+
+	// 7. Register HTTP Routes
 	http.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
-		userID := r.URL.Query().Get("user_id")
-		if userID == "" {
-			userID = "anonymous-" + nodeID
+		token := r.URL.Query().Get("token")
+		if token == "" {
+			http.Error(w, "Unauthorized: Token required", http.StatusUnauthorized)
+			return
 		}
+
+		userID, err := authVerifier.VerifyToken(r.Context(), token)
+		if err != nil {
+			debug.Print("GO-CHAT", "Auth Failure: "+err.Error())
+			http.Error(w, "Unauthorized: "+err.Error(), http.StatusUnauthorized)
+			return
+		}
+
+		debug.Print("GO-CHAT", "SUCCESS: Authenticated User: "+userID)
 		hub.ServeWs(w, r, userID)
 	})
 

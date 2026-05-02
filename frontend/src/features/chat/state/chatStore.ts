@@ -1,18 +1,20 @@
 import { create } from "zustand";
 import { socket } from "@/shared/api/socket";
-import axios from "axios";
-
-// Assuming we have an axios instance configured with interceptors elsewhere, 
-// if not, we use this for now.
-const api = axios.create({ baseURL: "/api/chat" });
+import { httpClient } from "@/shared/http/client";
+import { useAuthStore } from "@/modules/auth/state/authState";
 
 interface Room {
   id: string;
   name: string;
+  type: "DIRECT" | "GROUP";
   avatar: string | null;
+  display_name: string;
+  display_avatar: string | null;
   last_message: {
     content: string;
     created_at: string;
+    sender_id: string;
+    sender_name: string;
   } | null;
   unread_count: number;
 }
@@ -58,9 +60,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
   fetchRooms: async () => {
     set({ isLoading: true });
     try {
-      const { data } = await api.get("/v1/rooms/");
+      // Use standard httpClient which has auth interceptors
+      const { data } = await httpClient.get("/chat/v1/rooms/");
       const roomMap: Record<string, any> = {};
-      data.forEach((room: Room) => {
+      data.results.forEach((room: Room) => {
         roomMap[room.id] = {
           ...room,
           messageIds: get().rooms[room.id]?.messageIds || [],
@@ -76,11 +79,14 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   fetchHistory: async (roomId) => {
     try {
-      const { data } = await api.get(`/v1/rooms/${roomId}/history/`);
+      const { data } = await httpClient.get(`/chat/v1/rooms/${roomId}/history/`);
       const newMessages: Record<string, Message> = {};
       const messageIds: string[] = [];
 
-      data.forEach((msg: any) => {
+      // DRF might return .results if paginated
+      const results = data.results || data;
+
+      results.forEach((msg: any) => {
         const message: Message = {
           id: msg.id,
           sender_id: msg.sender.id,
@@ -88,7 +94,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
           content: msg.content,
           sequence_id: msg.sequence_id,
           sent_at: new Date(msg.created_at).getTime(),
-          status: "read" // Assume read for history, or sync from receipts later
+          status: "read"
         };
         newMessages[msg.id] = message;
         messageIds.push(msg.id);
@@ -118,8 +124,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
     const room = state.rooms[roomId] || { 
       id: roomId, 
       name: "Chat", 
+      type: "DIRECT",
       messageIds: [], 
-      unreadCount: 0, 
+      unread_count: 0, 
       typingUsers: new Set(), 
       lastReadSeq: 0 
     };
@@ -137,7 +144,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
           ...room,
           messageIds: room.messageIds.includes(message.id) ? room.messageIds : [...room.messageIds, message.id],
           unread_count: state.activeRoomId === roomId ? 0 : (room.unread_count || 0) + 1,
-          last_message: { content: message.content, created_at: new Date(message.sent_at).toISOString() }
+          last_message: { 
+            content: message.content, 
+            created_at: new Date(message.sent_at).toISOString(),
+            sender_id: message.sender_id,
+            sender_name: message.sender_id === useAuthStore.getState().user?.id ? "You" : (state.rooms[roomId]?.name || "User")
+          }
         }
       }
     };
@@ -167,11 +179,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
   }),
 
   sendMessage: (roomId, content) => {
+    const user = useAuthStore.getState().user;
     const tempId = `temp-${Date.now()}`;
     const message: Message = {
       id: tempId,
       temp_id: tempId,
-      sender_id: "me",
+      sender_id: user?.id || "me",
       room_id: roomId,
       content,
       sent_at: Date.now(),

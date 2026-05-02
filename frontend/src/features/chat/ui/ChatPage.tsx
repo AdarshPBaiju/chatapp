@@ -1,12 +1,15 @@
 import { useState, useRef, useEffect, useCallback } from "react";
+import { useLocation } from "react-router-dom";
 import { Search, MoreVertical, Send, Phone, Video, Info, Paperclip, Smile, MessageCircle, ArrowLeft } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/shared/lib/utils";
 import { socket } from "@/shared/api/socket";
 
 import { useChatStore } from "../state/chatStore";
+import { useAuthStore } from "@/modules/auth/state/authState";
 
 export function ChatPage() {
+  const location = useLocation();
   const { 
     activeRoomId, 
     setActiveRoom, 
@@ -24,10 +27,24 @@ export function ChatPage() {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const readObserver = useRef<IntersectionObserver | null>(null);
 
+  // Manage Socket Connection
+  useEffect(() => {
+    socket.connect();
+  }, []);
+
   // Initial Data Fetch
   useEffect(() => {
     fetchRooms();
   }, [fetchRooms]);
+
+  // Handle room opening from navigation state
+  useEffect(() => {
+    const openRoomId = (location as any).state?.openRoomId;
+    if (openRoomId) {
+      setActiveRoom(openRoomId);
+      window.history.replaceState({}, document.title);
+    }
+  }, [(location as any).state, setActiveRoom]);
 
   const chatList = Object.values(rooms).sort((a, b) => {
     const timeA = a.last_message ? new Date(a.last_message.created_at).getTime() : 0;
@@ -153,23 +170,34 @@ export function ChatPage() {
             >
               <div className="relative shrink-0">
                 <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center overflow-hidden border border-border/10">
-                  {chat.avatar ? (
-                    <img src={chat.avatar} alt={chat.name} className="h-full w-full object-cover" />
+                  {chat.display_avatar ? (
+                    <img src={chat.display_avatar} alt={chat.display_name} className="h-full w-full object-cover" />
                   ) : (
-                    <span className="font-bold text-lg">{chat.name.charAt(0)}</span>
+                    <span className="font-bold text-lg">{chat.display_name.charAt(0)}</span>
                   )}
                 </div>
               </div>
 
               <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between mb-0.5">
-                  <p className="font-bold text-sm truncate">{chat.name}</p>
+                  <p className="font-bold text-sm truncate">{chat.display_name}</p>
                   <p className={cn("text-[10px]", activeRoomId === chat.id ? "text-primary-foreground/70" : "text-muted-foreground")}>
                     {chat.last_message ? new Date(chat.last_message.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ""}
                   </p>
                 </div>
                 <p className={cn("text-xs truncate", activeRoomId === chat.id ? "text-primary-foreground/80" : "text-muted-foreground")}>
-                  {chat.last_message?.content || "No messages yet"}
+                  {chat.last_message ? (
+                    <>
+                      {chat.last_message.sender_id === useAuthStore.getState().user?.id ? (
+                        <span className="font-bold mr-1">You:</span>
+                      ) : (
+                        chat.type === "GROUP" && (
+                          <span className="font-bold mr-1">{chat.last_message.sender_name}:</span>
+                        )
+                      )}
+                      {chat.last_message.content}
+                    </>
+                  ) : "No messages yet"}
                 </p>
               </div>
 
@@ -203,11 +231,15 @@ export function ChatPage() {
                   <button onClick={() => setActiveRoom(null)} className="lg:hidden h-9 w-9 rounded-xl bg-muted flex items-center justify-center mr-2">
                     <ArrowLeft size={18} />
                   </button>
-                  <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center font-bold">
-                    {currentChat?.name.charAt(0)}
+                  <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center font-bold overflow-hidden">
+                    {currentChat?.display_avatar ? (
+                      <img src={currentChat.display_avatar} alt={currentChat.display_name} className="h-full w-full object-cover" />
+                    ) : (
+                      currentChat?.display_name.charAt(0)
+                    )}
                   </div>
                   <div>
-                    <p className="font-bold text-sm tracking-tight">{currentChat?.name}</p>
+                    <p className="font-bold text-sm tracking-tight">{currentChat?.display_name}</p>
                     <p className="text-[10px] text-green-500 font-bold flex items-center gap-1">
                       <span className="h-1.5 w-1.5 rounded-full bg-current animate-pulse" />
                       Online
@@ -239,7 +271,8 @@ export function ChatPage() {
                 )}
 
                 {messages.map((msg) => {
-                  const isMine = msg.sender_id === "me"; // Placeholder for current user ID
+                  const currentUser = useAuthStore.getState().user;
+                  const isMine = msg.sender_id === currentUser?.id;
                   return (
                     <motion.div
                       key={msg.id}

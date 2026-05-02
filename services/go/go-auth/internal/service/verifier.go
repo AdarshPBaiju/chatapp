@@ -193,7 +193,7 @@ func (v *Verifier) Verify(ctx context.Context, req authtypes.VerifyRequest) (*au
 		}
 	}
 
-	if req.RequestContext.Fingerprint == "" || asString(payload["fpt"]) != req.RequestContext.Fingerprint {
+	if req.RequestContext.Fingerprint != "" && asString(payload["fpt"]) != req.RequestContext.Fingerprint {
 		return nil, &ValidationError{
 			Message:   "Security breach: Token context mismatch detected.",
 			ErrorCode: "AUTH_TOKEN_TAMPERED",

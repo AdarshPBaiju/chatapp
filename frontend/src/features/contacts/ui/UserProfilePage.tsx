@@ -59,6 +59,20 @@ export function UserProfilePage() {
         }
     }
 
+    async function handleSendMessage() {
+        if (!user) return;
+        setActionLoading(true);
+        try {
+            const res = await httpClient.post(`/chat/v1/rooms/dm/${user.id}/`);
+            const roomId = res.data.id;
+            navigate(`/chats`, { state: { openRoomId: roomId } });
+        } catch (err) {
+            toast.error("Failed to start conversation.");
+        } finally {
+            setActionLoading(false);
+        }
+    }
+
     const formatDate = (dateStr: string) => {
         try {
             const d = new Date(dateStr);
@@ -210,7 +224,11 @@ export function UserProfilePage() {
                             {/* Action Buttons (Moved to Header Right Side) */}
                             <div className="flex flex-wrap md:flex-nowrap items-center justify-start md:justify-end gap-3 w-full md:w-auto md:ml-auto shrink-0 pb-2 md:pb-6 mt-4 md:mt-0">
                                 {user.contact_status === "accepted" && (
-                                    <Button className="rounded-2xl px-8 h-12 shadow-xl shadow-primary/20 text-sm font-bold shrink-0">
+                                    <Button 
+                                        onClick={handleSendMessage}
+                                        isLoading={actionLoading}
+                                        className="rounded-2xl px-8 h-12 shadow-xl shadow-primary/20 text-sm font-bold shrink-0"
+                                    >
                                         <MessageCircle size={18} className="mr-2" />
                                         Send Message
                                     </Button>
