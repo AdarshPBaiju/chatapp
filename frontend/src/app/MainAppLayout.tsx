@@ -1,4 +1,5 @@
 import { MessageCircle, Users, Settings, LogOut } from "lucide-react";
+import { useChatStore } from "@/features/chat/state/chatStore";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/shared/lib/utils";
@@ -43,6 +44,9 @@ export function MainAppLayout() {
     toast.info("Logged out successfully.");
     navigate("/auth/login");
   }
+
+  const pendingUser = useChatStore(s => s.pendingUser);
+  const isDetailView = location.pathname.match(/^\/chats\/[^\/]+/) || (location.pathname === "/chats" && !!pendingUser);
 
   return (
     <div className="flex h-[100dvh] w-full overflow-hidden bg-background font-sans text-foreground selection:bg-primary selection:text-primary-foreground">
@@ -137,9 +141,10 @@ export function MainAppLayout() {
         </AnimatePresence>
       </main>
 
-      {/* Mobile Bottom Navigation (Visible only on small screens) */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 h-16 border-t border-border bg-card/95 backdrop-blur-md z-50 flex items-center justify-around px-4 pb-safe">
-         {NAV_ITEMS.map((item) => {
+      {/* Mobile Bottom Navigation (Visible only on small screens, hidden in detail views) */}
+      {!isDetailView && (
+        <nav className="md:hidden fixed bottom-0 left-0 right-0 h-16 border-t border-border bg-card/95 backdrop-blur-md z-50 flex items-center justify-around px-4 pb-safe">
+          {NAV_ITEMS.map((item) => {
             const Icon = item.icon;
             const isActive = location.pathname.startsWith(item.path);
 
@@ -162,7 +167,8 @@ export function MainAppLayout() {
               </NavLink>
             );
           })}
-      </nav>
+        </nav>
+      )}
     </div>
   );
 }

@@ -50,7 +50,7 @@ export const appRouter = createBrowserRouter([
     ),
     children: [
       { index: true, element: <RootRedirect /> },
-      { path: "chats", element: <ChatPage /> },
+      { path: "chats/:roomId?", element: <ChatPage /> },
       {
         path: "contacts",
         element: <ContactsLayout />,

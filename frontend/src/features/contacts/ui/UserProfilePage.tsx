@@ -61,16 +61,8 @@ export function UserProfilePage() {
 
     async function handleSendMessage() {
         if (!user) return;
-        setActionLoading(true);
-        try {
-            const res = await httpClient.post(`/chat/v1/rooms/dm/${user.id}/`);
-            const roomId = res.data.id;
-            navigate(`/chats`, { state: { openRoomId: roomId } });
-        } catch (err) {
-            toast.error("Failed to start conversation.");
-        } finally {
-            setActionLoading(false);
-        }
+        // Navigate with targetUser intent instead of creating a room immediately
+        navigate(`/chats`, { state: { targetUser: user } });
     }
 
     const formatDate = (dateStr: string) => {

@@ -1,12 +1,14 @@
 import json
+import time
 import logging
 from functools import lru_cache
 from django.db import models, transaction
 from django.core.management.base import BaseCommand
 from django.conf import settings
-from confluent_kafka import Consumer, Producer, KafkaException
+from confluent_kafka import Consumer, KafkaError
 from chat.models import Room, Message, MessageReceipt, RoomMembership
 from users.models import Client
+from core.kafka import KafkaProducer
 
 logger = logging.getLogger(__name__)
 
@@ -18,218 +20,243 @@ def get_cached_room(room_id):
 
 
 @lru_cache(maxsize=4096)
-def get_cached_client(user_id):
-    return Client.objects.filter(user_id=user_id).first()
+def get_cached_membership(room_id, client_id):
+    return RoomMembership.objects.filter(
+        room_id=room_id, client_id=client_id, is_active=True
+    ).first()
 
 
 class Command(BaseCommand):
-    help = "Extreme-Optimized Chat Persistence Worker"
+    help = "Consumes chat messages from Kafka and persists them to the database"
 
     def handle(self, *args, **options):
-        consumer_conf = {
-            **settings.KAFKA_CONSUMER_CONFIG,
-            "group.id": "chat-persistence-worker-v2",
-            "auto.offset.reset": "earliest",
-            "fetch.min.bytes": 100000,  # Wait for more data before polling
-            "fetch.wait.max.ms": 50,  # Max delay for batching
-        }
-        producer_conf = {
-            **settings.KAFKA_PRODUCER_CONFIG,
-            "compression.type": "zstd",
-            "linger.ms": 10,  # Batching delay
-        }
+        consumer_config = settings.KAFKA_CONSUMER_CONFIG.copy()
+        consumer_config["group.id"] = "chat-worker"
+        consumer_config["auto.offset.reset"] = "earliest"
 
-        consumer = Consumer(consumer_conf)
-        producer = Producer(producer_conf)
+        consumer = Consumer(consumer_config)
         consumer.subscribe(["chat.inbound"])
 
-        self.stdout.write(
-            self.style.SUCCESS("🚀 Ultra-Optimized Worker Operational...")
-        )
+        logger.info("🚀 Chat Worker started, listening for messages...")
+
+        import signal
+
+        self.running = True
+
+        def handle_shutdown(signum, frame):
+            logger.info("Graceful shutdown initiated...")
+            self.running = False
+
+        signal.signal(signal.SIGTERM, handle_shutdown)
+        signal.signal(signal.SIGINT, handle_shutdown)
 
         try:
-            while True:
-                msg = consumer.poll(timeout=1.0)
+            while self.running:
+                msg = consumer.poll(1.0)
                 if msg is None:
                     continue
                 if msg.error():
-                    if msg.error().code() == KafkaException._PARTITION_EOF:
+                    if msg.error().code() == KafkaError._PARTITION_EOF:
                         continue
-                    logger.error(f"Kafka error: {msg.error()}")
-                    break
+                    elif msg.error().code() == KafkaError.UNKNOWN_TOPIC_OR_PART:
+                        logger.warning(f"⚠️ Topic not ready: {msg.error()}")
+                        time.sleep(2)
+                        continue
+                    else:
+                        logger.error(f"❌ Kafka error: {msg.error()}")
+                        break
 
-                try:
-                    payload = json.loads(msg.value().decode("utf-8"))
-                    self.process_message(payload, producer)
-                except Exception as e:
-                    logger.exception(f"Processing error: {e}")
+                topic = msg.topic()
+                data = json.loads(msg.value().decode("utf-8"))
+
+                event_type = data.get("Type", data.get("type"))
+                payload = data.get("Payload", data.get("payload", data))
+
+                if topic == "chat.inbound":
+                    if event_type == "CHAT_MESSAGE":
+                        self.process_chat_message(payload)
+                    elif event_type == "READ_RECEIPT":
+                        self.process_read_receipt(payload)
 
         except KeyboardInterrupt:
             pass
         finally:
+            logger.info("Closing consumer...")
             consumer.close()
 
-    def process_message(self, data, producer):
-        event_type = data.get("type")
-        room_id = data.get("key")
-        content_data = data.get("payload", {})
+    @transaction.atomic
+    def process_chat_message(self, data):
+        logger.info(f"Processing message: {data}")
+        room_id = data.get("room_id")
+        user_id = data.get("user_id")
+        content = data.get("content")
+        sequence_id = data.get("sequence_id")
+        temp_id = data.get("temp_id")
+        idempotency_key = data.get("idempotency_key")
 
-        if event_type == "CHAT_MESSAGE":
-            self.process_chat_message(room_id, content_data, producer)
-        elif event_type == "READ_RECEIPT":
-            self.process_read_receipt(room_id, content_data, producer)
-
-    def process_chat_message(self, room_id, content_data, producer):
-        sender_id = content_data.get("sender_id")
-        content = content_data.get("content")
-        temp_id = content_data.get("temp_id")
-        sequence_id = content_data.get("sequence_id")
-
-        if not room_id or not sender_id:
-            logger.warning(
-                f"Discarding message with missing IDs: Room={room_id}, Sender={sender_id}"
-            )
+        if not room_id:
+            logger.error(f"Missing room_id in message: {data}")
             return
 
-        # 1. Extreme Fast Path: Resolve Room and Sender from Cache
         room = get_cached_room(room_id)
-        sender = get_cached_client(sender_id)
-
-        if not room or not sender:
-            # Fallback if cache missed and not found in DB
-            logger.error(f"❌ Entity missing: Room {room_id} or Sender {sender_id}")
+        if not room:
+            logger.error(f"❌ Room {room_id} not found")
             return
 
-        # 2. Security Check: Verify Membership
-        # Ensure sender is actually in the room before saving
-        if not RoomMembership.objects.filter(room=room, client=sender, is_active=True).exists():
-            logger.warning(f"🛡️ Security: Blocked message from non-member {sender_id} to room {room_id}")
+        client = Client.objects.filter(user_id=user_id).first()
+        if not client:
+            logger.error(f"❌ Client {user_id} not found")
             return
 
-        delivery_events = []
+        # 🚀 SECURITY: Ensure sender is an active member
+        sender_membership = get_cached_membership(room_id, client.id)
+        if not sender_membership:
+            logger.error(f"❌ Security violation: {user_id} is not in room {room_id}")
+            return
 
-        with transaction.atomic():
-            # 3. Optimized Persistence
+        # Idempotency check
+        if (
+            idempotency_key
+            and Message.objects.filter(idempotency_key=idempotency_key).exists()
+        ):
+            logger.warning(f"⚠️ Duplicate message ignored: {idempotency_key}")
+            return
+
+        try:
+            # 1. Save the Message
             message = Message.objects.create(
                 room=room,
-                sender=sender,
+                sender=client,
                 content=content,
                 sequence_id=sequence_id,
-                metadata={"temp_id": temp_id},
+                idempotency_key=idempotency_key,
+                type="TEXT",
+                sent_at=data.get("sent_at") or int(time.time() * 1000),
             )
 
-            # Update room last message using F expression for safety
-            Room.objects.filter(id=room_id).update(last_message=message)
+            room.last_message = message
+            room.updated_at = message.created_at
+            room.save(update_fields=["last_message", "updated_at"])
 
-            # 3. High-Performance Batch Receipts
             memberships = RoomMembership.objects.filter(
                 room=room, is_active=True
-            ).select_related("client")
+            ).select_related("client", "client__user")
 
-            receipts_to_create = []
+            receipts = []
+
             for membership in memberships:
-                is_sender = membership.client_id == sender.id
+                is_sender = membership.client_id == client.id
 
-                # Prepare Bulk Receipt
-                receipts_to_create.append(
+                status = "READ" if is_sender else "DELIVERED"
+                receipts.append(
                     MessageReceipt(
                         message=message,
                         client=membership.client,
-                        status="SENT" if is_sender else "DELIVERED",
+                        status=status,
+                        read_at=message.created_at if is_sender else None,
                     )
                 )
 
                 if not is_sender:
-                    # Optimized unread count update
+                    # Optimized unread count update: Only for recipients
                     RoomMembership.objects.filter(id=membership.id).update(
                         unread_count=models.F("unread_count") + 1
                     )
 
-                delivery_events.append(
-                    {
+                    # BROADCAST: Notify recipient via Go Hub (High-Performance Singleton)
+                    delivery_event = {
                         "type": "CHAT_DELIVERY",
-                        "key": str(membership.client.user_id),
                         "payload": {
-                            "message_id": str(message.id),
-                            "room_id": str(room.id),
-                            "sender_id": str(sender_id),
-                            "content": content,
-                            "timestamp": message.created_at.isoformat(),
-                            "temp_id": temp_id,
+                            "id": str(message.id),
+                            "room_id": str(room_id),
                             "sequence_id": sequence_id,
-                            "status": "sent" if is_sender else "delivered",
+                            "sender_id": str(user_id),
+                            "content": content,
+                            "created_at": message.created_at.isoformat(),
+                            "status": "sent",
                         },
                     }
-                )
+                    KafkaProducer.produce(
+                        "chat.delivery",
+                        key=str(membership.client.user.id),
+                        value=json.dumps(delivery_event).encode("utf-8"),
+                    )
 
-            # Bulk Insert Receipts for 10x speedup in groups
-            MessageReceipt.objects.bulk_create(
-                receipts_to_create, ignore_conflicts=True
-            )
+            # Bulk save receipts for 10x performance
+            MessageReceipt.objects.bulk_create(receipts)
+            KafkaProducer.flush()
 
-            logger.info(f"⚡ [Fast-Path] Persisted message {message.id}")
-
-        for event in delivery_events:
-            producer.produce(
+            # 🚀 Delivery Optimization: Notify sender of "Delivered" status (Double Tick)
+            delivery_status = {
+                "type": "CHAT_STATUS",
+                "payload": {
+                    "room_id": str(room_id),
+                    "message_id": str(message.id),
+                    "temp_id": temp_id,
+                    "status": "sent",
+                },
+            }
+            KafkaProducer.produce(
                 "chat.delivery",
-                key=event["key"],
-                value=json.dumps(event).encode("utf-8"),
+                key=str(user_id),
+                value=json.dumps(delivery_status).encode("utf-8"),
             )
+            KafkaProducer.flush()
 
-        producer.flush()
+            logger.info(f"✅ Message {message.id} persisted and broadcasted")
 
-    def process_read_receipt(self, room_id, content_data, producer):
-        user_id = content_data.get("client_id")
-        sequence_id = content_data.get("sequence_id")
+        except Exception as e:
+            logger.error(f"❌ Failed to process message: {e}")
 
-        if not room_id or not user_id:
+    @transaction.atomic
+    def process_read_receipt(self, data):
+        room_id = data.get("room_id")
+        user_id = data.get("user_id")
+        sequence_id = data.get("sequence_id")
+
+        room = get_cached_room(room_id)
+        client = Client.objects.filter(user_id=user_id).first()
+        if not room or not client:
             return
 
-        with transaction.atomic():
-            try:
-                room = get_cached_room(room_id)
-                client = get_cached_client(user_id)
-                if not room or not client:
-                    return
-                membership = RoomMembership.objects.get(room=room, client=client)
-            except RoomMembership.DoesNotExist:
-                return
-
-            # 1. Update all receipts up to this sequence_id as READ
-            receipts = MessageReceipt.objects.filter(
+        try:
+            # 1. Update all messages up to this sequence as READ
+            unread_receipts = MessageReceipt.objects.filter(
                 client=client, message__room=room, message__sequence_id__lte=sequence_id
             ).exclude(status="READ")
 
-            count = receipts.count()
-            if count > 0:
-                receipts.update(status="READ", read_at=models.functions.Now())
+            if unread_receipts.exists():
+                unread_receipts.update(status="READ", read_at=models.functions.Now())
 
-                # 2. Decrement unread count
-                membership.unread_count = max(0, membership.unread_count - count)
-                membership.save(update_fields=["unread_count"])
+                # 2. Reset unread count
+                RoomMembership.objects.filter(room=room, client=client).update(
+                    unread_count=0
+                )
 
-                # 3. Broadcast status update to all members
+                # 3. Broadcast status update to all members via Singleton
                 status_event = {
                     "type": "CHAT_STATUS",
-                    "key": str(room_id),
                     "payload": {
                         "room_id": str(room_id),
-                        "client_id": str(user_id),
                         "last_read_seq": sequence_id,
                     },
                 }
-                # Broadcast to room members via Go Hub logic
-                memberships = RoomMembership.objects.filter(room=room, is_active=True)
+
+                memberships = RoomMembership.objects.filter(
+                    room=room, is_active=True
+                ).select_related("client", "client__user")
                 for member in memberships:
-                    if (
-                        member.client != client
-                    ):  # Don't send back to the one who read it
-                        producer.produce(
+                    if member.client.id != client.id:
+                        target_user_id = str(member.client.user.id)
+                        KafkaProducer.produce(
                             "chat.delivery",
-                            key=str(member.client.user_id),
+                            key=target_user_id,
                             value=json.dumps(status_event).encode("utf-8"),
                         )
-                producer.flush()
+                KafkaProducer.flush()
                 logger.info(
-                    f"Read receipt processed for client {user_id} in room {room_id}"
+                    f"👁️ Room {room_id} marked as read by {user_id} up to {sequence_id}"
                 )
+
+        except Exception as e:
+            logger.error(f"❌ Failed to process read receipt: {e}")

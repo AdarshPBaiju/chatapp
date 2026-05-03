@@ -16,9 +16,7 @@ class ChatMemberSerializer(serializers.ModelSerializer):
         request = self.context.get("request")
         room = self.context.get("room")
         viewer_client = (
-            request.user.client
-            if request and request.user.is_authenticated
-            else None
+            request.user.client if request and request.user.is_authenticated else None
         )
 
         if room and viewer_client and room.type == room.RoomType.DIRECT:
@@ -35,15 +33,50 @@ class ChatMemberSerializer(serializers.ModelSerializer):
 
 class MessageSerializer(serializers.ModelSerializer):
     sender = ChatMemberSerializer(read_only=True)
+    status = serializers.SerializerMethodField()
 
     class Meta:
         model = Message
         fields = [
             "id",
+            "room_id",
             "sequence_id",
             "sender",
             "content",
             "type",
             "metadata",
-            "created_at",
+            "status",
+            "sent_at",
         ]
+
+    sent_at = serializers.SerializerMethodField()
+
+    def get_sent_at(self, obj):
+        if obj.sent_at:
+            return obj.sent_at
+        return int(obj.created_at.timestamp() * 1000)
+
+    def get_status(self, obj):
+        request = self.context.get("request")
+        viewer_id = (
+            request.user.client.id
+            if request and hasattr(request.user, "client")
+            else None
+        )
+
+        if obj.sender_id == viewer_id:
+            if hasattr(obj, "annotated_status"):
+                return obj.annotated_status
+
+            receipts = obj.receipts.exclude(client_id=obj.sender_id)
+            if not receipts.exists():
+                return "sent"
+
+            if any(r.status == "READ" for r in receipts):
+                return "read"
+            if all(r.status == "DELIVERED" for r in receipts):
+                return "delivered"
+            return "sent"
+
+        receipt = obj.receipts.filter(client_id=viewer_id).first()
+        return receipt.status.lower() if receipt else "sent"

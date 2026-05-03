@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { Search, MoreVertical, Send, Phone, Video, Info, Paperclip, Smile, MessageCircle, ArrowLeft } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/shared/lib/utils";
@@ -10,6 +10,8 @@ import { useAuthStore } from "@/modules/auth/state/authState";
 
 export function ChatPage() {
   const location = useLocation();
+  const navigate = useNavigate();
+  const { roomId: urlRoomId } = useParams<{ roomId: string }>();
   const { 
     activeRoomId, 
     setActiveRoom, 
@@ -18,33 +20,71 @@ export function ChatPage() {
     sendMessage,
     markAsRead,
     fetchRooms,
-    isLoading
+    isLoading,
+    loadMoreMessages,
+    pendingUser,
+    setPendingUser
   } = useChatStore();
   
   const [input, setInput] = useState("");
   const isConnected = socket.isConnected;
   const feedRef = useRef<HTMLDivElement>(null);
+  const topSentinelRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const readObserver = useRef<IntersectionObserver | null>(null);
+  const loadMoreObserver = useRef<IntersectionObserver | null>(null);
 
   // Manage Socket Connection
   useEffect(() => {
     socket.connect();
   }, []);
 
-  // Initial Data Fetch
   useEffect(() => {
-    fetchRooms();
+    // Initial fetch
+    void fetchRooms();
   }, [fetchRooms]);
 
-  // Handle room opening from navigation state
   useEffect(() => {
-    const openRoomId = (location as any).state?.openRoomId;
+    // Refetch when returning to the list view from a room
+    if (!urlRoomId) {
+      void fetchRooms();
+    }
+  }, [urlRoomId, fetchRooms]);
+
+  // Sync URL with Store activeRoomId (Internal -> External)
+  // Handles lazy room creation navigation
+  useEffect(() => {
+    if (activeRoomId && activeRoomId !== urlRoomId) {
+      navigate(`/chats/${activeRoomId}`, { replace: true });
+    }
+  }, [activeRoomId, urlRoomId, navigate]);
+
+  // Sync URL roomId with Store activeRoomId (External -> Internal)
+  // Handles manual navigation and back button
+  useEffect(() => {
+    if (urlRoomId && urlRoomId !== activeRoomId) {
+      setActiveRoom(urlRoomId);
+    } else if (!urlRoomId && (activeRoomId || pendingUser)) {
+      // Handles returning to the main list / clearing pending chats
+      setActiveRoom(null);
+      setPendingUser(null);
+    }
+  }, [urlRoomId, activeRoomId, pendingUser, setActiveRoom, setPendingUser]);
+
+  // Handle room opening from navigation state (intent)
+  useEffect(() => {
+    const state = (location as any).state;
+    const openRoomId = state?.openRoomId;
+    const targetUser = state?.targetUser;
+
     if (openRoomId) {
-      setActiveRoom(openRoomId);
+      navigate(`/chats/${openRoomId}`, { replace: true });
+    } else if (targetUser) {
+      setPendingUser(targetUser);
+      // We don't navigate to a specific ID yet, staying on /chats
       window.history.replaceState({}, document.title);
     }
-  }, [(location as any).state, setActiveRoom]);
+  }, [location.state, navigate, setPendingUser]);
 
   const chatList = Object.values(rooms).sort((a, b) => {
     const timeA = a.last_message ? new Date(a.last_message.created_at).getTime() : 0;
@@ -74,12 +114,54 @@ export function ChatPage() {
     return () => readObserver.current?.disconnect();
   }, [activeRoomId, markAsRead]);
 
+  // Infinite Scroll Observer (Top Sentinel)
+  useEffect(() => {
+    if (loadMoreObserver.current) loadMoreObserver.current.disconnect();
+
+    loadMoreObserver.current = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && activeRoomId) {
+          loadMoreMessages(activeRoomId);
+        }
+      },
+      { threshold: 0.1 }
+    );
+
+    if (topSentinelRef.current) {
+      loadMoreObserver.current.observe(topSentinelRef.current);
+    }
+
+    return () => loadMoreObserver.current?.disconnect();
+  }, [activeRoomId, loadMoreMessages]);
+
   // Auto-scroll on new messages
   useEffect(() => {
     if (feedRef.current) {
       feedRef.current.scrollTop = feedRef.current.scrollHeight;
     }
   }, [allMessages, activeRoomId]);
+
+  // Typing Indicator Emission
+  useEffect(() => {
+    if (!activeRoomId || !isConnected) return;
+    
+    const sendTyping = (isTyping: boolean) => {
+      socket.send("typing", { 
+        target: activeRoomId, 
+        payload: { is_typing: isTyping } 
+      });
+    };
+
+    if (input.trim().length > 0) {
+      sendTyping(true);
+      const timeout = setTimeout(() => {
+        sendTyping(false);
+      }, 3000);
+      return () => clearTimeout(timeout);
+    } else {
+      sendTyping(false);
+    }
+  }, [input, activeRoomId, isConnected]);
 
   // Auto-resize textarea
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -108,7 +190,15 @@ export function ChatPage() {
     }
   };
 
-  const currentChat = activeRoomId ? rooms[activeRoomId] : null;
+  const currentChat = activeRoomId ? rooms[activeRoomId] : (pendingUser ? {
+    id: null,
+    display_name: pendingUser.nickname || pendingUser.full_name,
+    display_avatar: pendingUser.profile_picture,
+    type: "DIRECT",
+    isFetchingMore: false,
+    messageIds: [],
+    typingUsers: new Set<string>()
+  } : null);
   const roomMessages = activeRoomId ? (rooms[activeRoomId]?.messageIds || []) : [];
   const messages = roomMessages.map(id => allMessages[id]).filter(Boolean);
 
@@ -120,7 +210,7 @@ export function ChatPage() {
       {/* 1. Conversations Sidebar */}
       <aside className={cn(
         "w-full lg:w-[350px] border-r border-border flex flex-col bg-card/10 backdrop-blur-sm transition-all",
-        activeRoomId && "hidden lg:flex"
+        (activeRoomId || pendingUser) && "hidden lg:flex"
       )}>
         {/* Sidebar Header */}
         <div className="p-6 pb-2">
@@ -162,7 +252,7 @@ export function ChatPage() {
           {chatList.map((chat) => (
             <div
               key={chat.id}
-              onClick={() => setActiveRoom(chat.id)}
+              onClick={() => navigate(`/chats/${chat.id}`)}
               className={cn(
                 "group flex items-center gap-4 p-3 rounded-2xl cursor-pointer transition-all duration-200",
                 activeRoomId === chat.id ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20" : "hover:bg-muted/50"
@@ -214,12 +304,12 @@ export function ChatPage() {
       {/* 2. Main Chat Room Area */}
       <main className={cn(
         "flex-1 flex flex-col bg-background relative",
-        !activeRoomId && "hidden lg:flex"
+        !activeRoomId && !pendingUser && "hidden lg:flex"
       )}>
         <AnimatePresence mode="wait">
-          {activeRoomId ? (
+          {activeRoomId || pendingUser ? (
             <motion.div
-              key={activeRoomId}
+              key={activeRoomId || "pending"}
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -20 }}
@@ -228,7 +318,14 @@ export function ChatPage() {
               {/* Chat Header */}
               <header className="h-[72px] border-b border-border px-6 flex items-center justify-between bg-background/50 backdrop-blur-md sticky top-0 z-10">
                 <div className="flex items-center gap-4">
-                  <button onClick={() => setActiveRoom(null)} className="lg:hidden h-9 w-9 rounded-xl bg-muted flex items-center justify-center mr-2">
+                  <button 
+                    onClick={() => {
+                      setPendingUser(null);
+                      setActiveRoom(null);
+                      navigate("/chats");
+                    }} 
+                    className="lg:hidden h-9 w-9 rounded-xl bg-muted flex items-center justify-center mr-2"
+                  >
                     <ArrowLeft size={18} />
                   </button>
                   <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center font-bold overflow-hidden">
@@ -240,10 +337,14 @@ export function ChatPage() {
                   </div>
                   <div>
                     <p className="font-bold text-sm tracking-tight">{currentChat?.display_name}</p>
-                    <p className="text-[10px] text-green-500 font-bold flex items-center gap-1">
-                      <span className="h-1.5 w-1.5 rounded-full bg-current animate-pulse" />
-                      Online
-                    </p>
+                    {currentChat?.typingUsers && currentChat.typingUsers.size > 0 ? (
+                      <p className="text-[10px] text-primary font-bold animate-pulse">Typing...</p>
+                    ) : (
+                      <p className="text-[10px] text-green-500 font-bold flex items-center gap-1">
+                        <span className="h-1.5 w-1.5 rounded-full bg-current animate-pulse" />
+                        Online
+                      </p>
+                    )}
                   </div>
                 </div>
 
@@ -260,8 +361,16 @@ export function ChatPage() {
                 </div>
               </header>
 
-              {/* Message Feed */}
-              <div ref={feedRef} className="flex-1 overflow-y-auto p-6 space-y-4 custom-scrollbar">
+              <div ref={feedRef} className="flex-1 overflow-y-auto p-6 space-y-4 custom-scrollbar scroll-smooth">
+                {/* Infinite Scroll Sentinel */}
+                <div ref={topSentinelRef} className="h-1 w-full" />
+                
+                {currentChat?.isFetchingMore && (
+                  <div className="flex justify-center py-2">
+                    <div className="h-5 w-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                  </div>
+                )}
+
                 {messages.length === 0 && (
                   <div className="flex justify-center my-4">
                     <span className="px-4 py-1.5 rounded-full bg-muted/50 text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
@@ -299,19 +408,28 @@ export function ChatPage() {
                         <span className="text-[9px] text-muted-foreground">{formatTime(msg.sent_at)}</span>
                         {isMine && (
                           <div className="flex items-center ml-1">
+                          <div className="flex items-center ml-1">
                             {msg.status === "sending" ? (
-                              <span className="text-[9px] text-muted-foreground/50 italic">sending...</span>
+                              <span className="text-[9px] text-muted-foreground/50 italic animate-pulse">sending...</span>
+                            ) : msg.status === "acknowledged" ? (
+                              <span className="text-[11px] text-muted-foreground/40 leading-none">✓</span>
+                            ) : msg.status === "failed" ? (
+                              <span className="text-[9px] text-destructive font-bold">failed</span>
                             ) : (
                               <div className={cn(
                                 "flex items-center transition-colors duration-300",
-                                msg.status === "read" ? "text-blue-400" : "text-muted-foreground"
+                                msg.status === "read" ? "text-blue-400" : "text-primary/80"
                               )}>
-                                <span className="text-[10px] leading-none">✓</span>
+                                <span className={cn(
+                                  "text-[11px] leading-none",
+                                  msg.status === "sent" ? "font-normal" : "font-bold"
+                                )}>✓</span>
                                 {(msg.status === "delivered" || msg.status === "read") && (
-                                  <span className="text-[10px] leading-none -ml-0.5">✓</span>
+                                  <span className="text-[11px] leading-none -ml-1 font-bold">✓</span>
                                 )}
                               </div>
                             )}
+                          </div>
                           </div>
                         )}
                       </div>
@@ -331,7 +449,7 @@ export function ChatPage() {
                     value={input}
                     onChange={handleInputChange}
                     onKeyDown={handleKeyDown}
-                    placeholder="Type a message..."
+                    placeholder={`Message ${currentChat?.display_name || "..."}`}
                     rows={1}
                     className="flex-1 bg-transparent border-none outline-none resize-none py-2.5 text-sm max-h-32 custom-scrollbar"
                   />

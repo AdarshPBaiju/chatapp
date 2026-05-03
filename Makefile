@@ -17,6 +17,7 @@ help:
 	@echo "  make dev-build            - Build dev images"
 	@echo "  make dev-rebuild          - 🔨 Clean build (no cache)"
 	@echo "  make dev-up               - Start dev environment"
+	@echo "  make dev-full             - 🚀 Clean build, start, and restart gateway"
 	@echo "  make dev-down             - Stop dev containers"
 	@echo "  make dev-restart          - Restart dev containers"
 	@echo "  make dev-teardown         - Stop and remove dev volumes"
@@ -81,6 +82,8 @@ dev-down:
 dev-restart:
 	$(DEV_CMD) restart
 
+dev-full: dev-rebuild dev-up dev-gateway-restart
+
 dev-teardown:
 	$(DEV_CMD) down -v --remove-orphans
 
@@ -104,9 +107,6 @@ dev-backend:
 
 dev-gateway:
 	$(DEV_CMD) logs -f gateway
-
-dev-logs:
-	$(DEV_CMD) logs -f
 
 dev-go-auth:
 	$(DEV_CMD) logs -f go-auth
@@ -135,11 +135,14 @@ dev-migrate:
 dev-makemigrations:
 	$(DEV_CMD) exec backend python manage.py makemigrations
 
-dev-gateway:
-	$(DEV_CMD) logs -f gateway
-
 dev-gateway-restart:
 	$(DEV_CMD) restart gateway
+
+dev-go-rebuild:
+	$(DEV_CMD) up -d --build go-auth go-chat go-enrichment go-risk
+
+dev-worker-restart:
+	$(DEV_CMD) restart chat-worker
 
 # --- Production ---
 prod-build:

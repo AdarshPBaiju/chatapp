@@ -92,6 +92,7 @@ func (c *Consumer) Consume(ctx context.Context, handler func(Event) error) error
 			continue // Skip malformed events
 		}
 		event.Topic = msg.Topic
+		event.Key = string(msg.Key)
 
 		if err := handler(event); err != nil {
 			continue // Maintain stream even on handler error

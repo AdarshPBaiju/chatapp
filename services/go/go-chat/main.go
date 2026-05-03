@@ -110,7 +110,11 @@ func main() {
 
 			content, _ := body["content"].(string)
 			tempID, _ := body["temp_id"].(string)
+			idempotencyKey, _ := body["idempotency_key"].(string)
 			roomID := msg.Target
+			if idempotencyKey == "" {
+				idempotencyKey = tempID
+			}
 			if roomID == "" || tempID == "" || strings.TrimSpace(content) == "" {
 				sendSocketMessage(client, "message_ack", map[string]any{
 					"temp_id": tempID,
@@ -120,8 +124,6 @@ func main() {
 				return
 			}
 
-			// 1. Monotonic Sequencing (Phase 2.3 Requirement)
-			// We use Redis INCR to ensure atomic, strictly increasing IDs per room
 			seqID, err := rdb.Incr(context.Background(), "room:seq:"+roomID).Result()
 			if err != nil {
 				debug.Print("GO-CHAT", "Redis Error (Sequencing): "+err.Error())
@@ -133,16 +135,19 @@ func main() {
 				return
 			}
 
-			// 2. Publish to Kafka for persistence and global delivery
 			err = producer.Publish(context.Background(), messaging.Event{
 				Topic: "chat.inbound",
 				Key:   roomID,
 				Type:  "CHAT_MESSAGE",
 				Payload: map[string]any{
-					"content":     content,
-					"sender_id":   client.UserID,
-					"temp_id":     tempID,
-					"sequence_id": seqID,
+					"room_id":         roomID,
+					"user_id":          client.UserID,
+					"content":         content,
+					"sender_id":       client.UserID,
+					"temp_id":         tempID,
+					"idempotency_key": idempotencyKey,
+					"sequence_id":     seqID,
+					"sent_at":         time.Now().UnixMilli(),
 				},
 			})
 
@@ -156,11 +161,12 @@ func main() {
 				return
 			}
 
-			// 3. Send successful ACK only if Kafka confirmed
 			sendSocketMessage(client, "message_ack", map[string]any{
 				"temp_id":     tempID,
+				"message_id":  msgID,
 				"sequence_id": seqID,
 				"room_id":     roomID,
+				"status":      "acknowledged",
 				"success":     true,
 			})
 
@@ -177,7 +183,8 @@ func main() {
 				Key:   msg.Target, // RoomID
 				Type:  "READ_RECEIPT",
 				Payload: map[string]any{
-					"client_id":   client.UserID,
+					"room_id":     msg.Target,
+					"user_id":     client.UserID,
 					"sequence_id": body["sequence_id"],
 				},
 			})
@@ -186,6 +193,8 @@ func main() {
 				return
 			}
 			debug.Print("GO-CHAT", "Read receipt received for room: "+msg.Target)
+		} else if msg.Type == "ping" {
+			sendSocketMessage(client, "pong", map[string]any{"ts": time.Now().UnixMilli()})
 		}
 	}
 
@@ -217,6 +226,27 @@ func main() {
 			success := hub.SendToUser(event.Key, data)
 			if success {
 				debug.Print("GO-CHAT", "✅ Successfully delivered to user: "+event.Key)
+
+				if strings.ToUpper(event.Type) == "CHAT_DELIVERY" {
+					payload, ok := payloadMap(event.Payload)
+					if ok {
+						senderID, _ := payload["sender_id"].(string)
+						if senderID != "" && senderID != event.Key {
+							statusPayload := map[string]any{
+								"room_id":    payload["room_id"],
+								"message_id": payload["id"],
+								"temp_id":    payload["temp_id"],
+								"status":     "delivered",
+							}
+							producer.Publish(ctx, messaging.Event{
+								Topic:   "chat.delivery",
+								Key:     senderID,
+								Type:    "CHAT_STATUS",
+								Payload: statusPayload,
+							})
+						}
+					}
+				}
 			} else {
 				debug.Print("GO-CHAT", "⚠️ User not connected to this node: "+event.Key)
 			}

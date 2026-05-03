@@ -63,6 +63,10 @@ class RoomSerializer(serializers.ModelSerializer):
         return context["avatar"]
 
     def get_unread_count(self, obj):
+        # Prefer the annotated count from the view for performance
+        if hasattr(obj, "annotated_unread_count"):
+            return obj.annotated_unread_count
+            
         request = self.context.get("request")
         if request and request.user.is_authenticated:
             try:

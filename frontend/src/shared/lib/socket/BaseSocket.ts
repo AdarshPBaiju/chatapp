@@ -10,10 +10,13 @@ export interface SocketOptions {
 export class BaseSocket {
   protected socket: WebSocket | null = null;
   protected handlers: Map<string, Set<SocketEventHandler>> = new Map();
-  protected pendingRequests: Map<string, { resolve: Function; reject: Function; timer: any }> = new Map();
-  protected reconnectAttempts = 0;
-  protected options: Required<SocketOptions>;
   private heartbeatTimer: any;
+  private reconnectTimer: any;
+  private messageQueue: Array<{ type: string; payload: any; correlation_id?: string }> = [];
+  private isReconnecting = false;
+  protected options: SocketOptions;
+  protected reconnectAttempts = 0;
+  private pendingRequests: Map<string, { resolve: any; reject: any; timer: any }> = new Map();
 
   constructor(options: SocketOptions) {
     this.options = {
@@ -27,7 +30,6 @@ export class BaseSocket {
       this.connect();
     }
 
-    // Monitor visibility to adjust heartbeat
     if (typeof document !== "undefined") {
       document.addEventListener("visibilitychange", () => this.onVisibilityChange());
     }
@@ -38,14 +40,16 @@ export class BaseSocket {
   }
 
   public connect() {
-    if (this.socket?.readyState === WebSocket.OPEN) return;
+    if (this.socket?.readyState === WebSocket.OPEN || this.isReconnecting) return;
 
     console.log(`%c[Socket] %cConnecting to ${this.options.url}`, "color: #06b6d4; font-weight: bold", "color: inherit");
     this.socket = new WebSocket(this.options.url);
 
     this.socket.onopen = () => {
       this.reconnectAttempts = 0;
+      this.isReconnecting = false;
       this.startHeartbeat();
+      this.flushMessageQueue(); // Send queued messages
       this.emit("status", { connected: true });
     };
 
@@ -104,8 +108,8 @@ export class BaseSocket {
   private startHeartbeat() {
     this.stopHeartbeat();
     this.heartbeatTimer = setInterval(() => {
-      this.send("ping", { ts: Date.now() });
-    }, 30000); // 30s heartbeat
+      this.send("ping", { payload: { ts: Date.now() } });
+    }, 15000); // 15s heartbeat for better reliability
   }
 
   private stopHeartbeat() {
@@ -124,9 +128,9 @@ export class BaseSocket {
   }
 
   protected attemptReconnect() {
-    if (this.reconnectAttempts < this.options.maxReconnectAttempts) {
+    if (this.reconnectAttempts < (this.options.maxReconnectAttempts || 10)) {
       this.reconnectAttempts++;
-      const delay = Math.min(30000, this.options.reconnectInterval * Math.pow(1.5, this.reconnectAttempts - 1));
+      const delay = Math.min(30000, (this.options.reconnectInterval || 1000) * Math.pow(1.5, this.reconnectAttempts - 1));
       setTimeout(() => this.connect(), delay);
     }
   }
@@ -147,14 +151,36 @@ export class BaseSocket {
   }
 
   public send(type: string, payload: any) {
+    const message = { type, ...payload };
+    
     if (this.socket?.readyState === WebSocket.OPEN) {
-      this.socket.send(JSON.stringify({ type, ...payload }));
+      this.socket.send(JSON.stringify(message));
+    } else {
+      // Queue message for when connection is restored
+      this.messageQueue.push(message);
+      if (!this.isReconnecting && this.socket?.readyState !== WebSocket.CONNECTING) {
+        this.connect();
+      }
+    }
+  }
+
+  private flushMessageQueue() {
+    while (this.messageQueue.length > 0 && this.socket?.readyState === WebSocket.OPEN) {
+      const message = this.messageQueue.shift();
+      this.socket.send(JSON.stringify(message));
     }
   }
 
   public disconnect() {
     this.stopHeartbeat();
-    this.socket?.close();
-    this.socket = null;
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+    this.isReconnecting = false;
+    if (this.socket) {
+      this.socket.close();
+      this.socket = null;
+    }
   }
 }
