@@ -40,7 +40,9 @@ export class BaseSocket {
   }
 
   public connect() {
-    if (this.socket?.readyState === WebSocket.OPEN || this.isReconnecting) return;
+    if (this.socket?.readyState === WebSocket.OPEN || 
+        this.socket?.readyState === WebSocket.CONNECTING || 
+        this.isReconnecting) return;
 
     console.log(`%c[Socket] %cConnecting to ${this.options.url}`, "color: #06b6d4; font-weight: bold", "color: inherit");
     this.socket = new WebSocket(this.options.url);

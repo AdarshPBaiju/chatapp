@@ -41,7 +41,7 @@ type Message struct {
 type Hub struct {
 	// Local state
 	clients    map[*Client]bool
-	userToConn map[string]*Client // user_id -> Client
+	userToConn map[string]map[*Client]bool // user_id -> Set of Clients
 	mu         sync.RWMutex
 
 	// Channels
@@ -59,7 +59,7 @@ type Hub struct {
 func NewHub(serviceTag, nodeID string, rdb *redis.Client, handler MessageHandler) *Hub {
 	return &Hub{
 		clients:    make(map[*Client]bool),
-		userToConn: make(map[string]*Client),
+		userToConn: make(map[string]map[*Client]bool),
 		Broadcast:  make(chan []byte),
 		Register:   make(chan *Client),
 		Unregister: make(chan *Client),
@@ -86,7 +86,10 @@ func (h *Hub) Run(ctx context.Context) {
 			h.mu.Lock()
 			h.clients[client] = true
 			if client.UserID != "" {
-				h.userToConn[client.UserID] = client
+				if h.userToConn[client.UserID] == nil {
+					h.userToConn[client.UserID] = make(map[*Client]bool)
+				}
+				h.userToConn[client.UserID][client] = true
 				
 				// 🚀 HYPER-OPTIMIZED: Initial Session Registration
 				if h.Redis != nil {
@@ -118,7 +121,12 @@ func (h *Hub) Run(ctx context.Context) {
 			if _, ok := h.clients[client]; ok {
 				delete(h.clients, client)
 				if client.UserID != "" {
-					delete(h.userToConn, client.UserID)
+					if set, ok := h.userToConn[client.UserID]; ok {
+						delete(set, client)
+						if len(set) == 0 {
+							delete(h.userToConn, client.UserID)
+						}
+					}
 					
 					// 🚀 HYPER-OPTIMIZED: Final Session Cleanup
 					if h.Redis != nil {
@@ -165,19 +173,21 @@ func (h *Hub) Run(ctx context.Context) {
 
 func (h *Hub) SendToUser(userID string, payload []byte) bool {
 	h.mu.RLock()
-	client, ok := h.userToConn[userID]
+	clients, ok := h.userToConn[userID]
+	if !ok || len(clients) == 0 {
+		h.mu.RUnlock()
+		return false
+	}
+
+	// Fan-out to all sessions for this user
+	for client := range clients {
+		select {
+		case client.Send <- payload:
+		default:
+		}
+	}
 	h.mu.RUnlock()
-
-	if !ok {
-		return false
-	}
-
-	select {
-	case client.Send <- payload:
-		return true
-	default:
-		return false
-	}
+	return true
 }
 
 // subscribeToCluster listens for messages intended for users on this node
