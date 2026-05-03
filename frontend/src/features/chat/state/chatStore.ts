@@ -57,14 +57,14 @@ interface ChatState {
   syncRoom: (roomId: string) => Promise<void>;
   flushOutbox: () => Promise<void>;
   setActiveRoom: (roomId: string | null) => void;
-  addMessage: (message: Message) => void;
-  addMessages: (messages: Message[]) => void;
   loadMoreMessages: (roomId: string) => Promise<void>;
   updateMessageStatus: (messageId: string, status: Message["status"]) => void;
   setTyping: (roomId: string, userId: string, isTyping: boolean) => void;
   sendMessage: (roomId: string | null, content: string) => Promise<void>;
   markAsRead: (roomId: string, sequenceId: number) => void;
   setPendingUser: (user: any | null) => void;
+  addMessages: (messages: Message[], skipUnread?: boolean) => void;
+  addMessage: (message: Message, skipUnread?: boolean) => void;
 }
 
 const pendingAckTimers = new Map<string, ReturnType<typeof setTimeout>>();
@@ -232,7 +232,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       // Force messages to the requested roomId to avoid mismatches
       const normalized = results.map((msg: any) => mapHistoryMessage(roomId, msg));
       normalized.reverse();
-      get().addMessages(normalized);
+      get().addMessages(normalized, true); // Skip unread for history
     } catch (error) {
       console.error(`Failed to sync room ${roomId}`, error);
     }
@@ -265,7 +265,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     set({ pendingUser: user, activeRoomId: null });
   },
 
-  addMessages: (messages: Message[]) =>
+  addMessages: (messages: Message[], skipUnread = false) =>
     set((state) => {
       if (messages.length === 0) return state;
 
@@ -339,8 +339,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         }
 
         // 8. Update Room Metadata (Unread count, Last Message)
-        const isNewToRoom = !room.messageIds.includes(mergedMessage.id);
-        const shouldIncrementUnread = state.activeRoomId !== roomId && mergedMessage.sender_id !== currentUserId && isNewToRoom;
+        const shouldIncrementUnread = !skipUnread && state.activeRoomId !== roomId && mergedMessage.sender_id !== currentUserId && !existingId;
         
         updatedRooms[roomId] = {
           ...room,
@@ -361,7 +360,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       return { messages: updatedMessages, rooms: updatedRooms };
     }),
 
-  addMessage: (message) => get().addMessages([message]),
+  addMessage: (message, skipUnread = false) => get().addMessages([message], skipUnread),
 
   loadMoreMessages: async (roomId: string) => {
     const { rooms, messages } = get();
@@ -564,7 +563,7 @@ socket.on("chat_delivery", (data) => {
     sequence_id,
     sent_at: created_at ? new Date(created_at).getTime() : Date.now(),
     status: status || "sent",
-  });
+  }, false); // Do NOT skip unread for socket messages
 
   // 🚀 SIDEBAR SYNC: If this is a new room, fetch full room metadata to update sidebar
   if (isNewRoom) {
