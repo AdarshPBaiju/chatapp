@@ -5,8 +5,10 @@ import { searchUsers } from "../api";
 import { ContactCard } from "./ContactCard";
 import { Input } from "@/shared/ui/FormControls";
 import { useDebounce } from "../../../shared/hooks/useDebounce";
+import { useAuthStore } from "@/modules/auth/state/authState";
 
 export function DiscoverySearch() {
+  const currentUserId = useAuthStore(state => state.user?.id?.toLowerCase() || "");
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<ContactUser[]>([]);
   const [loading, setLoading] = useState(false);
@@ -17,13 +19,15 @@ export function DiscoverySearch() {
       setLoading(true);
       searchUsers(debouncedQuery)
         .then((res) => {
-          if (res.success) setResults(res.data);
+          if (res.success) {
+            setResults(res.data.filter(user => user.user_id?.toLowerCase() !== currentUserId));
+          }
         })
         .finally(() => setLoading(false));
     } else {
       setResults([]);
     }
-  }, [debouncedQuery]);
+  }, [debouncedQuery, currentUserId]);
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -61,7 +65,9 @@ export function DiscoverySearch() {
                 onActionComplete={() => {
                     // Refresh search to update status
                     searchUsers(debouncedQuery).then(res => {
-                        if (res.success) setResults(res.data);
+                        if (res.success) {
+                          setResults(res.data.filter(user => user.user_id?.toLowerCase() !== currentUserId));
+                        }
                     });
                 }} 
             />

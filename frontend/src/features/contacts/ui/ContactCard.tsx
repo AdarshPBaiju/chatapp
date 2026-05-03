@@ -1,12 +1,18 @@
-import { User, UserPlus, UserCheck, ShieldAlert } from "lucide-react";
+import { MessageCircle, User, UserPlus, UserCheck, ShieldAlert } from "lucide-react";
 import { ContactUser } from "../types";
 import { Button } from "@/shared/ui/FormControls";
 import { useState } from "react";
 import { manageContact } from "../api";
 import { toast } from "@/shared/ui/Toast";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { cn } from "@/shared/lib/utils";
 import { useChatStore } from "@/features/chat/state/chatStore";
+import { startDirectChat } from "@/features/chat/api/startDirectChat";
+import { useAuthStore } from "@/modules/auth/state/authState";
+
+function normalizeUserId(id?: string | null) {
+  return id ? id.toLowerCase() : "";
+}
 
 interface ContactCardProps {
   user: ContactUser;
@@ -14,11 +20,19 @@ interface ContactCardProps {
 }
 
 export function ContactCard({ user, onActionComplete }: ContactCardProps) {
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
+  const [chatStarting, setChatStarting] = useState(false);
   const [isAccepting, setIsAccepting] = useState(false);
   const [nickname, setNickname] = useState("");
+  const currentUserId = useAuthStore(state => state.user?.id);
   const onlineUsers = useChatStore(state => state.onlineUsers);
-  const isOnline = user.user_id ? onlineUsers.has(user.user_id) : false;
+  const isSelf = normalizeUserId(user.user_id) === normalizeUserId(currentUserId);
+  const isOnline = user.user_id ? onlineUsers.has(normalizeUserId(user.user_id)) : false;
+
+  if (isSelf) {
+    return null;
+  }
 
   async function handleAction(action: "add" | "accept" | "decline" | "block" | "unblock" | "remove", customNickname?: string) {
     setLoading(true);
@@ -38,6 +52,18 @@ export function ContactCard({ user, onActionComplete }: ContactCardProps) {
     }
   }
 
+  async function handleStartChat() {
+    setChatStarting(true);
+    try {
+      const roomId = await startDirectChat(user.id);
+      navigate(`/chats/${roomId}`);
+    } catch (err) {
+      toast.error("Could not start chat.");
+    } finally {
+      setChatStarting(false);
+    }
+  }
+
   return (
     <div className={cn(
         "group flex flex-col gap-2 p-4 rounded-2xl border transition-all duration-300",
@@ -48,7 +74,7 @@ export function ContactCard({ user, onActionComplete }: ContactCardProps) {
       <div className="flex items-center gap-4">
         <Link to={`/contacts/profile/${user.id}`} className="flex items-center gap-4 flex-1 min-w-0">
           <div className={cn(
-            "h-12 w-12 rounded-xl flex items-center justify-center overflow-hidden shrink-0 border",
+            "h-12 w-12 rounded-xl flex items-center justify-center overflow-hidden shrink-0 border relative",
             user.contact_status === "blocked" ? "bg-destructive/10 border-destructive/10" : "bg-primary/10 border-primary/5"
           )}>
             {user.profile_picture ? (
@@ -57,8 +83,8 @@ export function ContactCard({ user, onActionComplete }: ContactCardProps) {
               <User size={24} className={user.contact_status === "blocked" ? "text-destructive/40" : "text-primary"} />
             )}
             {isOnline && (
-              <div className="absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full bg-background flex items-center justify-center">
-                <div className="h-2 w-2 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]" />
+              <div className="absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full bg-background flex items-center justify-center z-10">
+                <div className="h-2.5 w-2.5 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]" />
               </div>
             )}
           </div>
@@ -127,6 +153,19 @@ export function ContactCard({ user, onActionComplete }: ContactCardProps) {
                  <span className="text-[10px] font-bold text-muted-foreground bg-muted px-2 py-1 rounded-md">
                    Request Sent
                  </span>
+              )}
+
+              {user.contact_status === "accepted" && (
+                <Button 
+                  compact 
+                  variant="primary" 
+                  className="h-8 px-3 rounded-lg text-[10px] font-bold"
+                  onClick={handleStartChat}
+                  isLoading={chatStarting}
+                >
+                  <MessageCircle size={14} className="mr-1.5" />
+                  Message
+                </Button>
               )}
 
               {user.contact_status === "accepted" && (

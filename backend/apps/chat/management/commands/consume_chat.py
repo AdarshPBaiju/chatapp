@@ -1,16 +1,36 @@
 import json
-import time
 import logging
+import time
 from functools import lru_cache
-from django.db import models, transaction
-from django.core.management.base import BaseCommand
-from django.conf import settings
+
 from confluent_kafka import Consumer, KafkaError
+from django.conf import settings
+from django.core.management.base import BaseCommand
+from django.db import models, transaction
+from django.db.models import Max
+from django_redis import get_redis_connection
+
 from chat.models import Room, Message, MessageReceipt, RoomMembership
-from users.models import Client
 from core.kafka import KafkaProducer
+from users.models import Client
 
 logger = logging.getLogger(__name__)
+
+
+def normalize_user_id(user_id):
+    return str(user_id).lower() if user_id else ""
+
+
+def is_user_online(user_id):
+    if not user_id:
+        return False
+
+    try:
+        redis_client = get_redis_connection("default")
+        return redis_client.scard(f"user:sessions:{normalize_user_id(user_id)}") > 0
+    except Exception as exc:
+        logger.warning("Presence check failed for %s: %s", user_id, exc)
+        return False
 
 
 # High-Performance Caching Layer
@@ -91,7 +111,7 @@ class Command(BaseCommand):
     def process_chat_message(self, data):
         logger.info(f"Processing message: {data}")
         room_id = data.get("room_id")
-        user_id = data.get("user_id")
+        user_id = normalize_user_id(data.get("user_id"))
         content = data.get("content")
         sequence_id = data.get("sequence_id")
         temp_id = data.get("temp_id")
@@ -107,16 +127,25 @@ class Command(BaseCommand):
             room = get_cached_room(room_id)
         elif data.get("target_user_id"):
             # Lazy creation: find or create a direct room
-            target_user_id = data.get("target_user_id")
+            target_user_id = normalize_user_id(data.get("target_user_id"))
             from chat.services import ChatService
             target_client = Client.objects.filter(user_id=target_user_id).first()
             if target_client:
-                room = ChatService.get_or_create_direct_room(client, target_client)
+                room = ChatService.get_or_create_dm_room(client, target_client)
                 room_id = str(room.id)
 
         if not room:
             logger.error(f"❌ Room {room_id} not found and no target_user_id provided")
             return
+
+        if not sequence_id:
+            last_sequence = (
+                Message.objects.filter(room=room).aggregate(max_sequence=Max("sequence_id"))[
+                    "max_sequence"
+                ]
+                or 0
+            )
+            sequence_id = last_sequence + 1
 
         # 🚀 SECURITY: Ensure sender is an active member
         sender_membership = get_cached_membership(room_id, client.id)
@@ -175,33 +204,54 @@ class Command(BaseCommand):
                         unread_count=models.F("unread_count") + 1
                     )
 
-                    # BROADCAST: Notify recipient via Go Hub (High-Performance Singleton)
-                    delivery_event = {
-                        "type": "CHAT_DELIVERY",
-                        "payload": {
-                            "id": str(message.id),
-                            "room_id": str(room_id),
-                            "sequence_id": sequence_id,
-                            "sender_id": str(user_id),
-                            "content": content,
-                            "temp_id": temp_id,
-                            "created_at": message.created_at.isoformat(),
-                            "status": "sent",
-                        },
-                    }
-                    KafkaProducer.produce(
-                        "chat.delivery",
-                        key=str(membership.client.user.id),
-                        value=json.dumps(delivery_event).encode("utf-8"),
-                    )
+                    target_user_id = normalize_user_id(membership.client.user.id)
+                    if is_user_online(target_user_id):
+                        delivery_event = {
+                            "type": "CHAT_DELIVERY",
+                            "payload": {
+                                "id": str(message.id),
+                                "room_id": str(room_id),
+                                "sequence_id": sequence_id,
+                                "sender_id": str(user_id),
+                                "content": content,
+                                "temp_id": temp_id,
+                                "created_at": message.created_at.isoformat(),
+                                "status": "sent",
+                            },
+                        }
+                        KafkaProducer.produce(
+                            "chat.delivery",
+                            key=target_user_id,
+                            value=json.dumps(delivery_event).encode("utf-8"),
+                        )
+                    else:
+                        logger.info(
+                            "Recipient %s is offline; message %s saved as SENT only",
+                            target_user_id,
+                            message.id,
+                        )
 
             # Bulk save receipts for 10x performance
             MessageReceipt.objects.bulk_create(receipts)
+
+            sender_status_event = {
+                "type": "CHAT_STATUS",
+                "payload": {
+                    "room_id": str(room_id),
+                    "message_id": str(message.id),
+                    "temp_id": temp_id,
+                    "sequence_id": sequence_id,
+                    "status": "acknowledged",
+                },
+            }
+            KafkaProducer.produce(
+                "chat.delivery",
+                key=user_id,
+                value=json.dumps(sender_status_event).encode("utf-8"),
+            )
             KafkaProducer.flush()
 
-            logger.info(f"✅ Message {message.id} persisted and broadcasted")
-
-            logger.info(f"✅ Message {message.id} persisted and broadcasted")
+            logger.info(f"✅ Message {message.id} persisted")
 
         except Exception as e:
             logger.error(f"❌ Failed to process message: {e}")
@@ -209,7 +259,7 @@ class Command(BaseCommand):
     @transaction.atomic
     def process_read_receipt(self, data):
         room_id = data.get("room_id")
-        user_id = data.get("user_id")
+        user_id = normalize_user_id(data.get("user_id"))
         sequence_id = data.get("sequence_id")
 
         room = get_cached_room(room_id)
@@ -245,7 +295,7 @@ class Command(BaseCommand):
                 ).select_related("client", "client__user")
                 for member in memberships:
                     if member.client.id != client.id:
-                        target_user_id = str(member.client.user.id)
+                        target_user_id = normalize_user_id(member.client.user.id)
                         KafkaProducer.produce(
                             "chat.delivery",
                             key=target_user_id,

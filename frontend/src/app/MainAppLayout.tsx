@@ -8,7 +8,7 @@ import { toast } from "@/shared/ui/Toast";
 import { useState, useEffect } from "react";
 import { fetchProfile } from "@/features/settings/api";
 import { UserProfile } from "@/features/settings/types";
-import { socket } from "@/shared/api/socket";
+import { chatSocket, presenceSocket, initializeSockets } from "@/shared/api/socket";
 import { ThemeSwitcher } from "@/shared/ui/ThemeSwitcher";
 
 const NAV_ITEMS = [
@@ -21,7 +21,8 @@ export function MainAppLayout() {
   const location = useLocation();
   const navigate = useNavigate();
   const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [isConnected, setIsConnected] = useState(false);
+  const [isChatConnected, setIsChatConnected] = useState(false);
+  const [isPresenceConnected, setIsPresenceConnected] = useState(false);
 
   // Extract the root app feature (chats, contacts, settings) for transition keys
   const currentAppSection = location.pathname.split('/')[1] || "home";
@@ -29,15 +30,22 @@ export function MainAppLayout() {
   useEffect(() => {
     fetchProfile().then(d => { if (d.success && d.data) setProfile(d.data); });
 
-    // Connect socket
-    socket.connect();
-    const handleStatus = (status: { connected: boolean }) => setIsConnected(status.connected);
-    socket.on("status", handleStatus);
+    // Connect sockets
+    initializeSockets();
+
+    const handleChatStatus = (status: { connected: boolean }) => setIsChatConnected(status.connected);
+    const handlePresenceStatus = (status: { connected: boolean }) => setIsPresenceConnected(status.connected);
+
+    chatSocket.on("status", handleChatStatus);
+    presenceSocket.on("status", handlePresenceStatus);
 
     return () => {
-      socket.off("status", handleStatus);
+      chatSocket.off("status", handleChatStatus);
+      presenceSocket.off("status", handlePresenceStatus);
     };
   }, []);
+
+  const isConnected = isChatConnected && isPresenceConnected;
 
   async function handleLogout() {
     await logoutFlow();

@@ -1,6 +1,7 @@
 import { Users, Search, Plus, Loader2 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useChatStore } from "@/features/chat/state/chatStore";
+import { useAuthStore } from "@/modules/auth/state/authState";
 
 import { ContactUser } from "../types";
 import { fetchContacts } from "../api";
@@ -10,21 +11,23 @@ import { useNavigate } from "react-router-dom";
 
 export function ContactsPage() {
   const navigate = useNavigate();
+  const currentUserId = useAuthStore(state => state.user?.id?.toLowerCase() || "");
   const [contacts, setContacts] = useState<ContactUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
 
   useEffect(() => {
     loadContacts();
-  }, []);
+  }, [currentUserId]);
 
   async function loadContacts() {
     setLoading(true);
     try {
       const res = await fetchContacts("accepted");
       if (res.success) {
-        setContacts(res.data);
-        const userIds = res.data.map((u: ContactUser) => u.user_id).filter(Boolean);
+        const peers = res.data.filter((u: ContactUser) => u.user_id?.toLowerCase() !== currentUserId);
+        setContacts(peers);
+        const userIds = peers.map((u: ContactUser) => u.user_id).filter(Boolean);
         useChatStore.getState().fetchPresence(userIds);
       }
     } finally {

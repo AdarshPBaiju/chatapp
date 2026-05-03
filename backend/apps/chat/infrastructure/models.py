@@ -50,6 +50,9 @@ class Room(SoftDeleteModel):
         db_table = "chat_rooms"
         verbose_name = "Chat Room"
         verbose_name_plural = "Chat Rooms"
+        indexes = [
+            models.Index(fields=["slug", "is_deleted"]),
+        ]
 
 
 class RoomMembership(SoftDeleteModel):  # ERP-Scale: preserve history of who left

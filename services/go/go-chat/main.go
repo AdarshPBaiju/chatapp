@@ -57,6 +57,13 @@ func payloadMap(payload any) (map[string]any, bool) {
 	return data, ok
 }
 
+var (
+	chatHub     *socket.Hub
+	presenceHub *socket.Hub
+	rdb         *redis.Client
+	producer    *messaging.Producer
+)
+
 func main() {
 	// 1. Environment & Configuration
 	port := os.Getenv("SERVICE_PORT")
@@ -91,202 +98,14 @@ func main() {
 	defer producer.Close()
 
 	// 3. Define Messaging Logic
-	handler := func(client *socket.Client, payload []byte) {
-		var msg socket.Message
-		if err := json.Unmarshal(payload, &msg); err != nil {
-			debug.Print("GO-CHAT", "Error decoding message: "+err.Error())
-			return
-		}
-
-		// Route message
-		if msg.Type == "chat_message" {
-			body, ok := payloadMap(msg.Payload)
-			if !ok {
-				sendSocketMessage(client, "message_ack", map[string]any{
-					"success": false,
-					"error":   "Invalid message payload",
-				})
-				return
-			}
-
-			content, _ := body["content"].(string)
-			tempID, _ := body["temp_id"].(string)
-			idempotencyKey, _ := body["idempotency_key"].(string)
-			targetUserID, _ := body["target_user_id"].(string)
-			roomID := msg.Target
-			
-			if idempotencyKey == "" {
-				idempotencyKey = tempID
-			}
-
-			// Validation: Must have either roomID or targetUserID
-			if (roomID == "" && targetUserID == "") || tempID == "" || strings.TrimSpace(content) == "" {
-				sendSocketMessage(client, "message_ack", map[string]any{
-					"temp_id": tempID,
-					"success": false,
-					"error":   "Room (or target_user_id), content, and temp_id are required",
-				})
-				return
-			}
-
-			var seqID int64
-			if roomID != "" {
-				var err error
-				seqID, err = rdb.Incr(context.Background(), "room:seq:"+roomID).Result()
-				if err != nil {
-					debug.Print("GO-CHAT", "Redis Error (Sequencing): "+err.Error())
-					sendSocketMessage(client, "message_ack", map[string]any{
-						"temp_id": tempID,
-						"success": false,
-						"error":   "Unable to reserve message sequence",
-					})
-					return
-				}
-			}
-
-			// Generate a properly formatted pseudo-UUID first
-			b := make([]byte, 16)
-			_, _ = rand.Read(b)
-			msgID := fmt.Sprintf("%08x-%04x-%04x-%04x-%012x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:])
-
-			err := producer.Publish(context.Background(), messaging.Event{
-				Topic: "chat.inbound",
-				Key:   roomID,
-				Type:  "CHAT_MESSAGE",
-				Payload: map[string]any{
-					"id":              msgID,
-					"room_id":         roomID,
-					"target_user_id":  targetUserID,
-					"user_id":          client.UserID,
-					"content":         content,
-					"sender_id":       client.UserID,
-					"temp_id":         tempID,
-					"idempotency_key": idempotencyKey,
-					"sequence_id":     seqID,
-					"sent_at":         time.Now().UnixMilli(),
-					"correlation_id":  fmt.Sprintf("corr-%s", msgID), // 🔍 Traceability
-				},
-			})
-
-			if err != nil {
-				debug.Print("GO-CHAT", "Kafka Error: "+err.Error())
-				sendSocketMessage(client, "message_ack", map[string]any{
-					"temp_id": tempID,
-					"success": false,
-					"error":   "Persistence failed",
-				})
-				return
-			}
-
-			// 🚀 HYPERSCALE OPTIMIZATION: Targeted Cross-Node Routing
-			if targetUserID != "" {
-				go func() {
-					// 1. Find which node the target user is on
-					targetNode, _ := rdb.Get(context.Background(), "user:node:"+targetUserID).Result()
-					
-					distEvent := map[string]any{
-						"type": "chat_delivery",
-						"target_user_id": targetUserID, // Explicit target for the receiving node
-						"payload": map[string]any{
-							"id":         msgID,
-							"room_id":    roomID,
-							"sender_id":  client.UserID,
-							"content":    content,
-							"created_at": time.Now().Format(time.RFC3339),
-							"status":     "sent",
-						},
-					}
-					distData, _ := json.Marshal(distEvent)
-					
-					if targetNode != "" {
-						// Targeted publish to the specific node
-						rdb.Publish(context.Background(), "node:delivery:"+targetNode, distData)
-					} else {
-						// Fallback: User might be on another node but not registered, or offline
-						// In a true hyperscale system, we'd use a more robust fallback
-						rdb.Publish(context.Background(), "user:delivery:broadcast", distData)
-					}
-				}()
-			}
-
-			sendSocketMessage(client, "message_ack", map[string]any{
-				"temp_id":     tempID,
-				"message_id":  msgID,
-				"sequence_id": seqID,
-				"room_id":     roomID,
-				"status":      "acknowledged",
-				"success":     true,
-			})
-
-			debug.Print("GO-CHAT", "Message seq:"+strconv.FormatInt(seqID, 10)+" persisted and short-circuited for room: "+roomID)
-		} else if msg.Type == "read_receipt" {
-			body, ok := payloadMap(msg.Payload)
-			if !ok {
-				return
-			}
-
-			// 1. Publish to Kafka for persistence and global sync
-			err := producer.Publish(context.Background(), messaging.Event{
-				Topic: "chat.inbound",
-				Key:   msg.Target, // RoomID
-				Type:  "READ_RECEIPT",
-				Payload: map[string]any{
-					"room_id":     msg.Target,
-					"user_id":     client.UserID,
-					"sequence_id": body["sequence_id"],
-				},
-			})
-			if err != nil {
-				debug.Print("GO-CHAT", "Read receipt publish failed: "+err.Error())
-				return
-			}
-			debug.Print("GO-CHAT", "Read receipt received for room: "+msg.Target)
-		} else if msg.Type == "ping" {
-			sendSocketMessage(client, "pong", map[string]any{"ts": time.Now().UnixMilli()})
-		} else if msg.Type == "get_presence" {
-			body, _ := payloadMap(msg.Payload)
-			userIDsStr, _ := body["user_ids"].([]any)
-			statusMap := make(map[string]string)
-			
-			// 🚀 HYPER-OPTIMIZED: Pipelined Redis Queries
-			pipe := rdb.Pipeline()
-			scardResults := make(map[string]*redis.IntCmd)
-			lastSeenResults := make(map[string]*redis.StringCmd)
-
-			for _, id := range userIDsStr {
-				idStr, ok := id.(string)
-				if !ok {
-					continue
-				}
-				scardResults[idStr] = pipe.SCard(context.Background(), "user:sessions:"+idStr)
-				lastSeenResults[idStr] = pipe.Get(context.Background(), "user:last_seen:"+idStr)
-			}
-			
-			_, _ = pipe.Exec(context.Background())
-
-			for idStr, cmd := range scardResults {
-				count, _ := cmd.Result()
-				if count > 0 {
-					statusMap[idStr] = "online"
-				} else {
-					lastSeen, _ := lastSeenResults[idStr].Result()
-					if lastSeen != "" {
-						statusMap[idStr] = "last_seen:" + lastSeen
-					} else {
-						statusMap[idStr] = "offline"
-					}
-				}
-			}
-			sendSocketMessage(client, "presence_update", statusMap)
-		}
-	}
-
-	// 4. Initialize Advanced Socket Hub
-	hub := socket.NewHub("GO-CHAT", nodeID, rdb, handler)
+	chatHub = socket.NewHub("CHAT", nodeID, rdb, chatHandler)
+	presenceHub = socket.NewHub("PRESENCE", nodeID, rdb, presenceHandler)
+	
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	go hub.Run(ctx)
+	go chatHub.Run(ctx)
+	go presenceHub.Run(ctx)
 
 	// 5. Initialize Delivery Consumer (Phase 2.2 Completion)
 	deliveryConsumer := messaging.NewConsumer(strings.Split(kafkaBrokers, ","), "go-chat-group-"+nodeID, "chat.delivery")
@@ -306,15 +125,13 @@ func main() {
 				return nil
 			}
 
-			success := hub.SendToUser(event.Key, data)
+			success := chatHub.SendToUser(event.Key, data)
 			if success {
 				debug.Print("GO-CHAT", "✅ Successfully delivered to user: "+event.Key)
 
-				// 🚀 DELIVERY FEEDBACK: Notify backend that message reached the device
 				if strings.ToUpper(event.Type) == "CHAT_DELIVERY" {
 					payload, ok := payloadMap(event.Payload)
 					if ok {
-						// 1. Notify Sender for UI update
 						senderID, _ := payload["sender_id"].(string)
 						if senderID != "" && senderID != event.Key {
 							statusPayload := map[string]any{
@@ -331,7 +148,6 @@ func main() {
 							})
 						}
 
-						// 2. Notify Backend for DB persistence
 						producer.Publish(ctx, messaging.Event{
 							Topic: "chat.receipts",
 							Type:  "DELIVERY_RECEIPT",
@@ -360,35 +176,8 @@ func main() {
 	internalSecret := os.Getenv("INTERNAL_SERVICE_SECRET")
 	authVerifier := auth.NewVerifierClient(authBaseURL, internalSecret)
 
-	// 🚀 HORIZONTAL SCALE: Targeted Distributed Delivery Listener
-	// Listen to our specific node's channel + global broadcast fallback
-	go func() {
-		nodeChannel := "node:delivery:" + nodeID
-		pubsub := rdb.Subscribe(context.Background(), nodeChannel, "user:delivery:broadcast")
-		defer pubsub.Close()
-
-		ch := pubsub.Channel()
-		debug.Print("GO-CHAT", "📡 Targeted delivery listener active on "+nodeChannel)
-		for msg := range ch {
-			var event struct {
-				TargetUserID string `json:"target_user_id"`
-				Payload      any    `json:"payload"`
-			}
-			if err := json.Unmarshal([]byte(msg.Payload), &event); err != nil {
-				continue
-			}
-
-			// Deliver directly to locally connected user
-			data, _ := json.Marshal(map[string]any{
-				"type":    "chat_delivery",
-				"payload": event.Payload,
-			})
-			hub.SendToUser(event.TargetUserID, data)
-		}
-	}()
-
 	// 7. Register HTTP Routes
-	http.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc("/ws/chat", func(w http.ResponseWriter, r *http.Request) {
 		token := r.URL.Query().Get("token")
 		if token == "" {
 			http.Error(w, "Unauthorized: Token required", http.StatusUnauthorized)
@@ -402,26 +191,38 @@ func main() {
 			return
 		}
 
-		debug.Print("GO-CHAT", "SUCCESS: Authenticated User: "+userID)
-		
-		// Serve WebSocket (Logic is now handled by Hub's Register/Unregister)
-		client := hub.ServeWs(w, r, userID)
+		userID = strings.ToLower(userID)
+		client := chatHub.ServeWs(w, r, userID)
+		if client == nil {
+			return
+		}
 
-		// Lightweight heartbeat for session persistence
-		go func() {
-			ticker := time.NewTicker(30 * time.Second)
-			defer ticker.Stop()
-			for {
-				select {
-				case <-ticker.C:
-					presenceKey := fmt.Sprintf("user:session:%s:%s", client.UserID, client.SessionID)
-					rdb.Set(context.Background(), presenceKey, nodeID, 60*time.Second)
-					rdb.Expire(context.Background(), "user:sessions:"+client.UserID, 120*time.Second)
-				case <-r.Context().Done():
-					return
-				}
-			}
-		}()
+		// Heartbeat
+		go sessionHeartbeat(r.Context(), client)
+	})
+
+	http.HandleFunc("/ws/presence", func(w http.ResponseWriter, r *http.Request) {
+		token := r.URL.Query().Get("token")
+		if token == "" {
+			http.Error(w, "Unauthorized: Token required", http.StatusUnauthorized)
+			return
+		}
+
+		userID, err := authVerifier.VerifyToken(r.Context(), token)
+		if err != nil {
+			debug.Print("GO-CHAT", "Auth Failure: "+err.Error())
+			http.Error(w, "Unauthorized: "+err.Error(), http.StatusUnauthorized)
+			return
+		}
+
+		userID = strings.ToLower(userID)
+		client := presenceHub.ServeWs(w, r, userID)
+		if client == nil {
+			return
+		}
+
+		// Heartbeat
+		go sessionHeartbeat(r.Context(), client)
 	})
 
 	// 8. Bulk Presence API (HTTP Fallback)
@@ -443,12 +244,27 @@ func main() {
 		ids := strings.Split(userIDs, ",")
 		statusMap := make(map[string]string)
 
+		pipe := rdb.Pipeline()
+		scardResults := make(map[string]*redis.IntCmd)
+		lastSeenResults := make(map[string]*redis.StringCmd)
+
 		for _, id := range ids {
-			count, _ := rdb.SCard(r.Context(), "user:sessions:"+id).Result()
-			if count > 0 {
+			id = strings.ToLower(strings.TrimSpace(id))
+			if id == "" {
+				continue
+			}
+			scardResults[id] = pipe.SCard(r.Context(), "user:sessions:"+id)
+			lastSeenResults[id] = pipe.Get(r.Context(), "user:last_seen:"+id)
+		}
+
+		_, _ = pipe.Exec(r.Context())
+
+		for id, cmd := range scardResults {
+			count, _ := cmd.Result()
+			if count > 0 || chatHub.HasLocalUser(id) || presenceHub.HasLocalUser(id) {
 				statusMap[id] = "online"
 			} else {
-				lastSeen, _ := rdb.Get(r.Context(), "user:last_seen:"+id).Result()
+				lastSeen, _ := lastSeenResults[id].Result()
 				if lastSeen != "" {
 					statusMap[id] = "last_seen:" + lastSeen
 				} else {
@@ -466,7 +282,7 @@ func main() {
 		w.Write([]byte("OK"))
 	})
 
-	// 6. Start Server
+	// 9. Start Server
 	srv := &http.Server{Addr: *addr}
 	go func() {
 		debug.Print("GO-CHAT", "Elite Node operational on "+*addr)
@@ -483,5 +299,232 @@ func main() {
 
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		debug.Print("GO-CHAT", "Shutdown error: "+err.Error())
+	}
+}
+
+func chatHandler(client *socket.Client, payload []byte) {
+	var msg socket.Message
+	if err := json.Unmarshal(payload, &msg); err != nil {
+		debug.Print("GO-CHAT", "Error decoding message: "+err.Error())
+		return
+	}
+
+	// Route message
+	if msg.Type == "chat_message" {
+		body, ok := payloadMap(msg.Payload)
+		if !ok {
+			sendSocketMessage(client, "message_ack", map[string]any{
+				"success": false,
+				"error":   "Invalid message payload",
+			})
+			return
+		}
+
+		content, _ := body["content"].(string)
+		tempID, _ := body["temp_id"].(string)
+		idempotencyKey, _ := body["idempotency_key"].(string)
+		roomID, _ := body["room_id"].(string)
+		targetUserID, _ := body["target_user_id"].(string)
+		routeTarget := strings.ToLower(strings.TrimSpace(msg.Target))
+		roomID = strings.TrimSpace(roomID)
+		targetUserID = strings.ToLower(targetUserID)
+
+		if roomID == "" && targetUserID == "" {
+			roomID = routeTarget
+		}
+
+		if idempotencyKey == "" {
+			idempotencyKey = tempID
+		}
+
+		// Validation: Must have either roomID or targetUserID
+		if (roomID == "" && targetUserID == "") || tempID == "" || strings.TrimSpace(content) == "" {
+			sendSocketMessage(client, "message_ack", map[string]any{
+				"temp_id": tempID,
+				"success": false,
+				"error":   "Room (or target_user_id), content, and temp_id are required",
+			})
+			return
+		}
+
+		var seqID int64
+		if roomID != "" {
+			var err error
+			seqID, err = rdb.Incr(context.Background(), "room:seq:"+roomID).Result()
+			if err != nil {
+				debug.Print("GO-CHAT", "Redis Error (Sequencing): "+err.Error())
+				sendSocketMessage(client, "message_ack", map[string]any{
+					"temp_id": tempID,
+					"success": false,
+					"error":   "Unable to reserve message sequence",
+				})
+				return
+			}
+		}
+
+		// Generate a properly formatted pseudo-UUID first
+		b := make([]byte, 16)
+		_, _ = rand.Read(b)
+		msgID := fmt.Sprintf("%08x-%04x-%04x-%04x-%012x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:])
+
+		err := producer.Publish(context.Background(), messaging.Event{
+			Topic: "chat.inbound",
+			Key:   roomID,
+			Type:  "CHAT_MESSAGE",
+			Payload: map[string]any{
+				"id":              msgID,
+				"room_id":         roomID,
+				"target_user_id":  targetUserID,
+				"user_id":         client.UserID,
+				"content":         content,
+				"sender_id":       client.UserID,
+				"temp_id":         tempID,
+				"idempotency_key": idempotencyKey,
+				"sequence_id":     seqID,
+				"sent_at":         time.Now().UnixMilli(),
+				"correlation_id":  fmt.Sprintf("corr-%s", msgID), // 🔍 Traceability
+			},
+		})
+
+		if err != nil {
+			debug.Print("GO-CHAT", "Kafka Error: "+err.Error())
+			sendSocketMessage(client, "message_ack", map[string]any{
+				"temp_id": tempID,
+				"success": false,
+				"error":   "Persistence failed",
+			})
+			return
+		}
+
+		sendSocketMessage(client, "message_ack", map[string]any{
+			"temp_id":     tempID,
+			"message_id":  msgID,
+			"sequence_id": seqID,
+			"room_id":     roomID,
+			"status":      "sent",
+			"success":     true,
+		})
+
+		debug.Print("GO-CHAT", "Message seq:"+strconv.FormatInt(seqID, 10)+" persisted and short-circuited for room: "+roomID)
+	} else if msg.Type == "read_receipt" {
+		body, ok := payloadMap(msg.Payload)
+		if !ok {
+			return
+		}
+
+		// 1. Publish to Kafka for persistence and global sync
+		err := producer.Publish(context.Background(), messaging.Event{
+			Topic: "chat.inbound",
+			Key:   msg.Target, // RoomID
+			Type:  "READ_RECEIPT",
+			Payload: map[string]any{
+				"room_id":     msg.Target,
+				"user_id":     client.UserID,
+				"sequence_id": body["sequence_id"],
+			},
+		})
+		if err != nil {
+			debug.Print("GO-CHAT", "Read receipt publish failed: "+err.Error())
+			return
+		}
+		debug.Print("GO-CHAT", "Read receipt received for room: "+msg.Target)
+	} else if msg.Type == "ping" {
+		sendSocketMessage(client, "pong", map[string]any{"ts": time.Now().UnixMilli()})
+	}
+}
+
+func presenceHandler(client *socket.Client, payload []byte) {
+	var msg socket.Message
+	if err := json.Unmarshal(payload, &msg); err != nil {
+		return
+	}
+
+	switch msg.Type {
+	case "subscribe_presence":
+		body, ok := payloadMap(msg.Payload)
+		if !ok {
+			return
+		}
+		userIDs, _ := body["user_ids"].([]any)
+		for _, id := range userIDs {
+			idStr, ok := id.(string)
+			if ok {
+				client.Hub.Subscribe(client, "presence:user:"+strings.ToLower(idStr))
+			}
+		}
+	case "unsubscribe_presence":
+		body, ok := payloadMap(msg.Payload)
+		if !ok {
+			return
+		}
+		userIDs, _ := body["user_ids"].([]any)
+		for _, id := range userIDs {
+			idStr, ok := id.(string)
+			if ok {
+				client.Hub.Unsubscribe(client, "presence:user:"+strings.ToLower(idStr))
+			}
+		}
+	case "get_presence":
+		body, _ := payloadMap(msg.Payload)
+		userIDsStr, _ := body["user_ids"].([]any)
+		statusMap := make(map[string]string)
+
+		// 🚀 HYPER-OPTIMIZED: Pipelined Redis Queries
+		pipe := rdb.Pipeline()
+		scardResults := make(map[string]*redis.IntCmd)
+		lastSeenResults := make(map[string]*redis.StringCmd)
+
+		for _, id := range userIDsStr {
+			idStr, ok := id.(string)
+			if !ok {
+				continue
+			}
+			idStr = strings.ToLower(idStr) // 🚀 NORMALIZE
+			scardResults[idStr] = pipe.SCard(context.Background(), "user:sessions:"+idStr)
+			lastSeenResults[idStr] = pipe.Get(context.Background(), "user:last_seen:"+idStr)
+		}
+
+		_, _ = pipe.Exec(context.Background())
+
+		for idStr, cmd := range scardResults {
+			count, _ := cmd.Result()
+
+			// 🚀 DEEP FIX: Local Fallback
+			isLocallyOnline := chatHub.HasLocalUser(idStr) || presenceHub.HasLocalUser(idStr)
+
+			if count > 0 || isLocallyOnline {
+				statusMap[idStr] = "online"
+			} else {
+				lastSeen, _ := lastSeenResults[idStr].Result()
+				if lastSeen != "" {
+					statusMap[idStr] = "last_seen:" + lastSeen
+				} else {
+					statusMap[idStr] = "offline"
+				}
+			}
+		}
+		sendSocketMessage(client, "presence_update", statusMap)
+	case "ping":
+		sendSocketMessage(client, "pong", map[string]any{"ts": time.Now().UnixMilli()})
+	}
+}
+
+func sessionHeartbeat(ctx context.Context, client *socket.Client) {
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
+	nodeID, _ := os.Hostname()
+	for {
+		select {
+		case <-ticker.C:
+			normID := strings.ToLower(client.UserID)
+			presenceKey := fmt.Sprintf("user:session:%s:%s", normID, client.SessionID)
+			rdb.Set(context.Background(), presenceKey, nodeID, 60*time.Second)
+			rdb.Set(context.Background(), "user:node:"+normID, nodeID, 120*time.Second)
+
+			rdb.SAdd(context.Background(), "user:sessions:"+normID, client.SessionID)
+			rdb.Expire(context.Background(), "user:sessions:"+normID, 120*time.Second)
+		case <-ctx.Done():
+			return
+		}
 	}
 }

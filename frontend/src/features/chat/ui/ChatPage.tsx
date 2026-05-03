@@ -3,10 +3,18 @@ import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { Search, MoreVertical, Send, Phone, Video, Info, Paperclip, Smile, MessageCircle, ArrowLeft } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/shared/lib/utils";
-import { socket } from "@/shared/api/socket";
+import { chatSocket } from "@/shared/api/socket";
 
 import { useChatStore } from "../state/chatStore";
 import { useAuthStore } from "@/modules/auth/state/authState";
+
+function normalizeUserId(id?: string | null) {
+  return id ? id.toLowerCase() : "";
+}
+
+function isSameUser(a?: string | null, b?: string | null) {
+  return normalizeUserId(a) === normalizeUserId(b);
+}
 
 export function ChatPage() {
   const location = useLocation();
@@ -27,20 +35,15 @@ export function ChatPage() {
     onlineUsers
   } = useChatStore();
   const currentUser = useAuthStore(state => state.user);
-  const currentUserId = currentUser?.id;
+  const currentUserId = normalizeUserId(currentUser?.id);
 
   const [input, setInput] = useState("");
-  const isConnected = socket.isConnected;
+  const isConnected = chatSocket.isConnected;
   const feedRef = useRef<HTMLDivElement>(null);
   const topSentinelRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const readObserver = useRef<IntersectionObserver | null>(null);
   const loadMoreObserver = useRef<IntersectionObserver | null>(null);
-
-  // Manage Socket Connection
-  useEffect(() => {
-    socket.connect();
-  }, []);
 
   useEffect(() => {
     // Initial fetch
@@ -54,10 +57,10 @@ export function ChatPage() {
     }
   }, [urlRoomId, fetchRooms]);
 
-  // Sync URL with Store activeRoomId (Internal -> External)
-  // Handles lazy room creation navigation
+  // Internal navigation is only allowed when there is no URL room yet, which
+  // happens after lazy direct-message creation confirms the new room.
   useEffect(() => {
-    if (activeRoomId && activeRoomId !== urlRoomId) {
+    if (!urlRoomId && activeRoomId) {
       navigate(`/chats/${activeRoomId}`, { replace: true });
     }
   }, [activeRoomId, urlRoomId, navigate]);
@@ -170,9 +173,17 @@ export function ChatPage() {
     if (!activeRoomId || !isConnected) return;
 
     const sendTyping = (isTyping: boolean) => {
-      socket.send("typing", {
-        target: activeRoomId,
-        payload: { is_typing: isTyping }
+      const room = rooms[activeRoomId];
+      const directUserId = normalizeUserId(
+        room?.type === "DIRECT"
+          ? room.participants?.find((p: any) => !isSameUser(p.user_id, currentUserId))?.user_id
+          : null,
+      );
+      const routeTarget = room?.type === "DIRECT" && directUserId ? directUserId : activeRoomId;
+
+      chatSocket.send("typing", {
+        target: routeTarget,
+        payload: { room_id: activeRoomId, is_typing: isTyping }
       });
     };
 
@@ -185,7 +196,7 @@ export function ChatPage() {
     } else {
       sendTyping(false);
     }
-  }, [input, activeRoomId, isConnected]);
+  }, [input, activeRoomId, isConnected, rooms, currentUserId]);
 
   // Auto-resize textarea
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -205,7 +216,7 @@ export function ChatPage() {
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto";
     }
-  }, [input, activeRoomId, sendMessage]);
+  }, [input, activeRoomId, pendingUser, sendMessage]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -310,8 +321,8 @@ export function ChatPage() {
                 </div>
                 {chat.type === "DIRECT" && (
                   (() => {
-                    const otherUser = chat.participants?.find((p: any) => p.user_id !== currentUserId);
-                    if (otherUser?.user_id && onlineUsers.has(otherUser.user_id)) {
+                    const otherUser = chat.participants?.find((p: any) => !isSameUser(p.user_id, currentUserId));
+                    if (otherUser?.user_id && onlineUsers.has(normalizeUserId(otherUser.user_id))) {
                       return (
                         <div className="absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full bg-background flex items-center justify-center">
                           <div className="h-2.5 w-2.5 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]" />
@@ -333,7 +344,7 @@ export function ChatPage() {
                 <p className={cn("text-xs truncate", activeRoomId === chat.id ? "text-primary-foreground/80" : "text-muted-foreground")}>
                   {chat.last_message ? (
                     <>
-                      {chat.last_message.sender_id === useAuthStore.getState().user?.id ? (
+                      {isSameUser(chat.last_message.sender_id, useAuthStore.getState().user?.id) ? (
                         <span className="font-bold mr-1">You:</span>
                       ) : (
                         chat.type === "GROUP" && (
@@ -395,9 +406,10 @@ export function ChatPage() {
                     {currentChat?.typingUsers && currentChat.typingUsers.size > 0 ? (
                       <p className="text-[10px] text-primary font-bold animate-pulse">Typing...</p>
                     ) : (() => {
-                      const otherUser = currentChat?.participants?.find((p: any) => p.user_id !== currentUserId);
-                      const isOnline = otherUser?.user_id ? onlineUsers.has(otherUser.user_id) : false;
-                      const lastSeenTime = otherUser?.user_id ? useChatStore.getState().lastSeen[otherUser.user_id] : null;
+                      const otherUser = currentChat?.participants?.find((p: any) => !isSameUser(p.user_id, currentUserId));
+                      const otherUserId = normalizeUserId(otherUser?.user_id);
+                      const isOnline = otherUserId ? onlineUsers.has(otherUserId) : false;
+                      const lastSeenTime = otherUserId ? useChatStore.getState().lastSeen[otherUserId] : null;
                       
                       return (
                         <p className={cn(
@@ -448,7 +460,7 @@ export function ChatPage() {
 
                 {messages.map((msg) => {
                   const currentUser = useAuthStore.getState().user;
-                  const isMine = msg.sender_id === currentUser?.id;
+                  const isMine = isSameUser(msg.sender_id, currentUser?.id);
                   return (
                     <motion.div
                       key={msg.id}

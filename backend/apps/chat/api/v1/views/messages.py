@@ -46,19 +46,24 @@ class MessageHistoryAPIView(generics.ListAPIView):
             message=OuterRef("pk"), client=client
         ).values("status")[:1]
 
-        queryset = Message.objects.filter(room_id=room_id, is_deleted=False).annotate(
-            annotated_status=Case(
-                When(Exists(read_exists), then=Value("read")),
-                When(Exists(delivered_exists), then=Value("delivered")),
-                default=Value("sent"),
-                output_field=CharField(),
-            ),
-            viewer_status=models.Subquery(viewer_receipt, output_field=CharField()),
+        queryset = (
+            Message.objects.filter(room_id=room_id, is_deleted=False)
+            .select_related("sender", "sender__user")
+            .prefetch_related("receipts")
+            .annotate(
+                annotated_status=Case(
+                    When(Exists(read_exists), then=Value("read")),
+                    When(Exists(delivered_exists), then=Value("delivered")),
+                    default=Value("sent"),
+                    output_field=CharField(),
+                ),
+                viewer_status=models.Subquery(viewer_receipt, output_field=CharField()),
+            )
         )
 
         unread_receipts = MessageReceipt.objects.filter(
             client=client, message__room_id=room_id
-        ).exclude(status="READ").exclude(message__sender_id=client.user_id)
+        ).exclude(status="READ").exclude(message__sender=client)
 
         membership.unread_count = 0
         membership.save(update_fields=["unread_count"])
@@ -83,7 +88,7 @@ class MessageHistoryAPIView(generics.ListAPIView):
                 .select_related("client", "client__user")
             )
             for member in other_members:
-                target_user_id = str(member.client.user.id)
+                target_user_id = str(member.client.user.id).lower()
                 KafkaProducer.produce(
                     "chat.delivery",
                     key=target_user_id,

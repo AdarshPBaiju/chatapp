@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { socket } from "@/shared/api/socket";
+import { chatSocket, presenceSocket } from "@/shared/api/socket";
 import { httpClient } from "@/shared/http/client";
 import { useAuthStore } from "@/modules/auth/state/authState";
 
@@ -54,6 +54,8 @@ interface ChatState {
   fetchHistory: (roomId: string) => Promise<void>;
   fetchPresence: (userIds: string[]) => Promise<void>;
   getPresence: (userIds: string[]) => void;
+  subscribePresence: (userIds: string[]) => void;
+  unsubscribePresence: (userIds: string[]) => void;
   syncRoom: (roomId: string) => Promise<void>;
   flushOutbox: () => Promise<void>;
   setActiveRoom: (roomId: string | null) => void;
@@ -68,9 +70,36 @@ interface ChatState {
 }
 
 const pendingAckTimers = new Map<string, ReturnType<typeof setTimeout>>();
+const roomHistoryRequests = new Map<string, Promise<void>>();
+const roomLastFullSyncAt = new Map<string, number>();
+const ROOM_FULL_SYNC_TTL_MS = 10_000;
+
+function normalizeUserId(id?: string | null) {
+  return id ? id.toLowerCase() : "";
+}
 
 function getCurrentUserId() {
   return useAuthStore.getState().user?.id ?? null;
+}
+
+function normalizePeerUserIds(userIds: string[]) {
+  const currentUserId = normalizeUserId(getCurrentUserId());
+  return Array.from(
+    new Set(
+      userIds
+        .map(normalizeUserId)
+        .filter((userId) => userId && userId !== currentUserId),
+    ),
+  );
+}
+
+function getDirectRecipientUserId(room?: Pick<Room, "type" | "participants"> | null) {
+  if (!room || room.type !== "DIRECT") return "";
+
+  const currentUserId = normalizeUserId(getCurrentUserId());
+  return normalizeUserId(
+    room.participants.find((participant) => normalizeUserId(participant.user_id) !== currentUserId)?.user_id,
+  );
 }
 
 function clearPendingAck(tempId?: string) {
@@ -113,28 +142,34 @@ function createEmptyRoom(roomId: string): RoomState {
 
 
 function mapHistoryMessage(roomId: string, msg: any): Message {
-  const currentUserId = getCurrentUserId();
-  const senderId = msg.sender_id || msg.sender?.id;
+  const currentUserId = normalizeUserId(getCurrentUserId());
+  const senderId = normalizeUserId(msg.sender_id || msg.sender?.id);
+  const sentAt = typeof msg.sent_at === "number"
+    ? msg.sent_at
+    : msg.sent_at
+      ? new Date(msg.sent_at).getTime()
+      : Date.now();
 
   return {
     id: msg.id,
     sender_id: senderId,
-    room_id: roomId,
+    room_id: msg.room_id || roomId,
     content: msg.content,
     sequence_id: msg.sequence_id,
-    sent_at: msg.sent_at || new Date().getTime(),
+    sent_at: Number.isFinite(sentAt) ? sentAt : Date.now(),
     status: (msg.status || (senderId === currentUserId ? "sent" : "read")).toLowerCase() as any,
   };
 }
 
-function sendOutboxEntry(message: Message, targetUserId?: string | null) {
-  if (!socket.isConnected) {
+function sendOutboxEntry(message: Message, routeTarget: string, targetUserId?: string | null) {
+  if (!chatSocket.isConnected) {
     return;
   }
 
-  socket.send("chat_message", {
-    target: message.room_id,
+  chatSocket.send("chat_message", {
+    target: routeTarget,
     payload: {
+      room_id: message.room_id,
       content: message.content,
       temp_id: message.temp_id,
       idempotency_key: message.idempotency_key,
@@ -174,21 +209,23 @@ export const useChatStore = create<ChatState>((set, get) => ({
         };
       });
 
+      if (currentState.rooms[""]) {
+        roomMap[""] = currentState.rooms[""];
+      }
+
       set({ rooms: roomMap });
 
       // Fetch presence for all participants in all rooms
       const allUserIds = new Set<string>();
+      const currentUserId = normalizeUserId(getCurrentUserId());
       results.forEach((room: Room) => {
         room.participants.forEach(p => {
-          if (p.user_id) allUserIds.add(p.user_id);
+          const userId = normalizeUserId(p.user_id);
+          if (userId && userId !== currentUserId) allUserIds.add(userId);
         });
       });
       get().getPresence(Array.from(allUserIds));
 
-      const activeRoomId = get().activeRoomId;
-      if (activeRoomId && roomMap[activeRoomId]) {
-        void get().syncRoom(activeRoomId);
-      }
     } finally {
       set({ isLoading: false });
     }
@@ -197,16 +234,17 @@ export const useChatStore = create<ChatState>((set, get) => ({
   fetchPresence: async (userIds: string[]) => {
     if (userIds.length === 0) return;
     try {
-      const protocol = window.location.protocol;
-      const host = window.location.hostname;
-      const response = await fetch(`${protocol}//${host}/presence?user_ids=${userIds.join(",")}`);
+      const normalized = normalizePeerUserIds(userIds);
+      if (normalized.length === 0) return;
+      const response = await fetch(`${window.location.origin}/presence?user_ids=${normalized.join(",")}`);
       const statusMap = await response.json();
       
       set((state) => {
         const newOnlineUsers = new Set(state.onlineUsers);
         Object.entries(statusMap).forEach(([id, status]) => {
-          if (status === "online") newOnlineUsers.add(id);
-          else newOnlineUsers.delete(id);
+          const normalizedId = normalizeUserId(id);
+          if (status === "online") newOnlineUsers.add(normalizedId);
+          else newOnlineUsers.delete(normalizedId);
         });
         return { onlineUsers: newOnlineUsers };
       });
@@ -217,38 +255,82 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   getPresence: (userIds: string[]) => {
     if (userIds.length === 0) return;
-    socket.send("get_presence", { user_ids: userIds });
+    const normalized = normalizePeerUserIds(userIds);
+    if (normalized.length === 0) return;
+    presenceSocket.send("get_presence", { payload: { user_ids: normalized } });
+  },
+
+  subscribePresence: (userIds: string[]) => {
+    if (userIds.length === 0) return;
+    const normalized = normalizePeerUserIds(userIds);
+    if (normalized.length === 0) return;
+    presenceSocket.send("subscribe_presence", { payload: { user_ids: normalized } });
+  },
+
+  unsubscribePresence: (userIds: string[]) => {
+    if (userIds.length === 0) return;
+    const normalized = normalizePeerUserIds(userIds);
+    if (normalized.length === 0) return;
+    presenceSocket.send("unsubscribe_presence", { payload: { user_ids: normalized } });
   },
 
   syncRoom: async (roomId) => {
-    try {
-      const { data } = await httpClient.get(`/chat/v1/rooms/${roomId}/history/`);
-      const results = data.results || data;
+    if (!roomId) return;
 
-      if (!Array.isArray(results) || results.length === 0) {
-        return;
-      }
-
-      // Force messages to the requested roomId to avoid mismatches
-      const normalized = results.map((msg: any) => mapHistoryMessage(roomId, msg));
-      normalized.reverse();
-      get().addMessages(normalized, true); // Skip unread for history
-    } catch (error) {
-      console.error(`Failed to sync room ${roomId}`, error);
+    const room = get().rooms[roomId];
+    const lastSyncAt = roomLastFullSyncAt.get(roomId) || 0;
+    if (room?.messageIds.length && Date.now() - lastSyncAt < ROOM_FULL_SYNC_TTL_MS) {
+      return;
     }
+
+    const existingRequest = roomHistoryRequests.get(roomId);
+    if (existingRequest) {
+      await existingRequest;
+      return;
+    }
+
+    const request = (async () => {
+      try {
+        const { data } = await httpClient.get(`/chat/v1/rooms/${roomId}/history/`);
+        const results = data.results || data;
+
+        if (Array.isArray(results) && results.length > 0) {
+          const normalized = results.map((msg: any) => mapHistoryMessage(roomId, msg)).reverse();
+          get().addMessages(normalized, true);
+        }
+        roomLastFullSyncAt.set(roomId, Date.now());
+      } catch (error) {
+        console.error(`Failed to sync room ${roomId}`, error);
+      } finally {
+        roomHistoryRequests.delete(roomId);
+      }
+    })();
+
+    roomHistoryRequests.set(roomId, request);
+    await request;
   },
 
   flushOutbox: async () => { },
 
   fetchHistory: async (roomId) => {
     const room = get().rooms[roomId];
-    if (room?.messageIds.length && !socket.isConnected) {
+    if (room?.messageIds.length && !chatSocket.isConnected) {
       return;
     }
     await get().syncRoom(roomId);
   },
 
   setActiveRoom: (roomId) => {
+    const previous = get().activeRoomId;
+    if (previous === roomId) return;
+
+    if (previous) {
+      const oldRoom = get().rooms[previous];
+      if (oldRoom) {
+        get().unsubscribePresence(oldRoom.participants.map(p => p.user_id));
+      }
+    }
+
     set((state) => {
       const updatedRooms = { ...state.rooms };
       if (roomId && updatedRooms[roomId]) {
@@ -256,8 +338,16 @@ export const useChatStore = create<ChatState>((set, get) => ({
       }
       return { activeRoomId: roomId, pendingUser: null, rooms: updatedRooms };
     });
+
     if (roomId) {
       void get().fetchHistory(roomId);
+      
+      const newRoom = get().rooms[roomId];
+      if (newRoom) {
+        const pids = newRoom.participants.map(p => p.user_id);
+        get().subscribePresence(pids);
+        get().getPresence(pids);
+      }
     }
   },
 
@@ -269,7 +359,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     set((state) => {
       if (messages.length === 0) return state;
 
-      const currentUserId = getCurrentUserId();
+      const currentUserId = normalizeUserId(getCurrentUserId());
       const updatedMessages = { ...state.messages };
       const updatedRooms = { ...state.rooms };
 
@@ -339,7 +429,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         }
 
         // 8. Update Room Metadata (Unread count, Last Message)
-        const shouldIncrementUnread = !skipUnread && state.activeRoomId !== roomId && mergedMessage.sender_id !== currentUserId && !existingId;
+        const shouldIncrementUnread = !skipUnread && state.activeRoomId !== roomId && normalizeUserId(mergedMessage.sender_id) !== currentUserId && !existingId;
         
         updatedRooms[roomId] = {
           ...room,
@@ -350,7 +440,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
             content: mergedMessage.content,
             created_at: new Date(mergedMessage.sent_at).toISOString(),
             sender_id: mergedMessage.sender_id,
-            sender_name: mergedMessage.sender_id === currentUserId ? "You" : room.display_name || "User",
+            sender_name: normalizeUserId(mergedMessage.sender_id) === currentUserId ? "You" : room.display_name || "User",
             status: mergedMessage.status,
           },
           lastSyncedSeq: Math.max(room.lastSyncedSeq || 0, mergedMessage.sequence_id || 0),
@@ -391,8 +481,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
         params: { before_seq_id: oldestMsg.sequence_id }
       });
 
-      if (response.data && response.data.length > 0) {
-        get().addMessages(response.data);
+      const results = response.data?.results || response.data;
+      if (Array.isArray(results) && results.length > 0) {
+        get().addMessages(results.map((msg: any) => mapHistoryMessage(roomId, msg)).reverse(), true);
       }
     } catch (error) {
       console.error("❌ Failed to load more messages:", error);
@@ -445,10 +536,16 @@ export const useChatStore = create<ChatState>((set, get) => ({
     if (!trimmedContent) return;
 
     let targetRoomId = roomId;
-    let targetUserId = null;
+    let targetUserId = "";
+    let routeTarget = targetRoomId || "";
 
     if (!targetRoomId && state.pendingUser) {
-      targetUserId = state.pendingUser.id;
+      targetUserId = normalizeUserId(state.pendingUser.user_id);
+      routeTarget = targetUserId;
+    } else if (targetRoomId) {
+      const room = state.rooms[targetRoomId];
+      targetUserId = getDirectRecipientUserId(room);
+      routeTarget = room?.type === "DIRECT" && targetUserId ? targetUserId : targetRoomId;
     }
 
     const tempId = `tmp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -456,7 +553,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       id: tempId,
       temp_id: tempId,
       idempotency_key: tempId,
-      sender_id: user.id,
+      sender_id: normalizeUserId(user.id),
       room_id: targetRoomId || "",
       content: trimmedContent,
       sent_at: Date.now(),
@@ -465,16 +562,16 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
     get().addMessage(message);
 
-    if (!socket.isConnected) {
+    if (!chatSocket.isConnected) {
       console.log("📤 Queuing message for later send");
       return;
     }
 
-    sendOutboxEntry(message, targetUserId);
+    sendOutboxEntry(message, routeTarget, targetUserId);
   },
 
   markAsRead: (roomId, sequenceId) => {
-    socket.send("read_receipt", {
+    chatSocket.send("read_receipt", {
       target: roomId,
       payload: {
         sequence_id: sequenceId,
@@ -484,14 +581,14 @@ export const useChatStore = create<ChatState>((set, get) => ({
 }));
 
 
-socket.on("status", (data) => {
+chatSocket.on("status", (data) => {
   if (data.connected) {
+    useChatStore.setState({ isReady: true });
     void useChatStore.getState().fetchRooms();
-    // Removed outbox flush
     return;
   }
 
-  console.log("🔌 Socket disconnected");
+  console.log("🔌 Chat Socket disconnected");
   // Mark all sending messages as failed
   useChatStore.setState((state) => {
     const updatedMessages = { ...state.messages };
@@ -504,7 +601,7 @@ socket.on("status", (data) => {
   });
 });
 
-socket.on("message_ack", (data) => {
+chatSocket.on("message_ack", (data) => {
   const { temp_id, message_id, sequence_id, status, success } = data;
   clearPendingAck(temp_id);
 
@@ -523,17 +620,15 @@ socket.on("message_ack", (data) => {
       status: success ? (status || "acknowledged") : "failed"
     };
 
-    // Use centralized addMessage logic for room moves
     state.addMessage(updatedMsg);
 
-    // If this was a lazy creation transition, trigger room list refresh
     if (finalRoomId && tempMsg.room_id === "" && finalRoomId !== "") {
       void state.fetchRooms();
     }
   }
 });
 
-socket.on("chat_delivery", (data) => {
+chatSocket.on("chat_delivery", (data) => {
   const payload = data.payload || data;
   const {
     id,
@@ -557,27 +652,25 @@ socket.on("chat_delivery", (data) => {
     id: id,
     temp_id,
     idempotency_key: idempotencyKey,
-    sender_id,
+    sender_id: normalizeUserId(sender_id),
     room_id,
     content,
     sequence_id,
     sent_at: created_at ? new Date(created_at).getTime() : Date.now(),
     status: status || "sent",
-  }, false); // Do NOT skip unread for socket messages
+  }, false);
 
-  // 🚀 SIDEBAR SYNC: If this is a new room, fetch full room metadata to update sidebar
   if (isNewRoom) {
     void state.fetchRooms();
   }
 });
 
-socket.on("chat_read", (data) => {
-  console.log("📦 Read Event:", data);
+chatSocket.on("chat_read", (data) => {
   const payload = data.payload || data;
   const { room_id, sequence_id, sender_id } = payload;
-  const currentUserId = getCurrentUserId();
+  const currentUserId = normalizeUserId(getCurrentUserId());
 
-  if (sender_id === currentUserId) return; // Ignore our own read events
+  if (normalizeUserId(sender_id) === currentUserId) return;
 
   useChatStore.setState((state) => {
     const updatedMessages = { ...state.messages };
@@ -587,25 +680,20 @@ socket.on("chat_read", (data) => {
         msg.room_id === room_id &&
         msg.sequence_id &&
         Number(msg.sequence_id) <= Number(sequence_id) &&
-        msg.sender_id === currentUserId &&
+        normalizeUserId(msg.sender_id) === currentUserId &&
         msg.status !== "read"
       ) {
-        // IMMUTABLE UPDATE: Clone the message object
-        updatedMessages[key] = {
-          ...msg,
-          status: "read"
-        };
+        updatedMessages[key] = { ...msg, status: "read" };
       }
     });
     return { messages: updatedMessages };
   });
 });
 
-socket.on("chat_status", (data) => {
-  console.log("🔵 Status Event:", data);
+chatSocket.on("chat_status", (data) => {
   const payload = data.payload || data;
   const { room_id, last_read_seq, message_id, id, temp_id, status } = payload;
-  const currentUserId = getCurrentUserId();
+  const currentUserId = normalizeUserId(getCurrentUserId());
   const state = useChatStore.getState();
 
   const targetMsgId = message_id || id || temp_id;
@@ -624,10 +712,8 @@ socket.on("chat_status", (data) => {
         id: message_id || id || msg.id
       };
 
-      // Use centralized addMessage logic for room moves
       state.addMessage(updatedMsg);
 
-      // If this is a lazy room confirmation, update state and fetch rooms
       if (finalRoomId && state.pendingUser && !state.activeRoomId) {
         void state.fetchRooms();
         useChatStore.setState({ activeRoomId: finalRoomId, pendingUser: null });
@@ -635,7 +721,6 @@ socket.on("chat_status", (data) => {
     }
   }
 
-  // 2. Handle bulk read status update (Collective Read Ticks)
   if (last_read_seq) {
     useChatStore.setState((state) => {
       const updatedMessages = { ...state.messages };
@@ -645,7 +730,7 @@ socket.on("chat_status", (data) => {
           msg.room_id === room_id &&
           msg.sequence_id &&
           Number(msg.sequence_id) <= Number(last_read_seq) &&
-          msg.sender_id === currentUserId &&
+          normalizeUserId(msg.sender_id) === currentUserId &&
           msg.status !== "read"
         ) {
           updatedMessages[key] = { ...msg, status: "read" };
@@ -656,8 +741,13 @@ socket.on("chat_status", (data) => {
   }
 });
 
-socket.on("user_presence", (data) => {
-  const { user_id, status } = data.payload || data;
+presenceSocket.on("user_presence", (data) => {
+  const payload = data.payload || data;
+  let { user_id, status } = payload;
+  if (!user_id) return;
+  user_id = user_id.toLowerCase();
+  if (user_id === normalizeUserId(getCurrentUserId())) return;
+  
   useChatStore.setState((state) => {
     const nextOnline = new Set(state.onlineUsers);
     const nextLastSeen = { ...state.lastSeen };
@@ -666,7 +756,7 @@ socket.on("user_presence", (data) => {
       nextOnline.add(user_id);
     } else {
       nextOnline.delete(user_id);
-      if (status.startsWith("last_seen:")) {
+      if (typeof status === "string" && status.startsWith("last_seen:")) {
         nextLastSeen[user_id] = parseInt(status.split(":")[1]);
       }
     }
@@ -674,18 +764,22 @@ socket.on("user_presence", (data) => {
   });
 });
 
-socket.on("presence_update", (data) => {
+presenceSocket.on("presence_update", (data) => {
   const statusMap = data.payload || data;
+  if (!statusMap) return;
+
   useChatStore.setState((state) => {
     const nextOnline = new Set(state.onlineUsers);
     const nextLastSeen = { ...state.lastSeen };
 
-    Object.entries(statusMap).forEach(([id, status]: [string, any]) => {
+    Object.entries(statusMap).forEach(([id_raw, status]: [string, any]) => {
+      const id = id_raw.toLowerCase();
+      if (id === normalizeUserId(getCurrentUserId())) return;
       if (status === "online") {
         nextOnline.add(id);
       } else {
         nextOnline.delete(id);
-        if (status.startsWith("last_seen:")) {
+        if (typeof status === "string" && status.startsWith("last_seen:")) {
           nextLastSeen[id] = parseInt(status.split(":")[1]);
         }
       }
@@ -694,10 +788,7 @@ socket.on("presence_update", (data) => {
   });
 });
 
-socket.on("connect", () => {
-  useChatStore.setState({ isReady: true });
-});
-
-socket.on("disconnect", () => {
-  useChatStore.setState({ isReady: false });
-});
+export const initializeSockets = () => {
+  chatSocket.connect();
+  presenceSocket.connect();
+};

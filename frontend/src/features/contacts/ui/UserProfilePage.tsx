@@ -7,6 +7,7 @@ import { Button } from "@/shared/ui/FormControls";
 import { manageContact } from "../api";
 import { toast } from "@/shared/ui/Toast";
 import { cn } from "@/shared/lib/utils";
+import { startDirectChat } from "@/features/chat/api/startDirectChat";
 
 export function UserProfilePage() {
     const { userId } = useParams<{ userId: string }>();
@@ -16,6 +17,7 @@ export function UserProfilePage() {
     const [actionLoading, setActionLoading] = useState(false);
     const [isAccepting, setIsAccepting] = useState(false);
     const [isEditingNickname, setIsEditingNickname] = useState(false);
+    const [chatStarting, setChatStarting] = useState(false);
     const [nickname, setNickname] = useState("");
 
     useEffect(() => {
@@ -61,8 +63,15 @@ export function UserProfilePage() {
 
     async function handleSendMessage() {
         if (!user) return;
-        // Navigate with targetUser intent instead of creating a room immediately
-        navigate(`/chats`, { state: { targetUser: user } });
+        setChatStarting(true);
+        try {
+            const roomId = await startDirectChat(user.id);
+            navigate(`/chats/${roomId}`);
+        } catch (err) {
+            toast.error("Could not start chat.");
+        } finally {
+            setChatStarting(false);
+        }
     }
 
     const formatDate = (dateStr: string) => {
@@ -218,7 +227,7 @@ export function UserProfilePage() {
                                 {user.contact_status === "accepted" && (
                                     <Button 
                                         onClick={handleSendMessage}
-                                        isLoading={actionLoading}
+                                        isLoading={chatStarting}
                                         className="rounded-2xl px-8 h-12 shadow-xl shadow-primary/20 text-sm font-bold shrink-0"
                                     >
                                         <MessageCircle size={18} className="mr-2" />

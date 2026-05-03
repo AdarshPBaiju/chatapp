@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -37,11 +38,12 @@ type Message struct {
 	Target  string      `json:"target,omitempty"` // For P2P routing
 }
 
-// Hub manages distributed connections
+// Hub manages distributed connections and topic subscriptions
 type Hub struct {
 	// Local state
 	clients    map[*Client]bool
 	userToConn map[string]map[*Client]bool // user_id -> Set of Clients
+	topics     map[string]map[*Client]bool // topic -> Set of Clients
 	mu         sync.RWMutex
 
 	// Channels
@@ -60,6 +62,7 @@ func NewHub(serviceTag, nodeID string, rdb *redis.Client, handler MessageHandler
 	return &Hub{
 		clients:    make(map[*Client]bool),
 		userToConn: make(map[string]map[*Client]bool),
+		topics:     make(map[string]map[*Client]bool),
 		Broadcast:  make(chan []byte),
 		Register:   make(chan *Client),
 		Unregister: make(chan *Client),
@@ -86,21 +89,24 @@ func (h *Hub) Run(ctx context.Context) {
 			h.mu.Lock()
 			h.clients[client] = true
 			if client.UserID != "" {
+				client.UserID = strings.ToLower(client.UserID)
 				if h.userToConn[client.UserID] == nil {
 					h.userToConn[client.UserID] = make(map[*Client]bool)
 				}
 				h.userToConn[client.UserID][client] = true
-				
-				// 🚀 HYPER-OPTIMIZED: Initial Session Registration
+
 				if h.Redis != nil {
+					debug.Print(h.ServiceTag, fmt.Sprintf("Registering Presence: User=%s, Session=%s", client.UserID, client.SessionID))
 					h.Redis.SAdd(context.Background(), "user:sessions:"+client.UserID, client.SessionID)
 					h.Redis.Expire(context.Background(), "user:sessions:"+client.UserID, 120*time.Second)
-					
+					h.Redis.Set(context.Background(), "user:node:"+client.UserID, h.NodeID, 120*time.Second)
+
 					presenceKey := fmt.Sprintf("user:session:%s:%s", client.UserID, client.SessionID)
 					h.Redis.Set(context.Background(), presenceKey, h.NodeID, 60*time.Second)
-					
+
 					count, _ := h.Redis.SCard(context.Background(), "user:sessions:"+client.UserID).Result()
 					if count <= 1 {
+						debug.Print(h.ServiceTag, "Broadcasting ONLINE for "+client.UserID)
 						update := map[string]any{
 							"type": "user_presence",
 							"payload": map[string]any{
@@ -109,6 +115,7 @@ func (h *Hub) Run(ctx context.Context) {
 							},
 						}
 						data, _ := json.Marshal(update)
+						h.Redis.Publish(context.Background(), "presence:user:"+client.UserID, data)
 						h.Redis.Publish(context.Background(), "cluster:broadcast", data)
 					}
 				}
@@ -120,6 +127,8 @@ func (h *Hub) Run(ctx context.Context) {
 			h.mu.Lock()
 			if _, ok := h.clients[client]; ok {
 				delete(h.clients, client)
+				
+				// Cleanup user connections
 				if client.UserID != "" {
 					if set, ok := h.userToConn[client.UserID]; ok {
 						delete(set, client)
@@ -127,17 +136,21 @@ func (h *Hub) Run(ctx context.Context) {
 							delete(h.userToConn, client.UserID)
 						}
 					}
-					
+
 					// 🚀 HYPER-OPTIMIZED: Final Session Cleanup
 					if h.Redis != nil {
+						debug.Print(h.ServiceTag, fmt.Sprintf("Unregistering Presence: User=%s, Session=%s", client.UserID, client.SessionID))
 						h.Redis.SRem(context.Background(), "user:sessions:"+client.UserID, client.SessionID)
 						h.Redis.Del(context.Background(), "user:session:"+client.UserID+":"+client.SessionID)
-						
+
 						remaining, _ := h.Redis.SCard(context.Background(), "user:sessions:"+client.UserID).Result()
+						debug.Print(h.ServiceTag, fmt.Sprintf("Remaining Sessions for %s: %d", client.UserID, remaining))
 						if remaining == 0 {
+							h.Redis.Del(context.Background(), "user:node:"+client.UserID)
+							debug.Print(h.ServiceTag, "Broadcasting OFFLINE for "+client.UserID)
 							now := time.Now().UnixMilli()
 							h.Redis.Set(context.Background(), "user:last_seen:"+client.UserID, now, 0)
-							
+
 							update := map[string]any{
 								"type": "user_presence",
 								"payload": map[string]any{
@@ -146,32 +159,87 @@ func (h *Hub) Run(ctx context.Context) {
 								},
 							}
 							data, _ := json.Marshal(update)
+							h.Redis.Publish(context.Background(), "presence:user:"+client.UserID, data)
 							h.Redis.Publish(context.Background(), "cluster:broadcast", data)
 						}
 					}
 				}
+
+				// Cleanup topic subscriptions
+				for topic := range client.topics {
+					if set, ok := h.topics[topic]; ok {
+						delete(set, client)
+						if len(set) == 0 {
+							delete(h.topics, topic)
+						}
+					}
+				}
+				
 				close(client.Send)
 			}
 			h.mu.Unlock()
 			debug.Print(h.ServiceTag, "Connection closed: "+client.UserID)
 
 		case msg := <-h.Broadcast:
-			// Extreme High-Performance Fan-out via Goroutine Pool
 			h.mu.RLock()
 			for client := range h.clients {
-				go func(c *Client, m []byte) {
-					select {
-					case c.Send <- m:
-					case <-time.After(5 * time.Millisecond):
-					}
-				}(client, msg)
+				select {
+				case client.Send <- msg:
+				default:
+				}
 			}
 			h.mu.RUnlock()
 		}
 	}
 }
 
+func (h *Hub) Subscribe(client *Client, topic string) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	
+	if h.topics[topic] == nil {
+		h.topics[topic] = make(map[*Client]bool)
+		if h.Redis != nil {
+			go h.subscribeToTopic(context.Background(), topic)
+		}
+	}
+	h.topics[topic][client] = true
+	client.topics[topic] = true
+	debug.Print(h.ServiceTag, fmt.Sprintf("Client %s subscribed to %s", client.UserID, topic))
+}
+
+func (h *Hub) Unsubscribe(client *Client, topic string) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	
+	if set, ok := h.topics[topic]; ok {
+		delete(set, client)
+		if len(set) == 0 {
+			delete(h.topics, topic)
+		}
+	}
+	delete(client.topics, topic)
+}
+
+func (h *Hub) BroadcastToTopic(topic string, payload []byte) {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	
+	clients, ok := h.topics[topic]
+	if !ok {
+		return
+	}
+	
+	for client := range clients {
+		select {
+		case client.Send <- payload:
+		default:
+		}
+	}
+}
+
 func (h *Hub) SendToUser(userID string, payload []byte) bool {
+	userID = strings.ToLower(userID)
 	h.mu.RLock()
 	clients, ok := h.userToConn[userID]
 	if !ok || len(clients) == 0 {
@@ -179,7 +247,6 @@ func (h *Hub) SendToUser(userID string, payload []byte) bool {
 		return false
 	}
 
-	// Fan-out to all sessions for this user
 	for client := range clients {
 		select {
 		case client.Send <- payload:
@@ -190,7 +257,15 @@ func (h *Hub) SendToUser(userID string, payload []byte) bool {
 	return true
 }
 
-// subscribeToCluster listens for messages intended for users on this node
+func (h *Hub) HasLocalUser(userID string) bool {
+	userID = strings.ToLower(userID)
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+
+	clients, ok := h.userToConn[userID]
+	return ok && len(clients) > 0
+}
+
 func (h *Hub) subscribeToCluster(ctx context.Context) {
 	topic := "cluster:msg:" + h.NodeID
 	pubsub := h.Redis.Subscribe(ctx, topic, "cluster:broadcast")
@@ -198,18 +273,36 @@ func (h *Hub) subscribeToCluster(ctx context.Context) {
 
 	ch := pubsub.Channel()
 	for msg := range ch {
-		// Forward to local broadcast or specific user
 		h.Broadcast <- []byte(msg.Payload)
+	}
+}
+
+func (h *Hub) subscribeToTopic(ctx context.Context, topic string) {
+	pubsub := h.Redis.Subscribe(ctx, topic)
+	defer pubsub.Close()
+
+	ch := pubsub.Channel()
+	for msg := range ch {
+		h.BroadcastToTopic(topic, []byte(msg.Payload))
+		
+		// Optimization: If no more local subscribers, stop the goroutine
+		h.mu.RLock()
+		subscriberCount := len(h.topics[topic])
+		h.mu.RUnlock()
+		if subscriberCount == 0 {
+			return
+		}
 	}
 }
 
 // Client represents a single persistent connection
 type Client struct {
-	Hub    *Hub
-	Conn   *websocket.Conn
-	Send   chan []byte
+	Hub       *Hub
+	Conn      *websocket.Conn
+	Send      chan []byte
 	UserID    string
 	SessionID string
+	topics    map[string]bool
 }
 
 func (c *Client) ReadPump() {
@@ -269,7 +362,14 @@ func (h *Hub) ServeWs(w http.ResponseWriter, r *http.Request, userID string) *Cl
 		return nil
 	}
 	sessionID := fmt.Sprintf("%d", time.Now().UnixNano())
-	client := &Client{Hub: h, Conn: conn, Send: make(chan []byte, 1024), UserID: userID, SessionID: sessionID}
+	client := &Client{
+		Hub:       h,
+		Conn:      conn,
+		Send:      make(chan []byte, 1024),
+		UserID:    userID,
+		SessionID: sessionID,
+		topics:    make(map[string]bool),
+	}
 	h.Register <- client
 
 	go client.WritePump()

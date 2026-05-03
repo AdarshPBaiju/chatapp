@@ -46,7 +46,7 @@ class ContactManagementAPIView(generics.GenericAPIView):
         if not action or not target_client_id:
             return ResponseFactory.error(
                 message="Action and client_id are required.",
-                status_code=status.HTTP_400_BAD_REQUEST,
+                code=status.HTTP_400_BAD_REQUEST,
             )
 
         owner = request.user.client
@@ -54,6 +54,12 @@ class ContactManagementAPIView(generics.GenericAPIView):
             target = Client.objects.get(id=target_client_id)
         except Client.DoesNotExist:
             return ResponseFactory.error(message="Target user not found.")
+
+        if target.id == owner.id:
+            return ResponseFactory.error(
+                message="You cannot add yourself as a contact.",
+                code=status.HTTP_400_BAD_REQUEST,
+            )
 
         if action == "add":
             # Check if already contacts
@@ -155,7 +161,7 @@ class ContactListAPIView(generics.ListAPIView):
 
         return Client.objects.filter(
             contacted_by__owner=owner, contacted_by__status=target_status
-        )
+        ).exclude(id=owner.id).distinct()
 
     def list(self, request, *args, **kwargs):
         queryset = self.get_queryset()
@@ -177,6 +183,11 @@ class PublicClientProfileAPIView(generics.RetrieveAPIView):
 
     def retrieve(self, request, *args, **kwargs):
         instance = self.get_object()
+        if instance.id == request.user.client.id:
+            return ResponseFactory.error(
+                message="Use your profile settings to view your own profile.",
+                code=status.HTTP_400_BAD_REQUEST,
+            )
         serializer = self.get_serializer(instance)
         return ResponseFactory.success(
             message="Public profile retrieved.", data=serializer.data
