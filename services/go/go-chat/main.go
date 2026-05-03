@@ -84,7 +84,6 @@ func main() {
 	flag.Parse()
 
 	// 2. Initialize Infrastructure
-	var rdb *redis.Client
 	if strings.HasPrefix(redisURL, "redis://") {
 		opts, err := redis.ParseURL(redisURL)
 		if err != nil {
@@ -94,7 +93,7 @@ func main() {
 	} else {
 		rdb = redis.NewClient(&redis.Options{Addr: redisURL})
 	}
-	producer := messaging.NewProducer(strings.Split(kafkaBrokers, ","))
+	producer = messaging.NewProducer(strings.Split(kafkaBrokers, ","))
 	defer producer.Close()
 
 	// 3. Define Messaging Logic

@@ -32,13 +32,14 @@ export function ChatPage() {
     loadMoreMessages,
     pendingUser,
     setPendingUser,
-    onlineUsers
+    onlineUsers,
+    isReady
   } = useChatStore();
   const currentUser = useAuthStore(state => state.user);
   const currentUserId = normalizeUserId(currentUser?.id);
 
   const [input, setInput] = useState("");
-  const isConnected = chatSocket.isConnected;
+  const isConnected = isReady;
   const feedRef = useRef<HTMLDivElement>(null);
   const topSentinelRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
