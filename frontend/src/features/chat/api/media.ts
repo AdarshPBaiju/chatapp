@@ -7,21 +7,29 @@ export interface SignedUrlResponse {
 }
 
 export const requestSignedUrl = async (filename: string, contentType: string): Promise<SignedUrlResponse> => {
-  const response = await httpClient.post("/v1/media/signed-url", {
+  const response = await httpClient.post("/media/signed-url", {
     filename,
     content_type: contentType,
   });
   return response.data.data;
 };
 
-export const uploadFileToS3 = async (
+export const uploadFileToS3 = (
   file: File,
   signedUrl: string,
-  onProgress?: (progress: number) => void
+  onProgress?: (progress: number) => void,
+  cancelRef?: { abort?: () => void }
 ): Promise<void> => {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     
+    if (cancelRef) {
+      cancelRef.abort = () => {
+        xhr.abort();
+        reject(new Error("UPLOAD_CANCELLED"));
+      };
+    }
+
     xhr.open("PUT", signedUrl);
     xhr.setRequestHeader("Content-Type", file.type);
 
@@ -43,6 +51,7 @@ export const uploadFileToS3 = async (
     };
 
     xhr.onerror = () => reject(new Error("Network error during upload"));
+    xhr.onabort = () => reject(new Error("UPLOAD_CANCELLED"));
     xhr.send(file);
   });
 };

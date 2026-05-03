@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
-import { Search, MoreVertical, Send, Phone, Video, Info, Paperclip, Smile, MessageCircle, ArrowLeft, X, File as FileIcon } from "lucide-react";
+import { Search, MoreVertical, Send, Phone, Video, Info, Paperclip, Smile, MessageCircle, ArrowLeft, X, File as FileIcon, RotateCcw, Check, Image as ImageIcon, FileText, Music, Play, Download, Maximize2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/shared/lib/utils";
 import { chatSocket } from "@/shared/api/socket";
@@ -41,7 +41,19 @@ export function ChatPage() {
   const [input, setInput] = useState("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const isConnected = isReady;
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [viewingMedia, setViewingMedia] = useState<any | null>(null);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [fileTypeFilter, setFileTypeFilter] = useState("image/*,video/*");
+  const [shouldCompress, setShouldCompress] = useState(true);
+
+  const onFileSelect = (filter: string, compress: boolean) => {
+    setFileTypeFilter(filter);
+    setShouldCompress(compress);
+    setIsMenuOpen(false);
+    setTimeout(() => fileInputRef.current?.click(), 100);
+  };
   const feedRef = useRef<HTMLDivElement>(null);
   const topSentinelRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -222,14 +234,7 @@ export function ChatPage() {
     }
   }, [input, selectedFile, activeRoomId, pendingUser, sendMessage]);
 
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setSelectedFile(file);
-    }
-    // Reset input value to allow selecting same file again
-    e.target.value = "";
-  };
+
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -423,7 +428,7 @@ export function ChatPage() {
                       const otherUserId = normalizeUserId(otherUser?.user_id);
                       const isOnline = otherUserId ? onlineUsers.has(otherUserId) : false;
                       const lastSeenTime = otherUserId ? useChatStore.getState().lastSeen[otherUserId] : null;
-                      
+
                       return (
                         <p className={cn(
                           "text-[10px] font-bold flex items-center gap-1",
@@ -471,9 +476,18 @@ export function ChatPage() {
                   </div>
                 )}
 
-                {messages.map((msg) => {
-                  const currentUser = useAuthStore.getState().user;
-                  const isMine = isSameUser(msg.sender_id, currentUser?.id);
+                {messages.map((msg, index) => {
+                  const isMine = isSameUser(msg.sender_id, currentUserId);
+                  const prevMsg = index > 0 ? messages[index - 1] : null;
+
+                  // Grouping logic: Apply ONLY if BOTH the current and previous messages are media
+                  // Normal text messages always show full metadata
+                  const isMediaGrouping = msg.metadata?.attachment && prevMsg?.metadata?.attachment;
+                  const isFirstInGroup = !prevMsg ||
+                    !isSameUser(prevMsg.sender_id, msg.sender_id) ||
+                    (msg.sent_at - prevMsg.sent_at > 120000) ||
+                    !isMediaGrouping;
+
                   return (
                     <motion.div
                       key={msg.id}
@@ -483,78 +497,245 @@ export function ChatPage() {
                       ref={(el) => {
                         if (el) readObserver.current?.observe(el);
                       }}
-                      initial={{ opacity: 0, y: 10, scale: 0.97 }}
-                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      initial={isFirstInGroup ? { opacity: 0, y: 10, scale: 0.97 } : { opacity: 0, x: isMine ? 10 : -10 }}
+                      animate={{ opacity: 1, y: 0, x: 0, scale: 1 }}
                       transition={{ duration: 0.2, ease: "easeOut" }}
-                      className={cn("flex flex-col gap-1 max-w-[80%]", isMine && "ml-auto items-end")}
+                      className={cn(
+                        "flex flex-col max-w-[85%] lg:max-w-[70%]",
+                        isMine ? "ml-auto items-end" : "items-start",
+                        isFirstInGroup ? "mt-4" : "mt-1"
+                      )}
                     >
-                        <div className={cn(
-                          "p-4 rounded-2xl text-sm shadow-sm flex flex-col gap-2",
-                          isMine
-                            ? "bg-primary text-primary-foreground rounded-br-sm shadow-lg shadow-primary/20"
-                            : "bg-muted rounded-tl-sm"
-                        )}>
-                          {msg.metadata?.attachment && (
-                            <div className="relative rounded-lg overflow-hidden bg-muted/5 border border-border/10">
-                              {msg.metadata.attachment.type === "IMAGE" && (
-                                <div className="relative aspect-auto min-h-[100px] min-w-[200px]">
-                                  <img 
-                                    src={msg.metadata.attachment.local_url || msg.metadata.attachment.thumbnail_url || msg.metadata.attachment.url} 
-                                    alt="attachment"
-                                    className={cn(
-                                      "max-h-[300px] w-full object-contain transition-all duration-500",
-                                      !msg.metadata.attachment.processed && !msg.metadata.attachment.local_url && "blur-lg grayscale"
-                                    )}
-                                  />
-                                  {msg.status === "sending" && msg.metadata.attachment.progress < 100 && (
-                                    <div className="absolute inset-0 bg-black/40 flex items-center justify-center backdrop-blur-[2px]">
-                                      <div className="flex flex-col items-center gap-2">
-                                        <div className="h-8 w-8 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                                        <span className="text-[10px] text-white font-bold">{Math.round(msg.metadata.attachment.progress)}%</span>
-                                      </div>
-                                    </div>
+                      {/* Optional: Show sender name for group chats if it's the first in a group */}
+                      {isFirstInGroup && !isMine && currentChat?.type === "GROUP" && (
+                        <span className="text-[10px] font-bold text-muted-foreground ml-3 mb-1 uppercase tracking-wider">
+                          {msg.sender_name || "User"}
+                        </span>
+                      )}
+
+                      <div className={cn(
+                        "relative group/msg transition-all duration-200",
+                        "rounded-2xl shadow-sm flex flex-col overflow-hidden",
+                        isMine
+                          ? cn(
+                            "bg-primary text-primary-foreground shadow-lg shadow-primary/10",
+                            isFirstInGroup ? "rounded-br-sm" : "rounded-r-sm"
+                          )
+                          : cn(
+                            "bg-muted/80 backdrop-blur-sm border border-border/40",
+                            isFirstInGroup ? "rounded-tl-sm" : "rounded-l-sm"
+                          ),
+                        // Edge-to-edge if it's ONLY an image
+                        msg.metadata?.attachment?.type === "IMAGE" && !msg.content && "p-0"
+                      )}>
+                        {msg.metadata?.attachment && (
+                          <div className={cn(
+                            "relative overflow-hidden",
+                            msg.content ? "p-1 pb-0" : "p-0"
+                          )}>
+                            {msg.metadata.attachment.type === "IMAGE" && (
+                              <div
+                                onClick={() => setViewingMedia(msg)}
+                                className="relative group/img overflow-hidden cursor-pointer"
+                              >
+                                <img
+                                  src={msg.metadata.attachment.local_url || msg.metadata.attachment.thumbnail_url || msg.metadata.attachment.url}
+                                  alt="attachment"
+                                  className={cn(
+                                    "max-h-[400px] w-full object-contain transition-all duration-500 hover:scale-[1.02]",
+                                    !msg.metadata.attachment.processed && !msg.metadata.attachment.local_url && "blur-lg grayscale"
                                   )}
+                                />
+                                {/* Overlay icon for premium feel */}
+                                <div className="absolute top-2 right-2 p-1.5 rounded-full bg-black/20 text-white opacity-0 group-hover/img:opacity-100 transition-opacity">
+                                  <Maximize2 size={14} />
                                 </div>
-                              )}
-                              {msg.metadata.attachment.type !== "IMAGE" && (
-                                <div className="p-3 flex items-center gap-3 bg-muted/10">
-                                  <FileIcon size={24} className="text-primary/60" />
-                                  <div className="flex-1 min-w-0">
-                                    <p className="text-xs font-bold truncate">{msg.metadata.attachment.filename}</p>
-                                    <p className="text-[9px] text-muted-foreground/60">{(msg.metadata.attachment.size / 1024).toFixed(1)} KB</p>
+
+                                {msg.status === "sending" && msg.metadata.attachment.progress < 100 && !msg.metadata.attachment.isSuccess && (
+                                  <div className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center backdrop-blur-[2px] transition-all duration-300">
+                                    <div className="relative h-14 w-14 flex items-center justify-center">
+                                      {/* WhatsApp Style Circular Progress */}
+                                      <svg className="absolute inset-0 h-full w-full -rotate-90 transform">
+                                        <circle
+                                          cx="28"
+                                          cy="28"
+                                          r="24"
+                                          stroke="currentColor"
+                                          strokeWidth="3.5"
+                                          fill="transparent"
+                                          className="text-white/20"
+                                        />
+                                        <circle
+                                          cx="28"
+                                          cy="28"
+                                          r="24"
+                                          stroke="currentColor"
+                                          strokeWidth="3.5"
+                                          fill="transparent"
+                                          strokeDasharray={151}
+                                          strokeDashoffset={151 - (151 * msg.metadata.attachment.progress) / 100}
+                                          strokeLinecap="round"
+                                          className="text-white transition-all duration-500 ease-out"
+                                        />
+                                      </svg>
+
+                                      {/* Central Action Circle */}
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          useChatStore.getState().cancelUpload(msg.id);
+                                        }}
+                                        className="relative z-10 h-10 w-10 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-all group/cancel"
+                                      >
+                                        <X size={20} className="group-hover/cancel:scale-110 transition-transform" />
+                                      </button>
+                                    </div>
+
+                                    {/* Centered Upload Stats */}
+                                    <div className="mt-3 px-3 py-1 rounded-full bg-black/40 backdrop-blur-md border border-white/10 shadow-xl">
+                                      <p className="text-[11px] text-white font-bold tracking-wide">
+                                        {(() => {
+                                          const total = msg.metadata.attachment.size;
+                                          const loaded = (total * msg.metadata.attachment.progress) / 100;
+                                          const format = (bytes: number) =>
+                                            bytes > 1024 * 1024
+                                              ? `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+                                              : `${(bytes / 1024).toFixed(0)} KB`;
+                                          return `${format(loaded)} / ${format(total)}`;
+                                        })()}
+                                      </p>
+                                    </div>
+                                  </div>
+                                )}
+
+                                {msg.metadata?.attachment?.isSuccess && (
+                                  <div className="absolute inset-0 bg-green-500/20 flex flex-col items-center justify-center backdrop-blur-[2px] animate-in fade-in duration-500">
+                                    <div className="h-12 w-12 rounded-full bg-green-500 text-white flex items-center justify-center shadow-lg animate-in zoom-in duration-300">
+                                      <Check size={24} strokeWidth={4} />
+                                    </div>
+                                    <span className="mt-2 text-[10px] font-bold text-white uppercase tracking-widest drop-shadow-md">Success</span>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+
+                            {msg.metadata.attachment.type === "VIDEO" && (
+                              <div
+                                onClick={() => setViewingMedia(msg)}
+                                className="relative group/video cursor-pointer bg-black overflow-hidden"
+                              >
+                                {msg.metadata.attachment.thumbnail_url ? (
+                                  <img
+                                    src={msg.metadata.attachment.thumbnail_url}
+                                    className="max-h-[300px] w-full object-cover opacity-80"
+                                  />
+                                ) : (
+                                  <div className="h-[200px] w-full flex items-center justify-center bg-muted">
+                                    <Video size={40} className="text-muted-foreground/20" />
+                                  </div>
+                                )}
+                                <div className="absolute inset-0 flex items-center justify-center">
+                                  <div className="h-14 w-14 rounded-full bg-white/20 backdrop-blur-md border border-white/30 flex items-center justify-center text-white group-hover:scale-110 transition-transform">
+                                    <Play size={28} fill="currentColor" />
                                   </div>
                                 </div>
-                              )}
-                            </div>
-                          )}
-                          {msg.content && <div>{msg.content}</div>}
-                        </div>
-                      <div className="flex items-center gap-1 px-1">
-                        <span className="text-[9px] text-muted-foreground">{formatTime(msg.sent_at)}</span>
-                        {isMine && (
-                          <div className="flex items-center ml-1">
-                            <div className="flex items-center ml-1">
-                              {msg.status === "sending" ? (
-                                <span className="text-[9px] text-muted-foreground/50 italic animate-pulse">sending...</span>
-                              ) : msg.status === "acknowledged" ? (
-                                <span className="text-[11px] text-muted-foreground/40 leading-none">✓</span>
-                              ) : msg.status === "failed" ? (
-                                <span className="text-[9px] text-destructive font-bold">failed</span>
-                              ) : (
+                              </div>
+                            )}
+
+                            {(msg.metadata.attachment.type === "DOCUMENT" || msg.metadata.attachment.type === "AUDIO") && (
+                              <div className="p-3 bg-muted/30 flex items-center gap-3 group/doc hover:bg-muted/50 transition-colors">
                                 <div className={cn(
-                                  "flex items-center transition-colors duration-300",
-                                  msg.status === "read" ? "text-blue-400" : "text-primary/80"
+                                  "h-12 w-12 rounded-xl flex items-center justify-center shadow-sm",
+                                  msg.metadata.attachment.type === "AUDIO" ? "bg-orange-500 text-white" : "bg-primary text-primary-foreground"
                                 )}>
-                                  <span className={cn(
-                                    "text-[11px] leading-none",
-                                    msg.status === "sent" ? "font-normal" : "font-bold"
-                                  )}>✓</span>
-                                  {(msg.status === "delivered" || msg.status === "read") && (
-                                    <span className="text-[11px] leading-none -ml-1 font-bold">✓</span>
-                                  )}
+                                  {msg.metadata.attachment.type === "AUDIO" ? <Music size={24} /> : <FileText size={24} />}
                                 </div>
-                              )}
-                            </div>
+                                <div className="flex-1 overflow-hidden">
+                                  <p className="text-sm font-bold truncate">{msg.metadata.attachment.filename}</p>
+                                  <p className="text-[11px] text-muted-foreground uppercase font-black tracking-widest mt-0.5">
+                                    {(() => {
+                                      const bytes = msg.metadata.attachment.size;
+                                      return bytes > 1024 * 1024
+                                        ? `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+                                        : `${(bytes / 1024).toFixed(0)} KB`;
+                                    })()} • {msg.metadata.attachment.type}
+                                  </p>
+                                </div>
+                                <a
+                                  href={msg.metadata.attachment.url}
+                                  download
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="h-10 w-10 rounded-full flex items-center justify-center text-muted-foreground hover:bg-primary/10 hover:text-primary transition-all"
+                                >
+                                  <Download size={20} />
+                                </a>
+                              </div>
+                            )}
+
+                            {msg.metadata.attachment.type !== "IMAGE" && msg.metadata.attachment.type !== "VIDEO" && msg.metadata.attachment.type !== "DOCUMENT" && msg.metadata.attachment.type !== "AUDIO" && (
+                              <div className="p-3 flex items-center gap-3 bg-muted/20">
+                                <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
+                                  <FileIcon size={20} />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-xs font-bold truncate">{msg.metadata.attachment.filename}</p>
+                                  <p className="text-[9px] opacity-60">{(msg.metadata.attachment.size / 1024).toFixed(1)} KB</p>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                        {msg.content && (
+                          <div className={cn(
+                            "px-4 py-2.5 text-sm leading-relaxed whitespace-pre-wrap break-words",
+                            msg.metadata?.attachment && "pt-2"
+                          )}>
+                            {msg.content}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Metadata Row: Only show if it's the last in a group OR someone is hovering */}
+                      <div className={cn(
+                        "flex items-center gap-2 mt-1 px-1 transition-opacity duration-200",
+                        isFirstInGroup ? "opacity-100" : "opacity-0 group-hover/msg:opacity-100"
+                      )}>
+                        <span className="text-[10px] text-muted-foreground/60 font-medium">{formatTime(msg.sent_at)}</span>
+                        {isMine && (
+                          <div className="flex items-center gap-1.5 ml-auto">
+                            {msg.status === "sending" ? (
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-[9px] text-primary/60 font-bold italic animate-pulse">
+                                  {msg.metadata?.attachment ? `uploading ${Math.round(msg.metadata.attachment.progress)}%` : "sending..."}
+                                </span>
+                              </div>
+                            ) : msg.status === "acknowledged" ? (
+                              <span className="text-[11px] text-muted-foreground/40 leading-none">✓</span>
+                            ) : msg.status === "failed" ? (
+                              <div className="flex items-center gap-2 bg-destructive/5 px-2 py-0.5 rounded-full border border-destructive/10">
+                                <span className="text-[9px] text-destructive font-black uppercase tracking-wider">FAILED</span>
+                                <button
+                                  onClick={() => useChatStore.getState().resendMessage(msg.id)}
+                                  className="h-4 w-4 text-destructive flex items-center justify-center hover:scale-125 transition-all active:rotate-180"
+                                  title="Retry sending"
+                                >
+                                  <RotateCcw size={10} className="hover:animate-spin" />
+                                </button>
+                              </div>
+                            ) : (
+                              <div className={cn(
+                                "flex items-center ml-1 transition-colors duration-300",
+                                msg.status === "read" ? "text-blue-500" : "text-primary/70"
+                              )}>
+                                <span className={cn(
+                                  "text-[11px] leading-none",
+                                  msg.status === "sent" ? "font-normal" : "font-bold"
+                                )}>✓</span>
+                                {(msg.status === "delivered" || msg.status === "read") && (
+                                  <span className="text-[11px] leading-none -ml-1 font-bold">✓</span>
+                                )}
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>
@@ -578,7 +759,7 @@ export function ChatPage() {
                       <p className="text-xs font-bold truncate">{selectedFile.name}</p>
                       <p className="text-[10px] text-muted-foreground">{(selectedFile.size / 1024).toFixed(1)} KB</p>
                     </div>
-                    <button 
+                    <button
                       onClick={() => setSelectedFile(null)}
                       className="h-8 w-8 rounded-lg hover:bg-destructive/10 hover:text-destructive flex items-center justify-center transition-colors"
                     >
@@ -587,18 +768,87 @@ export function ChatPage() {
                   </div>
                 )}
                 <div className="relative flex items-end gap-3 bg-muted/50 border border-transparent focus-within:border-primary/30 focus-within:bg-background p-2 rounded-2xl transition-all duration-300">
+                  <div className="flex items-center gap-2">
+                    <div className="relative">
+                      <button
+                        onClick={() => setIsMenuOpen(!isMenuOpen)}
+                        className={cn(
+                          "p-2.5 rounded-full transition-all duration-200",
+                          isMenuOpen ? "bg-primary text-primary-foreground scale-110 rotate-45" : "text-muted-foreground hover:bg-muted"
+                        )}
+                      >
+                        <Paperclip size={22} />
+                      </button>
+
+                      {/* WhatsApp Style Attachment Menu */}
+                      <AnimatePresence>
+                        {isMenuOpen && (
+                          <>
+                            <motion.div
+                              initial={{ opacity: 0 }}
+                              animate={{ opacity: 1 }}
+                              exit={{ opacity: 0 }}
+                              onClick={() => setIsMenuOpen(false)}
+                              className="fixed inset-0 z-40"
+                            />
+                            <motion.div
+                              initial={{ opacity: 0, scale: 0.8, y: 20, x: -20 }}
+                              animate={{ opacity: 1, scale: 1, y: 0, x: 0 }}
+                              exit={{ opacity: 0, scale: 0.8, y: 20, x: -20 }}
+                              className="absolute bottom-14 left-0 z-50 bg-background/95 backdrop-blur-xl border border-border shadow-2xl rounded-3xl p-3 grid grid-cols-2 gap-2 min-w-[200px]"
+                            >
+                              <button
+                                onClick={() => onFileSelect("image/*,video/*", true)}
+                                className="flex flex-col items-center gap-2 p-4 rounded-2xl hover:bg-primary/10 text-primary transition-colors group"
+                              >
+                                <div className="h-12 w-12 rounded-full bg-blue-500 text-white flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
+                                  <ImageIcon size={24} />
+                                </div>
+                                <span className="text-xs font-bold">Gallery</span>
+                              </button>
+
+                              <button
+                                onClick={() => onFileSelect("*/*", false)}
+                                className="flex flex-col items-center gap-2 p-4 rounded-2xl hover:bg-primary/10 text-primary transition-colors group"
+                              >
+                                <div className="h-12 w-12 rounded-full bg-purple-500 text-white flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
+                                  <FileText size={24} />
+                                </div>
+                                <span className="text-xs font-bold">Document</span>
+                              </button>
+
+                              <button
+                                onClick={() => onFileSelect("audio/*", false)}
+                                className="flex flex-col items-center gap-2 p-4 rounded-2xl hover:bg-primary/10 text-primary transition-colors group"
+                              >
+                                <div className="h-12 w-12 rounded-full bg-orange-500 text-white flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
+                                  <Music size={24} />
+                                </div>
+                                <span className="text-xs font-bold">Audio</span>
+                              </button>
+                            </motion.div>
+                          </>
+                        )}
+                      </AnimatePresence>
+                    </div>
+
+                    <button className="p-2.5 text-muted-foreground hover:bg-muted rounded-full transition-colors">
+                      <Smile size={22} />
+                    </button>
+                  </div>
+
                   <input
                     type="file"
                     ref={fileInputRef}
-                    onChange={handleFileSelect}
                     className="hidden"
+                    accept={fileTypeFilter}
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) sendMessage(activeRoomId, "", file, !shouldCompress);
+                      e.target.value = ""; // Clear for next selection
+                    }}
                   />
-                  <button 
-                    onClick={() => fileInputRef.current?.click()}
-                    className="h-10 w-10 shrink-0 rounded-xl hover:bg-muted flex items-center justify-center transition-colors"
-                  >
-                    <Paperclip size={20} className="text-muted-foreground" />
-                  </button>
+
                   <textarea
                     ref={textareaRef}
                     value={input}
@@ -608,9 +858,6 @@ export function ChatPage() {
                     rows={1}
                     className="flex-1 bg-transparent border-none outline-none resize-none py-2.5 text-sm max-h-32 custom-scrollbar"
                   />
-                  <button className="h-10 w-10 shrink-0 rounded-xl hover:bg-muted flex items-center justify-center transition-colors">
-                    <Smile size={20} className="text-muted-foreground" />
-                  </button>
                   <button
                     onClick={handleSend}
                     disabled={(!input.trim() && !selectedFile) || !isConnected}
@@ -648,6 +895,71 @@ export function ChatPage() {
           )}
         </AnimatePresence>
       </main>
+      {/* Full-screen Media Viewer */}
+      <AnimatePresence>
+        {viewingMedia && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] bg-black/95 backdrop-blur-xl flex flex-col"
+          >
+            {/* Header */}
+            <div className="p-4 flex items-center justify-between text-white bg-gradient-to-b from-black/60 to-transparent">
+              <div className="flex items-center gap-4">
+                <button onClick={() => setViewingMedia(null)} className="p-2 hover:bg-white/10 rounded-full">
+                  <ArrowLeft size={24} />
+                </button>
+                <div>
+                  <p className="font-bold">{viewingMedia.sender_name || "Gallery"}</p>
+                  <p className="text-xs text-white/60">{new Date(viewingMedia.sent_at).toLocaleString()}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <a
+                  href={viewingMedia.metadata.attachment.url}
+                  download
+                  className="p-2.5 hover:bg-white/10 rounded-full transition-colors"
+                >
+                  <Download size={22} />
+                </a>
+                <button onClick={() => setViewingMedia(null)} className="p-2.5 hover:bg-white/10 rounded-full">
+                  <X size={22} />
+                </button>
+              </div>
+            </div>
+
+            {/* Content */}
+            <div className="flex-1 flex items-center justify-center p-4">
+              {viewingMedia.metadata.attachment.type === "IMAGE" ? (
+                <motion.img
+                  layoutId={viewingMedia.id}
+                  src={viewingMedia.metadata.attachment.url}
+                  className="max-h-full max-w-full object-contain shadow-2xl"
+                  initial={{ scale: 0.9 }}
+                  animate={{ scale: 1 }}
+                />
+              ) : (
+                <video
+                  src={viewingMedia.metadata.attachment.url}
+                  controls
+                  autoPlay
+                  className="max-h-full max-w-full shadow-2xl"
+                />
+              )}
+            </div>
+
+            {/* Footer / Caption */}
+            {viewingMedia.content && (
+              <div className="p-8 text-center bg-gradient-to-t from-black/80 to-transparent">
+                <p className="text-white text-lg max-w-2xl mx-auto leading-relaxed">
+                  {viewingMedia.content}
+                </p>
+              </div>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

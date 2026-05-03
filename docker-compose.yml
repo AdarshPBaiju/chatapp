@@ -69,8 +69,15 @@ services:
     depends_on:
       minio:
         condition: service_healthy
-    entrypoint: >
-      /bin/sh -c " /usr/bin/mc alias set myminio http://minio:9000 ${MINIO_ACCESS_KEY} ${MINIO_SECRET_KEY}; /usr/bin/mc mb myminio/chatapp-media || true; /usr/bin/mc anonymous set download myminio/chatapp-media/thumbnails; exit 0; "
+    entrypoint: |
+      /bin/sh -c "
+      /usr/bin/mc alias set myminio http://minio:9000 ${MINIO_ACCESS_KEY} ${MINIO_SECRET_KEY};
+      /usr/bin/mc mb myminio/chatapp || true;
+      /usr/bin/mc anonymous set download myminio/chatapp/media/thumbnails;
+      echo '{\"CORSRules\":[{\"AllowedHeaders\":[\"*\"],\"AllowedMethods\":[\"PUT\",\"GET\",\"POST\"],\"AllowedOrigins\":[\"*\"],\"ExposeHeaders\":[\"ETag\"],\"MaxAgeSeconds\":3000}]}' > /tmp/cors.json;
+      /usr/bin/mc cors set myminio/chatapp /tmp/cors.json;
+      exit 0;
+      "
     networks:
       - chatapp_network
 

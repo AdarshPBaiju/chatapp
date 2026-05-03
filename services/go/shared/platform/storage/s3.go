@@ -1,8 +1,10 @@
 package storage
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"net/url"
 	"time"
 
@@ -43,7 +45,6 @@ func NewS3Client(cfg S3Config) (*S3Client, error) {
 
 // GeneratePresignedPutURL generates a temporary URL for uploading a file directly to S3.
 func (s *S3Client) GeneratePresignedPutURL(ctx context.Context, key string, contentType string, expires time.Duration) (*url.URL, error) {
-	reqParams := make(url.Values)
 	// We could add more constraints here if needed
 	
 	presignedURL, err := s.client.PresignedPutObject(ctx, s.bucketName, key, expires)
@@ -76,8 +77,12 @@ func (s *S3Client) GetObject(ctx context.Context, key string) (*minio.Object, er
 }
 
 func (s *S3Client) PutObject(ctx context.Context, key string, data []byte, contentType string) (minio.UploadInfo, error) {
-	reader := minio.NewBufferedReader(data)
-	return s.client.PutObject(ctx, s.bucketName, key, reader, int64(len(data)), minio.PutObjectOptions{
+	reader := bytes.NewReader(data)
+	return s.PutObjectStream(ctx, key, reader, int64(len(data)), contentType)
+}
+
+func (s *S3Client) PutObjectStream(ctx context.Context, key string, reader io.Reader, size int64, contentType string) (minio.UploadInfo, error) {
+	return s.client.PutObject(ctx, s.bucketName, key, reader, size, minio.PutObjectOptions{
 		ContentType: contentType,
 	})
 }

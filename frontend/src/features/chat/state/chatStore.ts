@@ -3,6 +3,7 @@ import { chatSocket, presenceSocket } from "@/shared/api/socket";
 import { httpClient } from "@/shared/http/client";
 import { useAuthStore } from "@/modules/auth/state/authState";
 import { requestSignedUrl, uploadFileToS3 } from "@/features/chat/api/media";
+import { compressImage } from "@/features/chat/lib/mediaUtils";
 
 interface Room {
   id: string;
@@ -28,6 +29,7 @@ interface Message {
   temp_id?: string;
   idempotency_key?: string;
   sender_id: string;
+  sender_name?: string;
   room_id: string;
   content: string;
   sequence_id?: number;
@@ -53,7 +55,7 @@ interface ChatState {
   lastSeen: Record<string, number>;
   isReady: boolean;
   fetchRooms: () => Promise<void>;
-  fetchHistory: (roomId: string) => Promise<void>;
+  fetchHistory: (roomId: string, beforeSeq?: number) => Promise<void>;
   fetchPresence: (userIds: string[]) => Promise<void>;
   getPresence: (userIds: string[]) => void;
   subscribePresence: (userIds: string[]) => void;
@@ -62,14 +64,19 @@ interface ChatState {
   flushOutbox: () => Promise<void>;
   setActiveRoom: (roomId: string | null) => void;
   loadMoreMessages: (roomId: string) => Promise<void>;
-  updateMessageStatus: (messageId: string, status: Message["status"]) => void;
+  updateMessageStatus: (tempId: string, status: Message["status"], messageId?: string) => void;
   setTyping: (roomId: string, userId: string, isTyping: boolean) => void;
-  sendMessage: (roomId: string | null, content: string, file?: File) => Promise<void>;
+  sendMessage: (roomId: string | null, content: string, file?: File, skipCompression?: boolean) => Promise<void>;
   markAsRead: (roomId: string, sequenceId: number) => void;
   setPendingUser: (user: any | null) => void;
   addMessages: (messages: Message[], skipUnread?: boolean) => void;
   addMessage: (message: Message, skipUnread?: boolean) => void;
+  cancelUpload: (tempId: string) => void;
+  resendMessage: (tempId: string, skipCompression?: boolean) => Promise<void>;
 }
+
+const abortControllers = new Map<string, { abort: () => void }>();
+const failedFiles = new Map<string, File>();
 
 const pendingAckTimers = new Map<string, ReturnType<typeof setTimeout>>();
 const roomHistoryRequests = new Map<string, Promise<void>>();
@@ -119,7 +126,13 @@ function schedulePendingAck(tempId: string) {
     tempId,
     setTimeout(() => {
       pendingAckTimers.delete(tempId);
-    }, 15000),
+      const state = useChatStore.getState();
+      const msg = state.messages[tempId];
+      if (msg && msg.status === "sending") {
+        console.log(`⏳ Message ${tempId} timed out waiting for ACK`);
+        state.updateMessageStatus(tempId, "failed");
+      }
+    }, 30000),
   );
 }
 
@@ -155,11 +168,13 @@ function mapHistoryMessage(roomId: string, msg: any): Message {
   return {
     id: msg.id,
     sender_id: senderId,
+    sender_name: msg.sender_name || msg.sender?.full_name || msg.sender?.username,
     room_id: msg.room_id || roomId,
     content: msg.content,
     sequence_id: msg.sequence_id,
     sent_at: Number.isFinite(sentAt) ? sentAt : Date.now(),
     status: (msg.status || (senderId === currentUserId ? "sent" : "read")).toLowerCase() as any,
+    metadata: msg.metadata,
   };
 }
 
@@ -240,7 +255,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       if (normalized.length === 0) return;
       const response = await fetch(`${window.location.origin}/presence?user_ids=${normalized.join(",")}`);
       const statusMap = await response.json();
-      
+
       set((state) => {
         const newOnlineUsers = new Set(state.onlineUsers);
         Object.entries(statusMap).forEach(([id, status]) => {
@@ -314,9 +329,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   flushOutbox: async () => { },
 
-  fetchHistory: async (roomId) => {
+  fetchHistory: async (roomId, beforeSeq) => {
     const room = get().rooms[roomId];
-    if (room?.messageIds.length && !chatSocket.isConnected) {
+    if (room?.messageIds.length && !chatSocket.isConnected && !beforeSeq) {
       return;
     }
     await get().syncRoom(roomId);
@@ -343,7 +358,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
     if (roomId) {
       void get().fetchHistory(roomId);
-      
+
       const newRoom = get().rooms[roomId];
       if (newRoom) {
         const pids = newRoom.participants.map(p => p.user_id);
@@ -432,7 +447,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
         // 8. Update Room Metadata (Unread count, Last Message)
         const shouldIncrementUnread = !skipUnread && state.activeRoomId !== roomId && normalizeUserId(mergedMessage.sender_id) !== currentUserId && !existingId;
-        
+
         updatedRooms[roomId] = {
           ...room,
           messageIds: finalIds,
@@ -499,15 +514,16 @@ export const useChatStore = create<ChatState>((set, get) => ({
     }
   },
 
-  updateMessageStatus: (messageId, status) =>
+  updateMessageStatus: (tempId, status, messageId) =>
     set((state) => {
-      const existing = state.messages[messageId];
+      const id = messageId || tempId;
+      const existing = state.messages[id];
       if (!existing) return state;
 
       return {
         messages: {
           ...state.messages,
-          [messageId]: { ...existing, status },
+          [id]: { ...existing, status },
         },
       };
     }),
@@ -529,7 +545,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       };
     }),
 
-  sendMessage: async (roomId, content, file) => {
+  sendMessage: async (roomId, content, file, skipCompression = false) => {
     const state = get();
     const user = useAuthStore.getState().user;
     if (!user || (!roomId && !state.pendingUser)) return;
@@ -564,9 +580,15 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
     // If there is a file, prepare attachment metadata
     if (file) {
+      let mediaType: "IMAGE" | "VIDEO" | "DOCUMENT" | "AUDIO" | undefined;
+      if (file.type.startsWith("image/")) mediaType = "IMAGE";
+      else if (file.type.startsWith("video/")) mediaType = "VIDEO";
+      else if (file.type.startsWith("audio/")) mediaType = "AUDIO";
+      else mediaType = "DOCUMENT";
+      
       message.metadata = {
         attachment: {
-          type: file.type.startsWith("image/") ? "IMAGE" : file.type.startsWith("video/") ? "VIDEO" : "FILE",
+          type: mediaType,
           filename: file.name,
           size: file.size,
           mime_type: file.type,
@@ -581,9 +603,16 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
     if (file) {
       try {
-        const { signed_url, s3_key } = await requestSignedUrl(file.name, file.type);
+        // Only compress if it's an image and skipCompression is false
+        const shouldOptimize = !skipCompression && file.type.startsWith("image/");
+        const optimizedFile = shouldOptimize ? await compressImage(file) : file;
         
-        await uploadFileToS3(file, signed_url, (progress) => {
+        const { signed_url, s3_key } = await requestSignedUrl(optimizedFile.name, optimizedFile.type);
+        
+        const cancelRef = { abort: () => { } };
+        abortControllers.set(tempId, cancelRef);
+
+        await uploadFileToS3(optimizedFile, signed_url, (progress) => {
           set((state) => {
             const msg = state.messages[tempId];
             if (!msg || !msg.metadata?.attachment) return state;
@@ -594,16 +623,51 @@ export const useChatStore = create<ChatState>((set, get) => ({
                   ...msg,
                   metadata: {
                     ...msg.metadata,
-                    attachment: { ...msg.metadata.attachment, progress }
+                    attachment: { ...msg.metadata.attachment, progress, size: optimizedFile.size }
                   }
                 }
               }
             };
           });
+        }, cancelRef);
+
+        abortControllers.delete(tempId);
+
+        // Mark as success briefly for the UI
+        set((state) => {
+          const msg = state.messages[tempId];
+          if (!msg || !msg.metadata?.attachment) return state;
+          return {
+            messages: {
+              ...state.messages,
+              [tempId]: {
+                ...msg,
+                metadata: { ...msg.metadata, attachment: { ...msg.metadata.attachment, isSuccess: true } }
+              }
+            }
+          };
         });
+
+        // Clear success state after 2 seconds
+        setTimeout(() => {
+          set((state) => {
+            const msg = state.messages[tempId];
+            if (!msg || !msg.metadata?.attachment) return state;
+            return {
+              messages: {
+                ...state.messages,
+                [tempId]: {
+                  ...msg,
+                  metadata: { ...msg.metadata, attachment: { ...msg.metadata.attachment, isSuccess: false } }
+                }
+              }
+            };
+          });
+        }, 2000);
 
         // Update message with the s3_key before sending to socket
         message.metadata.attachment.s3_key = s3_key;
+        message.metadata.attachment.size = optimizedFile.size;
         message.metadata.attachment.progress = 100;
         
         // Final store update for the s3_key
@@ -614,16 +678,22 @@ export const useChatStore = create<ChatState>((set, get) => ({
             messages: { ...state.messages, [tempId]: { ...msg, metadata: message.metadata } }
           };
         });
-      } catch (error) {
+      } catch (error: any) {
+        abortControllers.delete(tempId);
+        if (error.message === "UPLOAD_CANCELLED") {
+          console.log("📤 Upload cancelled for:", tempId);
+          set((state) => {
+            const updatedMessages = { ...state.messages };
+            delete updatedMessages[tempId];
+            return { messages: updatedMessages };
+          });
+          return;
+        }
         console.error("❌ Media upload failed:", error);
+        if (file) failedFiles.set(tempId, file);
         get().updateMessageStatus(tempId, "failed");
         return;
       }
-    }
-
-    if (!chatSocket.isConnected) {
-      console.log("📤 Queuing message for later send");
-      return;
     }
 
     sendOutboxEntry(message, routeTarget, targetUserId);
@@ -637,6 +707,104 @@ export const useChatStore = create<ChatState>((set, get) => ({
       },
     });
   },
+
+  cancelUpload: (tempId) => {
+    const controller = abortControllers.get(tempId);
+    if (controller) {
+      controller.abort();
+    }
+  },
+
+  resendMessage: async (tempId) => {
+    const state = get();
+    const msg = state.messages[tempId];
+    if (!msg || msg.status !== "failed") return;
+
+    const file = failedFiles.get(tempId);
+    failedFiles.delete(tempId);
+
+    // Reset status and retry
+    get().updateMessageStatus(tempId, "sending");
+    
+    // Extract room info
+    const roomId = msg.room_id;
+    const room = state.rooms[roomId];
+    const targetUserId = getDirectRecipientUserId(room);
+    const routeTarget = room?.type === "DIRECT" && targetUserId ? targetUserId : roomId;
+
+    if (file) {
+      try {
+        const optimizedFile = file.type.startsWith("image/") ? await compressImage(file) : file;
+        const { signed_url, s3_key } = await requestSignedUrl(optimizedFile.name, optimizedFile.type);
+        const cancelRef = { abort: () => { } };
+        abortControllers.set(tempId, cancelRef);
+
+        await uploadFileToS3(optimizedFile, signed_url, (progress) => {
+          set((state) => {
+            const m = state.messages[tempId];
+            if (!m || !m.metadata?.attachment) return state;
+            return {
+              messages: {
+                ...state.messages,
+                [tempId]: {
+                  ...m,
+                  metadata: { ...m.metadata, attachment: { ...m.metadata.attachment, progress, size: optimizedFile.size } }
+                }
+              }
+            };
+          });
+        }, cancelRef);
+
+        abortControllers.delete(tempId);
+
+        set((state) => {
+          const m = state.messages[tempId];
+          if (!m || !m.metadata?.attachment) return state;
+          return {
+            messages: {
+              ...state.messages,
+              [tempId]: {
+                ...m,
+                metadata: { ...m.metadata, attachment: { ...m.metadata.attachment, isSuccess: true } }
+              }
+            }
+          };
+        });
+
+        setTimeout(() => {
+          set((state) => {
+            const m = state.messages[tempId];
+            if (!m || !m.metadata?.attachment) return state;
+            return {
+              messages: {
+                ...state.messages,
+                [tempId]: {
+                  ...m,
+                  metadata: { ...m.metadata, attachment: { ...m.metadata.attachment, isSuccess: false } }
+                }
+              }
+            };
+          });
+        }, 2000);
+
+        msg.metadata!.attachment!.s3_key = s3_key;
+        msg.metadata!.attachment!.size = optimizedFile.size;
+        msg.metadata!.attachment!.progress = 100;
+        
+        set((state) => ({
+          messages: { ...state.messages, [tempId]: { ...msg, status: "sending" } }
+        }));
+      } catch (error: any) {
+        abortControllers.delete(tempId);
+        if (error.message === "UPLOAD_CANCELLED") return;
+        failedFiles.set(tempId, file);
+        get().updateMessageStatus(tempId, "failed");
+        return;
+      }
+    }
+
+    sendOutboxEntry(msg, routeTarget, targetUserId);
+  },
 }));
 
 
@@ -648,16 +816,8 @@ chatSocket.on("status", (data) => {
   }
 
   console.log("🔌 Chat Socket disconnected");
-  // Mark all sending messages as failed
-  useChatStore.setState((state) => {
-    const updatedMessages = { ...state.messages };
-    Object.values(updatedMessages).forEach((msg) => {
-      if (msg.status === "sending") {
-        msg.status = "failed";
-      }
-    });
-    return { messages: updatedMessages };
-  });
+  // We no longer mark messages as failed immediately. 
+  // BaseSocket will queue them, and our 30s timeout will handle real failures.
 });
 
 chatSocket.on("message_ack", (data) => {
@@ -666,11 +826,11 @@ chatSocket.on("message_ack", (data) => {
 
   const state = useChatStore.getState();
   const tempMsg = state.messages[temp_id];
-  
+
   if (tempMsg) {
     const finalId = message_id || temp_id;
     const finalRoomId = data.room_id || tempMsg.room_id;
-    
+
     const updatedMsg: Message = {
       ...tempMsg,
       id: finalId,
@@ -757,8 +917,8 @@ chatSocket.on("chat_status", (data) => {
 
   const targetMsgId = message_id || id || temp_id;
   if (targetMsgId) {
-    const msg = state.messages[targetMsgId] || 
-                Object.values(state.messages).find(m => m.temp_id === temp_id || m.id === targetMsgId);
+    const msg = state.messages[targetMsgId] ||
+      Object.values(state.messages).find(m => m.temp_id === temp_id || m.id === targetMsgId);
 
     if (msg && status) {
       const mappedStatus = status.toLowerCase() === "sent" ? "delivered" : status.toLowerCase();
@@ -806,11 +966,11 @@ presenceSocket.on("user_presence", (data) => {
   if (!user_id) return;
   user_id = user_id.toLowerCase();
   if (user_id === normalizeUserId(getCurrentUserId())) return;
-  
+
   useChatStore.setState((state) => {
     const nextOnline = new Set(state.onlineUsers);
     const nextLastSeen = { ...state.lastSeen };
-    
+
     if (status === "online") {
       nextOnline.add(user_id);
     } else {

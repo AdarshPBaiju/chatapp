@@ -121,11 +121,18 @@ export class BaseSocket {
   private onVisibilityChange() {
     if (document.visibilityState === "visible") {
       this.startHeartbeat();
-      if (this.socket?.readyState === WebSocket.CLOSED) this.connect();
+      if (this.socket?.readyState === WebSocket.CLOSED || this.socket?.readyState === WebSocket.CLOSING) {
+        console.log("%c[Socket] %cRestoring connection after background", "color: #06b6d4; font-weight: bold", "color: inherit");
+        this.connect();
+      }
     } else {
-      // Slow down heartbeat in background
+      // Slow down heartbeat in background, but keep it within common LB timeout limits (30s-60s)
       this.stopHeartbeat();
-      this.heartbeatTimer = setInterval(() => this.send("ping", {}), 120000);
+      this.heartbeatTimer = setInterval(() => {
+        if (this.isConnected) {
+          this.send("ping", { payload: { background: true } });
+        }
+      }, 30000); // 30s is much safer than 120s
     }
   }
 

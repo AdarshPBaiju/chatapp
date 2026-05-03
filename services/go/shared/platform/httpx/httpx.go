@@ -38,6 +38,14 @@ func WriteJSON(w http.ResponseWriter, statusCode int, payload APIResponse) {
 	}
 }
 
+// WriteError sends a standard error response.
+func WriteError(w http.ResponseWriter, statusCode int, message string) {
+	WriteJSON(w, statusCode, APIResponse{
+		Status:  "error",
+		Message: message,
+	})
+}
+
 // LoggingMiddleware logs the details of each incoming HTTP request.
 func LoggingMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

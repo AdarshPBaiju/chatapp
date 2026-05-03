@@ -17,6 +17,7 @@ import (
 	"chatapp/services/go/shared/platform/auth"
 	"chatapp/services/go/shared/platform/debug"
 	"chatapp/services/go/shared/platform/httpx"
+	"chatapp/services/go/shared/platform/messaging"
 	"chatapp/services/go/shared/platform/storage"
 	"github.com/google/uuid"
 )
@@ -76,14 +77,18 @@ func main() {
 
 	proc := processor.NewMediaProcessor(s3Client, producer)
 
+	// Context for background processing
+	bgCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
 	// 3. Background Processing
 	consumer := messaging.NewConsumer(strings.Split(kafkaBrokers, ","), "go-media-group", "chat.delivery")
 	defer consumer.Close()
 
 	go func() {
 		debug.Print("GO-MEDIA", "Starting background processor...")
-		err := consumer.Consume(ctx, func(event messaging.Event) error {
-			return proc.ProcessEvent(ctx, event)
+		err := consumer.Consume(bgCtx, func(event messaging.Event) error {
+			return proc.ProcessEvent(bgCtx, event)
 		})
 		if err != nil {
 			log.Printf("consumer error: %v", err)
@@ -105,9 +110,6 @@ func main() {
 		Handler: mux,
 	}
 
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
-
 	go func() {
 		debug.Print("GO-MEDIA", fmt.Sprintf("Service listening on %s", *addr))
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
@@ -115,7 +117,7 @@ func main() {
 		}
 	}()
 
-	<-ctx.Done()
+	<-bgCtx.Done()
 	debug.Print("GO-MEDIA", "Shutting down gracefully...")
 	
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -169,7 +171,7 @@ func handleSignedURL(w http.ResponseWriter, r *http.Request) {
 	// 3. Generate Key and URL
 	// Pattern: originals/userID/UUID/filename
 	fileUUID := uuid.New().String()
-	key := fmt.Sprintf("originals/%s/%s/%s", userID, fileUUID, req.Filename)
+	key := fmt.Sprintf("media/originals/%s/%s/%s", userID, fileUUID, req.Filename)
 	
 	expires := 15 * time.Minute
 	presignedURL, err := s3Client.GeneratePresignedPutURL(r.Context(), key, req.ContentType, expires)
