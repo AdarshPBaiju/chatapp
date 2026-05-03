@@ -35,7 +35,7 @@ class Command(BaseCommand):
         consumer_config["auto.offset.reset"] = "earliest"
 
         consumer = Consumer(consumer_config)
-        consumer.subscribe(["chat.inbound"])
+        consumer.subscribe(["chat.inbound", "chat.receipts"])
 
         logger.info("🚀 Chat Worker started, listening for messages...")
 
@@ -77,6 +77,9 @@ class Command(BaseCommand):
                         self.process_chat_message(payload)
                     elif event_type == "READ_RECEIPT":
                         self.process_read_receipt(payload)
+                elif topic == "chat.receipts":
+                    if event_type == "DELIVERY_RECEIPT":
+                        self.process_delivery_receipt(payload)
 
         except KeyboardInterrupt:
             pass
@@ -156,7 +159,7 @@ class Command(BaseCommand):
             for membership in memberships:
                 is_sender = membership.client_id == client.id
 
-                status = "READ" if is_sender else "DELIVERED"
+                status = "READ" if is_sender else "SENT"
                 receipts.append(
                     MessageReceipt(
                         message=message,
@@ -255,3 +258,25 @@ class Command(BaseCommand):
 
         except Exception as e:
             logger.error(f"❌ Failed to process read receipt: {e}")
+    @transaction.atomic
+    def process_delivery_receipt(self, data):
+        logger.info(f"Processing delivery receipt: {data}")
+        message_id = data.get("message_id")
+        user_id = data.get("user_id")
+
+        if not message_id or not user_id:
+            return
+
+        # Update the specific receipt for this user
+        receipt = MessageReceipt.objects.filter(
+            message_id=message_id,
+            client__user_id=user_id,
+            status="SENT" # Only update if it hasn't been upgraded to DELIVERED or READ already
+        ).first()
+
+        if receipt:
+            receipt.status = "DELIVERED"
+            receipt.save()
+            logger.info(f"✅ Message {message_id} marked as DELIVERED for user {user_id}")
+        else:
+            logger.warning(f"⚠️ No SENT receipt found for message {message_id} and user {user_id}")

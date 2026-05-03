@@ -6,6 +6,7 @@ import { manageContact } from "../api";
 import { toast } from "@/shared/ui/Toast";
 import { Link } from "react-router-dom";
 import { cn } from "@/shared/lib/utils";
+import { useChatStore } from "@/features/chat/state/chatStore";
 
 interface ContactCardProps {
   user: ContactUser;
@@ -16,6 +17,8 @@ export function ContactCard({ user, onActionComplete }: ContactCardProps) {
   const [loading, setLoading] = useState(false);
   const [isAccepting, setIsAccepting] = useState(false);
   const [nickname, setNickname] = useState("");
+  const onlineUsers = useChatStore(state => state.onlineUsers);
+  const isOnline = user.user_id ? onlineUsers.has(user.user_id) : false;
 
   async function handleAction(action: "add" | "accept" | "decline" | "block" | "unblock" | "remove", customNickname?: string) {
     setLoading(true);
@@ -53,6 +56,11 @@ export function ContactCard({ user, onActionComplete }: ContactCardProps) {
             ) : (
               <User size={24} className={user.contact_status === "blocked" ? "text-destructive/40" : "text-primary"} />
             )}
+            {isOnline && (
+              <div className="absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full bg-background flex items-center justify-center">
+                <div className="h-2 w-2 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]" />
+              </div>
+            )}
           </div>
 
           <div className="flex-1 min-w-0">
@@ -70,7 +78,10 @@ export function ContactCard({ user, onActionComplete }: ContactCardProps) {
                 <span className="text-[8px] font-black uppercase tracking-tighter bg-destructive/10 text-destructive px-1.5 py-0.5 rounded">Blocked</span>
               )}
             </div>
-            <p className="text-[11px] font-medium text-muted-foreground truncate">@{user.username}</p>
+            <p className="text-[11px] font-medium text-muted-foreground truncate">
+              @{user.username}
+              {isOnline && <span className="ml-2 text-[8px] font-black uppercase text-green-500 bg-green-500/5 px-1 rounded">Online</span>}
+            </p>
           </div>
         </Link>
 

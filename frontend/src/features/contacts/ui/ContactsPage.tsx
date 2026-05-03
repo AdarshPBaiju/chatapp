@@ -1,5 +1,7 @@
 import { Users, Search, Plus, Loader2 } from "lucide-react";
 import { useState, useEffect } from "react";
+import { useChatStore } from "@/features/chat/state/chatStore";
+
 import { ContactUser } from "../types";
 import { fetchContacts } from "../api";
 import { ContactCard } from "./ContactCard";
@@ -20,7 +22,11 @@ export function ContactsPage() {
     setLoading(true);
     try {
       const res = await fetchContacts("accepted");
-      if (res.success) setContacts(res.data);
+      if (res.success) {
+        setContacts(res.data);
+        const userIds = res.data.map((u: ContactUser) => u.user_id).filter(Boolean);
+        useChatStore.getState().fetchPresence(userIds);
+      }
     } finally {
       setLoading(false);
     }

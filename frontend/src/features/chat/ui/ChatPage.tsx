@@ -23,8 +23,11 @@ export function ChatPage() {
     isLoading,
     loadMoreMessages,
     pendingUser,
-    setPendingUser
+    setPendingUser,
+    onlineUsers
   } = useChatStore();
+  const currentUser = useAuthStore(state => state.user);
+  const currentUserId = currentUser?.id;
 
   const [input, setInput] = useState("");
   const isConnected = socket.isConnected;
@@ -218,12 +221,30 @@ export function ChatPage() {
     type: "DIRECT",
     isFetchingMore: false,
     messageIds: rooms[""]?.messageIds || [],
-    typingUsers: new Set<string>()
+    typingUsers: new Set<string>(),
+    participants: pendingUser ? [{
+      id: pendingUser.id,
+      user_id: pendingUser.user_id,
+      username: pendingUser.username,
+      full_name: pendingUser.full_name,
+      profile_picture: pendingUser.profile_picture
+    }] : []
   } : null);
   const roomMessages = activeRoomId ? (rooms[activeRoomId]?.messageIds || []) : (pendingUser ? (rooms[""]?.messageIds || []) : []);
   const messages = roomMessages.map(id => allMessages[id]).filter(Boolean);
 
   const formatTime = (ts: number) => new Date(ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+
+  if (!isConnected || !currentUserId) {
+    return (
+      <div className="flex h-full w-full items-center justify-center bg-background">
+        <div className="flex flex-col items-center gap-4">
+          <div className="h-12 w-12 rounded-full border-4 border-primary border-t-transparent animate-spin" />
+          <p className="text-muted-foreground font-medium animate-pulse">Connecting to chat server...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-full w-full bg-background overflow-hidden">
@@ -287,6 +308,19 @@ export function ChatPage() {
                     <span className="font-bold text-lg">{chat.display_name.charAt(0)}</span>
                   )}
                 </div>
+                {chat.type === "DIRECT" && (
+                  (() => {
+                    const otherUser = chat.participants?.find((p: any) => p.user_id !== currentUserId);
+                    if (otherUser?.user_id && onlineUsers.has(otherUser.user_id)) {
+                      return (
+                        <div className="absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full bg-background flex items-center justify-center">
+                          <div className="h-2.5 w-2.5 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]" />
+                        </div>
+                      );
+                    }
+                    return null;
+                  })()
+                )}
               </div>
 
               <div className="flex-1 min-w-0">
@@ -360,12 +394,24 @@ export function ChatPage() {
                     <p className="font-bold text-sm tracking-tight">{currentChat?.display_name}</p>
                     {currentChat?.typingUsers && currentChat.typingUsers.size > 0 ? (
                       <p className="text-[10px] text-primary font-bold animate-pulse">Typing...</p>
-                    ) : (
-                      <p className="text-[10px] text-green-500 font-bold flex items-center gap-1">
-                        <span className="h-1.5 w-1.5 rounded-full bg-current animate-pulse" />
-                        Online
-                      </p>
-                    )}
+                    ) : (() => {
+                      const otherUser = currentChat?.participants?.find((p: any) => p.user_id !== currentUserId);
+                      const isOnline = otherUser?.user_id ? onlineUsers.has(otherUser.user_id) : false;
+                      const lastSeenTime = otherUser?.user_id ? useChatStore.getState().lastSeen[otherUser.user_id] : null;
+                      
+                      return (
+                        <p className={cn(
+                          "text-[10px] font-bold flex items-center gap-1",
+                          isOnline ? "text-green-500" : "text-muted-foreground/60"
+                        )}>
+                          <span className={cn(
+                            "h-1.5 w-1.5 rounded-full bg-current",
+                            isOnline && "animate-pulse"
+                          )} />
+                          {isOnline ? "Online" : (lastSeenTime ? `Last seen ${formatTime(lastSeenTime)}` : "Offline")}
+                        </p>
+                      );
+                    })()}
                   </div>
                 </div>
 

@@ -2,6 +2,8 @@ package socket
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"net/http"
 	"sync"
 	"time"
@@ -85,6 +87,28 @@ func (h *Hub) Run(ctx context.Context) {
 			h.clients[client] = true
 			if client.UserID != "" {
 				h.userToConn[client.UserID] = client
+				
+				// 🚀 HYPER-OPTIMIZED: Initial Session Registration
+				if h.Redis != nil {
+					h.Redis.SAdd(context.Background(), "user:sessions:"+client.UserID, client.SessionID)
+					h.Redis.Expire(context.Background(), "user:sessions:"+client.UserID, 120*time.Second)
+					
+					presenceKey := fmt.Sprintf("user:session:%s:%s", client.UserID, client.SessionID)
+					h.Redis.Set(context.Background(), presenceKey, h.NodeID, 60*time.Second)
+					
+					count, _ := h.Redis.SCard(context.Background(), "user:sessions:"+client.UserID).Result()
+					if count <= 1 {
+						update := map[string]any{
+							"type": "user_presence",
+							"payload": map[string]any{
+								"user_id": client.UserID,
+								"status":  "online",
+							},
+						}
+						data, _ := json.Marshal(update)
+						h.Redis.Publish(context.Background(), "cluster:broadcast", data)
+					}
+				}
 			}
 			h.mu.Unlock()
 			debug.Print(h.ServiceTag, "Connection established: "+client.UserID)
@@ -95,6 +119,28 @@ func (h *Hub) Run(ctx context.Context) {
 				delete(h.clients, client)
 				if client.UserID != "" {
 					delete(h.userToConn, client.UserID)
+					
+					// 🚀 HYPER-OPTIMIZED: Final Session Cleanup
+					if h.Redis != nil {
+						h.Redis.SRem(context.Background(), "user:sessions:"+client.UserID, client.SessionID)
+						h.Redis.Del(context.Background(), "user:session:"+client.UserID+":"+client.SessionID)
+						
+						remaining, _ := h.Redis.SCard(context.Background(), "user:sessions:"+client.UserID).Result()
+						if remaining == 0 {
+							now := time.Now().UnixMilli()
+							h.Redis.Set(context.Background(), "user:last_seen:"+client.UserID, now, 0)
+							
+							update := map[string]any{
+								"type": "user_presence",
+								"payload": map[string]any{
+									"user_id": client.UserID,
+									"status":  "last_seen:" + fmt.Sprintf("%d", now),
+								},
+							}
+							data, _ := json.Marshal(update)
+							h.Redis.Publish(context.Background(), "cluster:broadcast", data)
+						}
+					}
 				}
 				close(client.Send)
 			}
@@ -152,7 +198,8 @@ type Client struct {
 	Hub    *Hub
 	Conn   *websocket.Conn
 	Send   chan []byte
-	UserID string
+	UserID    string
+	SessionID string
 }
 
 func (c *Client) ReadPump() {
@@ -206,14 +253,16 @@ func (c *Client) WritePump() {
 	}
 }
 
-func (h *Hub) ServeWs(w http.ResponseWriter, r *http.Request, userID string) {
+func (h *Hub) ServeWs(w http.ResponseWriter, r *http.Request, userID string) *Client {
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		return
+		return nil
 	}
-	client := &Client{Hub: h, Conn: conn, Send: make(chan []byte, 1024), UserID: userID}
+	sessionID := fmt.Sprintf("%d", time.Now().UnixNano())
+	client := &Client{Hub: h, Conn: conn, Send: make(chan []byte, 1024), UserID: userID, SessionID: sessionID}
 	h.Register <- client
 
 	go client.WritePump()
 	go client.ReadPump()
+	return client
 }

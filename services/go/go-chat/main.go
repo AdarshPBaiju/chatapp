@@ -243,6 +243,41 @@ func main() {
 			debug.Print("GO-CHAT", "Read receipt received for room: "+msg.Target)
 		} else if msg.Type == "ping" {
 			sendSocketMessage(client, "pong", map[string]any{"ts": time.Now().UnixMilli()})
+		} else if msg.Type == "get_presence" {
+			body, _ := payloadMap(msg.Payload)
+			userIDsStr, _ := body["user_ids"].([]any)
+			statusMap := make(map[string]string)
+			
+			// 🚀 HYPER-OPTIMIZED: Pipelined Redis Queries
+			pipe := rdb.Pipeline()
+			scardResults := make(map[string]*redis.IntCmd)
+			lastSeenResults := make(map[string]*redis.StringCmd)
+
+			for _, id := range userIDsStr {
+				idStr, ok := id.(string)
+				if !ok {
+					continue
+				}
+				scardResults[idStr] = pipe.SCard(context.Background(), "user:sessions:"+idStr)
+				lastSeenResults[idStr] = pipe.Get(context.Background(), "user:last_seen:"+idStr)
+			}
+			
+			_, _ = pipe.Exec(context.Background())
+
+			for idStr, cmd := range scardResults {
+				count, _ := cmd.Result()
+				if count > 0 {
+					statusMap[idStr] = "online"
+				} else {
+					lastSeen, _ := lastSeenResults[idStr].Result()
+					if lastSeen != "" {
+						statusMap[idStr] = "last_seen:" + lastSeen
+					} else {
+						statusMap[idStr] = "offline"
+					}
+				}
+			}
+			sendSocketMessage(client, "presence_update", statusMap)
 		}
 	}
 
@@ -275,9 +310,11 @@ func main() {
 			if success {
 				debug.Print("GO-CHAT", "✅ Successfully delivered to user: "+event.Key)
 
+				// 🚀 DELIVERY FEEDBACK: Notify backend that message reached the device
 				if strings.ToUpper(event.Type) == "CHAT_DELIVERY" {
 					payload, ok := payloadMap(event.Payload)
 					if ok {
+						// 1. Notify Sender for UI update
 						senderID, _ := payload["sender_id"].(string)
 						if senderID != "" && senderID != event.Key {
 							statusPayload := map[string]any{
@@ -293,6 +330,16 @@ func main() {
 								Payload: statusPayload,
 							})
 						}
+
+						// 2. Notify Backend for DB persistence
+						producer.Publish(ctx, messaging.Event{
+							Topic: "chat.receipts",
+							Type:  "DELIVERY_RECEIPT",
+							Payload: map[string]any{
+								"message_id": payload["id"],
+								"user_id":    event.Key, // recipient
+							},
+						})
 					}
 				}
 			} else {
@@ -357,28 +404,61 @@ func main() {
 
 		debug.Print("GO-CHAT", "SUCCESS: Authenticated User: "+userID)
 		
-		// 🚀 PRESENCE REGISTRY: Mark user as connected to this specific node
-		presenceKey := "user:node:" + userID
-		rdb.Set(r.Context(), presenceKey, nodeID, 60*time.Second) // 60s TTL
-		
-		// Start a heartbeat goroutine to keep presence alive
-		heartbeatCtx, stopHeartbeat := context.WithCancel(r.Context())
+		// Serve WebSocket (Logic is now handled by Hub's Register/Unregister)
+		client := hub.ServeWs(w, r, userID)
+
+		// Lightweight heartbeat for session persistence
 		go func() {
 			ticker := time.NewTicker(30 * time.Second)
 			defer ticker.Stop()
 			for {
 				select {
 				case <-ticker.C:
-					rdb.Set(heartbeatCtx, presenceKey, nodeID, 60*time.Second)
-				case <-heartbeatCtx.Done():
-					rdb.Del(context.Background(), presenceKey)
+					presenceKey := fmt.Sprintf("user:session:%s:%s", client.UserID, client.SessionID)
+					rdb.Set(context.Background(), presenceKey, nodeID, 60*time.Second)
+					rdb.Expire(context.Background(), "user:sessions:"+client.UserID, 120*time.Second)
+				case <-r.Context().Done():
 					return
 				}
 			}
 		}()
+	})
 
-		hub.ServeWs(w, r, userID)
-		stopHeartbeat()
+	// 8. Bulk Presence API (HTTP Fallback)
+	http.HandleFunc("/presence", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+
+		if r.Method == "OPTIONS" {
+			return
+		}
+
+		userIDs := r.URL.Query().Get("user_ids")
+		if userIDs == "" {
+			json.NewEncoder(w).Encode(map[string]string{})
+			return
+		}
+
+		ids := strings.Split(userIDs, ",")
+		statusMap := make(map[string]string)
+
+		for _, id := range ids {
+			count, _ := rdb.SCard(r.Context(), "user:sessions:"+id).Result()
+			if count > 0 {
+				statusMap[id] = "online"
+			} else {
+				lastSeen, _ := rdb.Get(r.Context(), "user:last_seen:"+id).Result()
+				if lastSeen != "" {
+					statusMap[id] = "last_seen:" + lastSeen
+				} else {
+					statusMap[id] = "offline"
+				}
+			}
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(statusMap)
 	})
 
 	http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {

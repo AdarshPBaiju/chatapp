@@ -3,6 +3,7 @@ from users.models import Client, Contact
 
 
 class UserSearchSerializer(serializers.ModelSerializer):
+    user_id = serializers.ReadOnlyField(source="user.id")
     is_contact = serializers.SerializerMethodField()
     contact_status = serializers.SerializerMethodField()
     nickname = serializers.SerializerMethodField()
@@ -15,6 +16,7 @@ class UserSearchSerializer(serializers.ModelSerializer):
         model = Client
         fields = [
             "id",
+            "user_id",
             "full_name",
             "username",
             "email",

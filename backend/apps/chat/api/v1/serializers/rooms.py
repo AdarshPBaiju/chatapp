@@ -5,9 +5,11 @@ from chat.services import ChatService
 
 
 class RoomParticipantSerializer(serializers.ModelSerializer):
+    user_id = serializers.ReadOnlyField(source="user.id")
+
     class Meta:
         model = Client
-        fields = ["id", "username", "full_name", "profile_picture"]
+        fields = ["id", "user_id", "username", "full_name", "profile_picture"]
 
 
 class LastMessageSerializer(serializers.ModelSerializer):

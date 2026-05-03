@@ -18,6 +18,7 @@ interface Room {
     status: Message["status"];
   } | null;
   unread_count: number;
+  participants: { id: string; user_id: string; username: string; full_name: string; profile_picture: string | null }[];
   isFetchingMore?: boolean;
 }
 
@@ -46,8 +47,13 @@ interface ChatState {
   messages: Record<string, Message>;
   isLoading: boolean;
   pendingUser: any | null; // Using any for simplicity with ContactUser type
+  onlineUsers: Set<string>;
+  lastSeen: Record<string, number>;
+  isReady: boolean;
   fetchRooms: () => Promise<void>;
   fetchHistory: (roomId: string) => Promise<void>;
+  fetchPresence: (userIds: string[]) => Promise<void>;
+  getPresence: (userIds: string[]) => void;
   syncRoom: (roomId: string) => Promise<void>;
   flushOutbox: () => Promise<void>;
   setActiveRoom: (roomId: string | null) => void;
@@ -100,6 +106,7 @@ function createEmptyRoom(roomId: string): RoomState {
     typingUsers: new Set(),
     lastReadSeq: 0,
     lastSyncedSeq: 0,
+    participants: [],
   };
 }
 
@@ -144,6 +151,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
   messages: {},
   isLoading: false,
   pendingUser: null,
+  onlineUsers: new Set<string>(),
+  lastSeen: {},
+  isReady: false,
 
   fetchRooms: async () => {
     set({ isLoading: true });
@@ -166,6 +176,15 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
       set({ rooms: roomMap });
 
+      // Fetch presence for all participants in all rooms
+      const allUserIds = new Set<string>();
+      results.forEach((room: Room) => {
+        room.participants.forEach(p => {
+          if (p.user_id) allUserIds.add(p.user_id);
+        });
+      });
+      get().getPresence(Array.from(allUserIds));
+
       const activeRoomId = get().activeRoomId;
       if (activeRoomId && roomMap[activeRoomId]) {
         void get().syncRoom(activeRoomId);
@@ -173,6 +192,32 @@ export const useChatStore = create<ChatState>((set, get) => ({
     } finally {
       set({ isLoading: false });
     }
+  },
+
+  fetchPresence: async (userIds: string[]) => {
+    if (userIds.length === 0) return;
+    try {
+      const protocol = window.location.protocol;
+      const host = window.location.hostname;
+      const response = await fetch(`${protocol}//${host}/presence?user_ids=${userIds.join(",")}`);
+      const statusMap = await response.json();
+      
+      set((state) => {
+        const newOnlineUsers = new Set(state.onlineUsers);
+        Object.entries(statusMap).forEach(([id, status]) => {
+          if (status === "online") newOnlineUsers.add(id);
+          else newOnlineUsers.delete(id);
+        });
+        return { onlineUsers: newOnlineUsers };
+      });
+    } catch (error) {
+      console.error("❌ Failed to fetch presence:", error);
+    }
+  },
+
+  getPresence: (userIds: string[]) => {
+    if (userIds.length === 0) return;
+    socket.send("get_presence", { user_ids: userIds });
   },
 
   syncRoom: async (roomId) => {
@@ -610,4 +655,50 @@ socket.on("chat_status", (data) => {
       return { messages: updatedMessages };
     });
   }
+});
+
+socket.on("user_presence", (data) => {
+  const { user_id, status } = data.payload || data;
+  useChatStore.setState((state) => {
+    const nextOnline = new Set(state.onlineUsers);
+    const nextLastSeen = { ...state.lastSeen };
+    
+    if (status === "online") {
+      nextOnline.add(user_id);
+    } else {
+      nextOnline.delete(user_id);
+      if (status.startsWith("last_seen:")) {
+        nextLastSeen[user_id] = parseInt(status.split(":")[1]);
+      }
+    }
+    return { onlineUsers: nextOnline, lastSeen: nextLastSeen };
+  });
+});
+
+socket.on("presence_update", (data) => {
+  const statusMap = data.payload || data;
+  useChatStore.setState((state) => {
+    const nextOnline = new Set(state.onlineUsers);
+    const nextLastSeen = { ...state.lastSeen };
+
+    Object.entries(statusMap).forEach(([id, status]: [string, any]) => {
+      if (status === "online") {
+        nextOnline.add(id);
+      } else {
+        nextOnline.delete(id);
+        if (status.startsWith("last_seen:")) {
+          nextLastSeen[id] = parseInt(status.split(":")[1]);
+        }
+      }
+    });
+    return { onlineUsers: nextOnline, lastSeen: nextLastSeen };
+  });
+});
+
+socket.on("connect", () => {
+  useChatStore.setState({ isReady: true });
+});
+
+socket.on("disconnect", () => {
+  useChatStore.setState({ isReady: false });
 });
