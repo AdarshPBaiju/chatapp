@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { chatSocket, presenceSocket } from "@/shared/api/socket";
 import { httpClient } from "@/shared/http/client";
 import { useAuthStore } from "@/modules/auth/state/authState";
+import { requestSignedUrl, uploadFileToS3 } from "@/features/chat/api/media";
 
 interface Room {
   id: string;
@@ -30,6 +31,7 @@ interface Message {
   room_id: string;
   content: string;
   sequence_id?: number;
+  metadata?: any;
   sent_at: number;
   status: "sending" | "acknowledged" | "sent" | "delivered" | "read" | "failed";
 }
@@ -62,7 +64,7 @@ interface ChatState {
   loadMoreMessages: (roomId: string) => Promise<void>;
   updateMessageStatus: (messageId: string, status: Message["status"]) => void;
   setTyping: (roomId: string, userId: string, isTyping: boolean) => void;
-  sendMessage: (roomId: string | null, content: string) => Promise<void>;
+  sendMessage: (roomId: string | null, content: string, file?: File) => Promise<void>;
   markAsRead: (roomId: string, sequenceId: number) => void;
   setPendingUser: (user: any | null) => void;
   addMessages: (messages: Message[], skipUnread?: boolean) => void;
@@ -527,13 +529,13 @@ export const useChatStore = create<ChatState>((set, get) => ({
       };
     }),
 
-  sendMessage: async (roomId, content) => {
+  sendMessage: async (roomId, content, file) => {
     const state = get();
     const user = useAuthStore.getState().user;
     if (!user || (!roomId && !state.pendingUser)) return;
 
     const trimmedContent = content.trim();
-    if (!trimmedContent) return;
+    if (!trimmedContent && !file) return;
 
     let targetRoomId = roomId;
     let targetUserId = "";
@@ -560,7 +562,64 @@ export const useChatStore = create<ChatState>((set, get) => ({
       status: "sending",
     };
 
+    // If there is a file, prepare attachment metadata
+    if (file) {
+      message.metadata = {
+        attachment: {
+          type: file.type.startsWith("image/") ? "IMAGE" : file.type.startsWith("video/") ? "VIDEO" : "FILE",
+          filename: file.name,
+          size: file.size,
+          mime_type: file.type,
+          processed: false,
+          progress: 0,
+          local_url: URL.createObjectURL(file), // For instant preview
+        }
+      };
+    }
+
     get().addMessage(message);
+
+    if (file) {
+      try {
+        const { signed_url, s3_key } = await requestSignedUrl(file.name, file.type);
+        
+        await uploadFileToS3(file, signed_url, (progress) => {
+          set((state) => {
+            const msg = state.messages[tempId];
+            if (!msg || !msg.metadata?.attachment) return state;
+            return {
+              messages: {
+                ...state.messages,
+                [tempId]: {
+                  ...msg,
+                  metadata: {
+                    ...msg.metadata,
+                    attachment: { ...msg.metadata.attachment, progress }
+                  }
+                }
+              }
+            };
+          });
+        });
+
+        // Update message with the s3_key before sending to socket
+        message.metadata.attachment.s3_key = s3_key;
+        message.metadata.attachment.progress = 100;
+        
+        // Final store update for the s3_key
+        set((state) => {
+          const msg = state.messages[tempId];
+          if (!msg) return state;
+          return {
+            messages: { ...state.messages, [tempId]: { ...msg, metadata: message.metadata } }
+          };
+        });
+      } catch (error) {
+        console.error("❌ Media upload failed:", error);
+        get().updateMessageStatus(tempId, "failed");
+        return;
+      }
+    }
 
     if (!chatSocket.isConnected) {
       console.log("📤 Queuing message for later send");

@@ -70,7 +70,7 @@ services:
       minio:
         condition: service_healthy
     entrypoint: >
-      /bin/sh -c " /usr/bin/mc alias set myminio http://minio:9000 ${MINIO_ACCESS_KEY} ${MINIO_SECRET_KEY}; /usr/bin/mc mb myminio/${MINIO_BUCKET_NAME} || true; /usr/bin/mc anonymous set download myminio/${MINIO_BUCKET_NAME}; exit 0; "
+      /bin/sh -c " /usr/bin/mc alias set myminio http://minio:9000 ${MINIO_ACCESS_KEY} ${MINIO_SECRET_KEY}; /usr/bin/mc mb myminio/chatapp-media || true; /usr/bin/mc anonymous set download myminio/chatapp-media/thumbnails; exit 0; "
     networks:
       - chatapp_network
 
@@ -287,6 +287,38 @@ services:
       redis:
         condition: service_healthy
       kafka:
+        condition: service_healthy
+    networks:
+      - chatapp_network
+
+  go-media:
+    build:
+      context: .
+      dockerfile: services/go/go-media/Dockerfile
+    ports:
+      - "8084:8084"
+    environment:
+      SERVICE_NAME: go-media
+      SERVICE_PORT: ${GO_MEDIA_PORT:-8084}
+      INTERNAL_SERVICE_SECRET: ${GO_INTERNAL_SERVICE_SECRET}
+      GO_AUTH_URL: http://go-auth:${GO_AUTH_PORT:-8080}
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY}
+      MINIO_BUCKET_NAME: ${MINIO_BUCKET_NAME}
+      MINIO_EXTERNAL_URL: ${MINIO_EXTERNAL_URL}
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS}
+    healthcheck:
+      test: [ "CMD", "wget", "-qO-", "http://localhost:${GO_MEDIA_PORT:-8084}/health" ]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+    depends_on:
+      minio:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      go-auth:
         condition: service_healthy
     networks:
       - chatapp_network

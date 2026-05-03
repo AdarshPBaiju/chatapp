@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
-import { Search, MoreVertical, Send, Phone, Video, Info, Paperclip, Smile, MessageCircle, ArrowLeft } from "lucide-react";
+import { Search, MoreVertical, Send, Phone, Video, Info, Paperclip, Smile, MessageCircle, ArrowLeft, X, File as FileIcon } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/shared/lib/utils";
 import { chatSocket } from "@/shared/api/socket";
@@ -39,7 +39,9 @@ export function ChatPage() {
   const currentUserId = normalizeUserId(currentUser?.id);
 
   const [input, setInput] = useState("");
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const isConnected = isReady;
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const feedRef = useRef<HTMLDivElement>(null);
   const topSentinelRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -208,16 +210,26 @@ export function ChatPage() {
 
   const handleSend = useCallback(() => {
     const content = input.trim();
-    if (!content || (!activeRoomId && !pendingUser)) return;
+    if ((!content && !selectedFile) || (!activeRoomId && !pendingUser)) return;
 
-    sendMessage(activeRoomId, content);
+    sendMessage(activeRoomId, content, selectedFile || undefined);
 
-    // Clear input
+    // Clear input and file
     setInput("");
+    setSelectedFile(null);
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto";
     }
-  }, [input, activeRoomId, pendingUser, sendMessage]);
+  }, [input, selectedFile, activeRoomId, pendingUser, sendMessage]);
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setSelectedFile(file);
+    }
+    // Reset input value to allow selecting same file again
+    e.target.value = "";
+  };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -476,14 +488,47 @@ export function ChatPage() {
                       transition={{ duration: 0.2, ease: "easeOut" }}
                       className={cn("flex flex-col gap-1 max-w-[80%]", isMine && "ml-auto items-end")}
                     >
-                      <div className={cn(
-                        "p-4 rounded-2xl text-sm shadow-sm",
-                        isMine
-                          ? "bg-primary text-primary-foreground rounded-br-sm shadow-lg shadow-primary/20"
-                          : "bg-muted rounded-tl-sm"
-                      )}>
-                        {msg.content}
-                      </div>
+                        <div className={cn(
+                          "p-4 rounded-2xl text-sm shadow-sm flex flex-col gap-2",
+                          isMine
+                            ? "bg-primary text-primary-foreground rounded-br-sm shadow-lg shadow-primary/20"
+                            : "bg-muted rounded-tl-sm"
+                        )}>
+                          {msg.metadata?.attachment && (
+                            <div className="relative rounded-lg overflow-hidden bg-muted/5 border border-border/10">
+                              {msg.metadata.attachment.type === "IMAGE" && (
+                                <div className="relative aspect-auto min-h-[100px] min-w-[200px]">
+                                  <img 
+                                    src={msg.metadata.attachment.local_url || msg.metadata.attachment.thumbnail_url || msg.metadata.attachment.url} 
+                                    alt="attachment"
+                                    className={cn(
+                                      "max-h-[300px] w-full object-contain transition-all duration-500",
+                                      !msg.metadata.attachment.processed && !msg.metadata.attachment.local_url && "blur-lg grayscale"
+                                    )}
+                                  />
+                                  {msg.status === "sending" && msg.metadata.attachment.progress < 100 && (
+                                    <div className="absolute inset-0 bg-black/40 flex items-center justify-center backdrop-blur-[2px]">
+                                      <div className="flex flex-col items-center gap-2">
+                                        <div className="h-8 w-8 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                        <span className="text-[10px] text-white font-bold">{Math.round(msg.metadata.attachment.progress)}%</span>
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                              {msg.metadata.attachment.type !== "IMAGE" && (
+                                <div className="p-3 flex items-center gap-3 bg-muted/10">
+                                  <FileIcon size={24} className="text-primary/60" />
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-xs font-bold truncate">{msg.metadata.attachment.filename}</p>
+                                    <p className="text-[9px] text-muted-foreground/60">{(msg.metadata.attachment.size / 1024).toFixed(1)} KB</p>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                          {msg.content && <div>{msg.content}</div>}
+                        </div>
                       <div className="flex items-center gap-1 px-1">
                         <span className="text-[9px] text-muted-foreground">{formatTime(msg.sent_at)}</span>
                         {isMine && (
@@ -520,8 +565,38 @@ export function ChatPage() {
 
               {/* Message Input */}
               <footer className="p-4 bg-background border-t border-border/50">
+                {selectedFile && (
+                  <div className="mb-3 flex items-center gap-3 p-2 bg-muted/30 rounded-xl border border-border/50 animate-in fade-in slide-in-from-bottom-2">
+                    <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center overflow-hidden border border-primary/20">
+                      {selectedFile.type.startsWith("image/") ? (
+                        <img src={URL.createObjectURL(selectedFile)} className="h-full w-full object-cover" />
+                      ) : (
+                        <FileIcon size={20} className="text-primary" />
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-bold truncate">{selectedFile.name}</p>
+                      <p className="text-[10px] text-muted-foreground">{(selectedFile.size / 1024).toFixed(1)} KB</p>
+                    </div>
+                    <button 
+                      onClick={() => setSelectedFile(null)}
+                      className="h-8 w-8 rounded-lg hover:bg-destructive/10 hover:text-destructive flex items-center justify-center transition-colors"
+                    >
+                      <X size={16} />
+                    </button>
+                  </div>
+                )}
                 <div className="relative flex items-end gap-3 bg-muted/50 border border-transparent focus-within:border-primary/30 focus-within:bg-background p-2 rounded-2xl transition-all duration-300">
-                  <button className="h-10 w-10 shrink-0 rounded-xl hover:bg-muted flex items-center justify-center transition-colors">
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    onChange={handleFileSelect}
+                    className="hidden"
+                  />
+                  <button 
+                    onClick={() => fileInputRef.current?.click()}
+                    className="h-10 w-10 shrink-0 rounded-xl hover:bg-muted flex items-center justify-center transition-colors"
+                  >
                     <Paperclip size={20} className="text-muted-foreground" />
                   </button>
                   <textarea
@@ -538,10 +613,10 @@ export function ChatPage() {
                   </button>
                   <button
                     onClick={handleSend}
-                    disabled={!input.trim() || !isConnected}
+                    disabled={(!input.trim() && !selectedFile) || !isConnected}
                     className={cn(
                       "h-10 w-10 shrink-0 rounded-xl flex items-center justify-center shadow-lg transition-all duration-200 active:scale-95",
-                      input.trim() && isConnected
+                      (input.trim() || selectedFile) && isConnected
                         ? "bg-primary text-primary-foreground shadow-primary/20 hover:opacity-90"
                         : "bg-muted text-muted-foreground cursor-not-allowed"
                     )}
