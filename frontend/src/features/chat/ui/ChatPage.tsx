@@ -12,11 +12,11 @@ export function ChatPage() {
   const location = useLocation();
   const navigate = useNavigate();
   const { roomId: urlRoomId } = useParams<{ roomId: string }>();
-  const { 
-    activeRoomId, 
-    setActiveRoom, 
-    messages: allMessages, 
-    rooms, 
+  const {
+    activeRoomId,
+    setActiveRoom,
+    messages: allMessages,
+    rooms,
     sendMessage,
     markAsRead,
     fetchRooms,
@@ -25,7 +25,7 @@ export function ChatPage() {
     pendingUser,
     setPendingUser
   } = useChatStore();
-  
+
   const [input, setInput] = useState("");
   const isConnected = socket.isConnected;
   const feedRef = useRef<HTMLDivElement>(null);
@@ -106,12 +106,12 @@ export function ChatPage() {
             const seqId = entry.target.getAttribute("data-seq");
             const isMine = entry.target.getAttribute("data-mine") === "true";
             const status = entry.target.getAttribute("data-status");
-            
+
             if (seqId && !isMine && status !== "read") {
               const seq = parseInt(seqId);
               if (seq > maxSeqRef.current) {
                 maxSeqRef.current = seq;
-                
+
                 // Start a timer to batch the read receipt
                 if (!batchTimerRef.current && activeRoomId) {
                   batchTimerRef.current = setTimeout(() => {
@@ -165,11 +165,11 @@ export function ChatPage() {
   // Typing Indicator Emission
   useEffect(() => {
     if (!activeRoomId || !isConnected) return;
-    
+
     const sendTyping = (isTyping: boolean) => {
-      socket.send("typing", { 
-        target: activeRoomId, 
-        payload: { is_typing: isTyping } 
+      socket.send("typing", {
+        target: activeRoomId,
+        payload: { is_typing: isTyping }
       });
     };
 
@@ -217,10 +217,10 @@ export function ChatPage() {
     display_avatar: pendingUser.profile_picture,
     type: "DIRECT",
     isFetchingMore: false,
-    messageIds: [],
+    messageIds: rooms[""]?.messageIds || [],
     typingUsers: new Set<string>()
   } : null);
-  const roomMessages = activeRoomId ? (rooms[activeRoomId]?.messageIds || []) : [];
+  const roomMessages = activeRoomId ? (rooms[activeRoomId]?.messageIds || []) : (pendingUser ? (rooms[""]?.messageIds || []) : []);
   const messages = roomMessages.map(id => allMessages[id]).filter(Boolean);
 
   const formatTime = (ts: number) => new Date(ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
@@ -269,7 +269,7 @@ export function ChatPage() {
               ))}
             </div>
           )}
-          
+
           {chatList.map((chat) => (
             <div
               key={chat.id}
@@ -339,12 +339,12 @@ export function ChatPage() {
               {/* Chat Header */}
               <header className="h-[72px] border-b border-border px-6 flex items-center justify-between bg-background/50 backdrop-blur-md sticky top-0 z-10">
                 <div className="flex items-center gap-4">
-                  <button 
+                  <button
                     onClick={() => {
                       setPendingUser(null);
                       setActiveRoom(null);
                       navigate("/chats");
-                    }} 
+                    }}
                     className="lg:hidden h-9 w-9 rounded-xl bg-muted flex items-center justify-center mr-2"
                   >
                     <ArrowLeft size={18} />
@@ -385,7 +385,7 @@ export function ChatPage() {
               <div ref={feedRef} className="flex-1 overflow-y-auto p-6 space-y-4 custom-scrollbar scroll-smooth">
                 {/* Infinite Scroll Sentinel */}
                 <div ref={topSentinelRef} className="h-1 w-full" />
-                
+
                 {currentChat?.isFetchingMore && (
                   <div className="flex justify-center py-2">
                     <div className="h-5 w-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
@@ -429,28 +429,28 @@ export function ChatPage() {
                         <span className="text-[9px] text-muted-foreground">{formatTime(msg.sent_at)}</span>
                         {isMine && (
                           <div className="flex items-center ml-1">
-                          <div className="flex items-center ml-1">
-                            {msg.status === "sending" ? (
-                              <span className="text-[9px] text-muted-foreground/50 italic animate-pulse">sending...</span>
-                            ) : msg.status === "acknowledged" ? (
-                              <span className="text-[11px] text-muted-foreground/40 leading-none">✓</span>
-                            ) : msg.status === "failed" ? (
-                              <span className="text-[9px] text-destructive font-bold">failed</span>
-                            ) : (
-                              <div className={cn(
-                                "flex items-center transition-colors duration-300",
-                                msg.status === "read" ? "text-blue-400" : "text-primary/80"
-                              )}>
-                                <span className={cn(
-                                  "text-[11px] leading-none",
-                                  msg.status === "sent" ? "font-normal" : "font-bold"
-                                )}>✓</span>
-                                {(msg.status === "delivered" || msg.status === "read") && (
-                                  <span className="text-[11px] leading-none -ml-1 font-bold">✓</span>
-                                )}
-                              </div>
-                            )}
-                          </div>
+                            <div className="flex items-center ml-1">
+                              {msg.status === "sending" ? (
+                                <span className="text-[9px] text-muted-foreground/50 italic animate-pulse">sending...</span>
+                              ) : msg.status === "acknowledged" ? (
+                                <span className="text-[11px] text-muted-foreground/40 leading-none">✓</span>
+                              ) : msg.status === "failed" ? (
+                                <span className="text-[9px] text-destructive font-bold">failed</span>
+                              ) : (
+                                <div className={cn(
+                                  "flex items-center transition-colors duration-300",
+                                  msg.status === "read" ? "text-blue-400" : "text-primary/80"
+                                )}>
+                                  <span className={cn(
+                                    "text-[11px] leading-none",
+                                    msg.status === "sent" ? "font-normal" : "font-bold"
+                                  )}>✓</span>
+                                  {(msg.status === "delivered" || msg.status === "read") && (
+                                    <span className="text-[11px] leading-none -ml-1 font-bold">✓</span>
+                                  )}
+                                </div>
+                              )}
+                            </div>
                           </div>
                         )}
                       </div>

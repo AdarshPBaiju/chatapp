@@ -108,7 +108,7 @@ function createEmptyRoom(roomId: string): RoomState {
 function mapHistoryMessage(roomId: string, msg: any): Message {
   const currentUserId = getCurrentUserId();
   const senderId = msg.sender_id || msg.sender?.id;
-  
+
   return {
     id: msg.id,
     sender_id: senderId,
@@ -193,7 +193,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     }
   },
 
-  flushOutbox: async () => {},
+  flushOutbox: async () => { },
 
   fetchHistory: async (roomId) => {
     const room = get().rooms[roomId];
@@ -281,7 +281,19 @@ export const useChatStore = create<ChatState>((set, get) => ({
         const sortedIds = Array.from(new Set(room.messageIds)).sort(compareMessages);
         const finalIds = sortedIds.slice(-500); // Maintain only last 500 in memory
 
-        // 7. Update Room Metadata (Unread count, Last Message)
+        // 7. Room Move Logic: If the room ID changed, remove from old room
+        if (existingMsg && existingMsg.room_id !== roomId) {
+          const oldRoomId = existingMsg.room_id;
+          const oldRoom = updatedRooms[oldRoomId];
+          if (oldRoom) {
+            updatedRooms[oldRoomId] = {
+              ...oldRoom,
+              messageIds: oldRoom.messageIds.filter(id => id !== existingId)
+            };
+          }
+        }
+
+        // 8. Update Room Metadata (Unread count, Last Message)
         const isNewToRoom = !room.messageIds.includes(mergedMessage.id);
         const shouldIncrementUnread = state.activeRoomId !== roomId && mergedMessage.sender_id !== currentUserId && isNewToRoom;
         
@@ -334,7 +346,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       const response = await httpClient.get(`/chat/v1/rooms/${roomId}/history/`, {
         params: { before_seq_id: oldestMsg.sequence_id }
       });
-      
+
       if (response.data && response.data.length > 0) {
         get().addMessages(response.data);
       }
@@ -452,61 +464,29 @@ socket.on("message_ack", (data) => {
   const { temp_id, message_id, sequence_id, status, success } = data;
   clearPendingAck(temp_id);
 
-  useChatStore.setState((state) => {
-    const updatedMessages = { ...state.messages };
-    const tempMsg = updatedMessages[temp_id];
+  const state = useChatStore.getState();
+  const tempMsg = state.messages[temp_id];
+  
+  if (tempMsg) {
+    const finalId = message_id || temp_id;
+    const finalRoomId = data.room_id || tempMsg.room_id;
     
-    if (tempMsg) {
-      const finalId = message_id || temp_id;
-      const finalRoomId = data.room_id || tempMsg.room_id;
-      
-      // Update message content
-      const updatedMsg = {
-        ...tempMsg,
-        id: finalId,
-        room_id: finalRoomId,
-        sequence_id: sequence_id || tempMsg.sequence_id,
-        status: success ? (status || "acknowledged") : "failed"
-      };
+    const updatedMsg: Message = {
+      ...tempMsg,
+      id: finalId,
+      room_id: finalRoomId,
+      sequence_id: sequence_id || tempMsg.sequence_id,
+      status: success ? (status || "acknowledged") : "failed"
+    };
 
-      // If ID changed, swap the key in the map
-      if (finalId !== temp_id) {
-        delete updatedMessages[temp_id];
-      }
-      updatedMessages[finalId] = updatedMsg;
+    // Use centralized addMessage logic for room moves
+    state.addMessage(updatedMsg);
 
-      // Also update the room's messageIds list to use the new ID
-      const updatedRooms = { ...state.rooms };
-      const roomId = finalRoomId;
-      
-      // If this was a lazy creation, we might need to create the room object in store
-      if (roomId && !updatedRooms[roomId] && state.pendingUser) {
-        // This is the first message ack for a lazy room
-        updatedRooms[roomId] = {
-          id: roomId,
-          display_name: state.pendingUser.full_name,
-          display_avatar: state.pendingUser.profile_picture,
-          type: "DIRECT",
-          messageIds: [finalId],
-          unread_count: 0,
-          typingUsers: new Set(),
-          lastReadSeq: 0,
-          lastSyncedSeq: sequence_id || 0,
-        } as any;
-        
-        return { 
-          messages: updatedMessages, 
-          rooms: updatedRooms,
-          activeRoomId: roomId, // Auto-switch to the new room
-          pendingUser: null 
-        };
-      }
-
-      return { messages: updatedMessages, rooms: updatedRooms };
+    // If this was a lazy creation transition, trigger room list refresh
+    if (finalRoomId && tempMsg.room_id === "" && finalRoomId !== "") {
+      void state.fetchRooms();
     }
-    
-    return state;
-  });
+  }
 });
 
 socket.on("chat_delivery", (data) => {
@@ -582,45 +562,39 @@ socket.on("chat_status", (data) => {
   const payload = data.payload || data;
   const { room_id, last_read_seq, message_id, id, temp_id, status } = payload;
   const currentUserId = getCurrentUserId();
+  const state = useChatStore.getState();
 
-  useChatStore.setState((state) => {
-    const updatedMessages = { ...state.messages };
-    const targetMsgId = message_id || id || temp_id;
+  const targetMsgId = message_id || id || temp_id;
+  if (targetMsgId) {
+    const msg = state.messages[targetMsgId] || 
+                Object.values(state.messages).find(m => m.temp_id === temp_id || m.id === targetMsgId);
 
-    if (targetMsgId) {
-      // Find the message key
-      const messageKey = Object.keys(updatedMessages).find(key => {
-        const m = updatedMessages[key];
-        return key === targetMsgId || m.id === targetMsgId || m.temp_id === targetMsgId || m.temp_id === temp_id;
-      });
+    if (msg && status) {
+      const mappedStatus = status.toLowerCase() === "sent" ? "delivered" : status.toLowerCase();
+      const finalRoomId = room_id || msg.room_id;
 
-      if (messageKey && status) {
-        // Map "sent" from backend to "delivered" in our UI context
-        const mappedStatus = status.toLowerCase() === "sent" ? "delivered" : status.toLowerCase();
-        const msg = updatedMessages[messageKey];
-        const finalRoomId = room_id || msg.room_id;
+      const updatedMsg: Message = {
+        ...msg,
+        status: mappedStatus as any,
+        room_id: finalRoomId,
+        id: message_id || id || msg.id
+      };
 
-        // IMMUTABLE UPDATE: Clone the message object
-        updatedMessages[messageKey] = {
-          ...msg,
-          status: mappedStatus as any,
-          room_id: finalRoomId,
-          id: message_id || id || msg.id
-        };
+      // Use centralized addMessage logic for room moves
+      state.addMessage(updatedMsg);
 
-        // If this is a lazy room confirmation, update state
-        if (finalRoomId && state.pendingUser && !state.activeRoomId) {
-          return {
-            messages: updatedMessages,
-            activeRoomId: finalRoomId,
-            pendingUser: null
-          };
-        }
+      // If this is a lazy room confirmation, update state and fetch rooms
+      if (finalRoomId && state.pendingUser && !state.activeRoomId) {
+        void state.fetchRooms();
+        useChatStore.setState({ activeRoomId: finalRoomId, pendingUser: null });
       }
     }
+  }
 
-    // 2. Handle bulk read status update (Collective Read Ticks)
-    if (last_read_seq) {
+  // 2. Handle bulk read status update (Collective Read Ticks)
+  if (last_read_seq) {
+    useChatStore.setState((state) => {
+      const updatedMessages = { ...state.messages };
       Object.keys(updatedMessages).forEach((key) => {
         const msg = updatedMessages[key];
         if (
@@ -630,15 +604,10 @@ socket.on("chat_status", (data) => {
           msg.sender_id === currentUserId &&
           msg.status !== "read"
         ) {
-          // IMMUTABLE UPDATE: Clone the message object
-          updatedMessages[key] = {
-            ...msg,
-            status: "read"
-          };
+          updatedMessages[key] = { ...msg, status: "read" };
         }
       });
-    }
-
-    return { messages: updatedMessages };
-  });
+      return { messages: updatedMessages };
+    });
+  }
 });
