@@ -13,6 +13,7 @@ class RoomParticipantSerializer(serializers.ModelSerializer):
 class LastMessageSerializer(serializers.ModelSerializer):
     sender_id = serializers.ReadOnlyField(source="sender.user.id")
     sender_name = serializers.ReadOnlyField(source="sender.full_name")
+    status = serializers.SerializerMethodField()
 
     class Meta:
         model = Message
@@ -23,7 +24,13 @@ class LastMessageSerializer(serializers.ModelSerializer):
             "sequence_id",
             "sender_id",
             "sender_name",
+            "status",
         ]
+
+    def get_status(self, obj):
+        # Re-use logic from MessageSerializer if possible, or simple fallback
+        from .messages import MessageSerializer
+        return MessageSerializer(context=self.context).get_status(obj)
 
 
 class RoomSerializer(serializers.ModelSerializer):

@@ -12,29 +12,30 @@ class ChatService:
         if client_a == client_b:
             raise ValueError("Cannot create a DM room with yourself.")
 
-        # Check for existing DM room
-        existing_room = (
-            Room.objects.filter(
-                type=Room.RoomType.DIRECT,
-                memberships__client=client_a,
-                is_deleted=False,
-            )
-            .filter(memberships__client=client_b, is_deleted=False)
-            .first()
-        )
+        # Deterministic DM key
+        ids = sorted([str(client_a.id), str(client_b.id)])
+        dm_slug = f"dm:{ids[0]}:{ids[1]}"
+
+        # Check for existing DM room via slug
+        existing_room = Room.objects.filter(slug=dm_slug, is_deleted=False).first()
 
         if existing_room:
             return existing_room
 
-        # Create new DM room
-        with transaction.atomic():
-            room = Room.objects.create(
-                type=Room.RoomType.DIRECT,
-                name=f"DM: {client_a.username} & {client_b.username}",
-            )
-            RoomMembership.objects.create(room=room, client=client_a)
-            RoomMembership.objects.create(room=room, client=client_b)
-            return room
+        # Create new DM room with atomic protection
+        try:
+            with transaction.atomic():
+                room = Room.objects.create(
+                    type=Room.RoomType.DIRECT,
+                    slug=dm_slug,
+                    name=f"DM: {client_a.username} & {client_b.username}",
+                )
+                RoomMembership.objects.create(room=room, client=client_a)
+                RoomMembership.objects.create(room=room, client=client_b)
+                return room
+        except Exception:
+            # Handle race condition where another thread created it just now
+            return Room.objects.filter(slug=dm_slug).first()
 
     @staticmethod
     def get_display_context(room: Room, viewer_client: Client):

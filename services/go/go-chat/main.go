@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -111,36 +112,51 @@ func main() {
 			content, _ := body["content"].(string)
 			tempID, _ := body["temp_id"].(string)
 			idempotencyKey, _ := body["idempotency_key"].(string)
+			targetUserID, _ := body["target_user_id"].(string)
 			roomID := msg.Target
+			
 			if idempotencyKey == "" {
 				idempotencyKey = tempID
 			}
-			if roomID == "" || tempID == "" || strings.TrimSpace(content) == "" {
+
+			// Validation: Must have either roomID or targetUserID
+			if (roomID == "" && targetUserID == "") || tempID == "" || strings.TrimSpace(content) == "" {
 				sendSocketMessage(client, "message_ack", map[string]any{
 					"temp_id": tempID,
 					"success": false,
-					"error":   "Room, content, and temp_id are required",
+					"error":   "Room (or target_user_id), content, and temp_id are required",
 				})
 				return
 			}
 
-			seqID, err := rdb.Incr(context.Background(), "room:seq:"+roomID).Result()
-			if err != nil {
-				debug.Print("GO-CHAT", "Redis Error (Sequencing): "+err.Error())
-				sendSocketMessage(client, "message_ack", map[string]any{
-					"temp_id": tempID,
-					"success": false,
-					"error":   "Unable to reserve message sequence",
-				})
-				return
+			var seqID int64
+			if roomID != "" {
+				var err error
+				seqID, err = rdb.Incr(context.Background(), "room:seq:"+roomID).Result()
+				if err != nil {
+					debug.Print("GO-CHAT", "Redis Error (Sequencing): "+err.Error())
+					sendSocketMessage(client, "message_ack", map[string]any{
+						"temp_id": tempID,
+						"success": false,
+						"error":   "Unable to reserve message sequence",
+					})
+					return
+				}
 			}
 
-			err = producer.Publish(context.Background(), messaging.Event{
+			// Generate a properly formatted pseudo-UUID first
+			b := make([]byte, 16)
+			_, _ = rand.Read(b)
+			msgID := fmt.Sprintf("%08x-%04x-%04x-%04x-%012x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:])
+
+			err := producer.Publish(context.Background(), messaging.Event{
 				Topic: "chat.inbound",
 				Key:   roomID,
 				Type:  "CHAT_MESSAGE",
 				Payload: map[string]any{
+					"id":              msgID,
 					"room_id":         roomID,
+					"target_user_id":  targetUserID,
 					"user_id":          client.UserID,
 					"content":         content,
 					"sender_id":       client.UserID,
@@ -148,6 +164,7 @@ func main() {
 					"idempotency_key": idempotencyKey,
 					"sequence_id":     seqID,
 					"sent_at":         time.Now().UnixMilli(),
+					"correlation_id":  fmt.Sprintf("corr-%s", msgID), // 🔍 Traceability
 				},
 			})
 
@@ -161,6 +178,37 @@ func main() {
 				return
 			}
 
+			// 🚀 HYPERSCALE OPTIMIZATION: Targeted Cross-Node Routing
+			if targetUserID != "" {
+				go func() {
+					// 1. Find which node the target user is on
+					targetNode, _ := rdb.Get(context.Background(), "user:node:"+targetUserID).Result()
+					
+					distEvent := map[string]any{
+						"type": "chat_delivery",
+						"target_user_id": targetUserID, // Explicit target for the receiving node
+						"payload": map[string]any{
+							"id":         msgID,
+							"room_id":    roomID,
+							"sender_id":  client.UserID,
+							"content":    content,
+							"created_at": time.Now().Format(time.RFC3339),
+							"status":     "sent",
+						},
+					}
+					distData, _ := json.Marshal(distEvent)
+					
+					if targetNode != "" {
+						// Targeted publish to the specific node
+						rdb.Publish(context.Background(), "node:delivery:"+targetNode, distData)
+					} else {
+						// Fallback: User might be on another node but not registered, or offline
+						// In a true hyperscale system, we'd use a more robust fallback
+						rdb.Publish(context.Background(), "user:delivery:broadcast", distData)
+					}
+				}()
+			}
+
 			sendSocketMessage(client, "message_ack", map[string]any{
 				"temp_id":     tempID,
 				"message_id":  msgID,
@@ -170,7 +218,7 @@ func main() {
 				"success":     true,
 			})
 
-			debug.Print("GO-CHAT", "Message seq:"+strconv.FormatInt(seqID, 10)+" persisted and queued for room: "+roomID)
+			debug.Print("GO-CHAT", "Message seq:"+strconv.FormatInt(seqID, 10)+" persisted and short-circuited for room: "+roomID)
 		} else if msg.Type == "read_receipt" {
 			body, ok := payloadMap(msg.Payload)
 			if !ok {
@@ -265,6 +313,33 @@ func main() {
 	internalSecret := os.Getenv("INTERNAL_SERVICE_SECRET")
 	authVerifier := auth.NewVerifierClient(authBaseURL, internalSecret)
 
+	// 🚀 HORIZONTAL SCALE: Targeted Distributed Delivery Listener
+	// Listen to our specific node's channel + global broadcast fallback
+	go func() {
+		nodeChannel := "node:delivery:" + nodeID
+		pubsub := rdb.Subscribe(context.Background(), nodeChannel, "user:delivery:broadcast")
+		defer pubsub.Close()
+
+		ch := pubsub.Channel()
+		debug.Print("GO-CHAT", "📡 Targeted delivery listener active on "+nodeChannel)
+		for msg := range ch {
+			var event struct {
+				TargetUserID string `json:"target_user_id"`
+				Payload      any    `json:"payload"`
+			}
+			if err := json.Unmarshal([]byte(msg.Payload), &event); err != nil {
+				continue
+			}
+
+			// Deliver directly to locally connected user
+			data, _ := json.Marshal(map[string]any{
+				"type":    "chat_delivery",
+				"payload": event.Payload,
+			})
+			hub.SendToUser(event.TargetUserID, data)
+		}
+	}()
+
 	// 7. Register HTTP Routes
 	http.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
 		token := r.URL.Query().Get("token")
@@ -281,7 +356,29 @@ func main() {
 		}
 
 		debug.Print("GO-CHAT", "SUCCESS: Authenticated User: "+userID)
+		
+		// 🚀 PRESENCE REGISTRY: Mark user as connected to this specific node
+		presenceKey := "user:node:" + userID
+		rdb.Set(r.Context(), presenceKey, nodeID, 60*time.Second) // 60s TTL
+		
+		// Start a heartbeat goroutine to keep presence alive
+		heartbeatCtx, stopHeartbeat := context.WithCancel(r.Context())
+		go func() {
+			ticker := time.NewTicker(30 * time.Second)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-ticker.C:
+					rdb.Set(heartbeatCtx, presenceKey, nodeID, 60*time.Second)
+				case <-heartbeatCtx.Done():
+					rdb.Del(context.Background(), presenceKey)
+					return
+				}
+			}
+		}()
+
 		hub.ServeWs(w, r, userID)
+		stopHeartbeat()
 	})
 
 	http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {

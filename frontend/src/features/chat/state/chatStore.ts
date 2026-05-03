@@ -15,6 +15,7 @@ interface Room {
     created_at: string;
     sender_id: string;
     sender_name: string;
+    status: Message["status"];
   } | null;
   unread_count: number;
   isFetchingMore?: boolean;
@@ -106,18 +107,20 @@ function createEmptyRoom(roomId: string): RoomState {
 
 function mapHistoryMessage(roomId: string, msg: any): Message {
   const currentUserId = getCurrentUserId();
+  const senderId = msg.sender_id || msg.sender?.id;
+  
   return {
     id: msg.id,
-    sender_id: msg.sender.id,
+    sender_id: senderId,
     room_id: roomId,
     content: msg.content,
     sequence_id: msg.sequence_id,
     sent_at: msg.sent_at || new Date().getTime(),
-    status: msg.status || (msg.sender.id === currentUserId ? "sent" : "read"),
+    status: (msg.status || (senderId === currentUserId ? "sent" : "read")).toLowerCase() as any,
   };
 }
 
-function sendOutboxEntry(message: Message) {
+function sendOutboxEntry(message: Message, targetUserId?: string | null) {
   if (!socket.isConnected) {
     return;
   }
@@ -128,6 +131,7 @@ function sendOutboxEntry(message: Message) {
       content: message.content,
       temp_id: message.temp_id,
       idempotency_key: message.idempotency_key,
+      target_user_id: targetUserId,
     },
   });
 
@@ -224,96 +228,76 @@ export const useChatStore = create<ChatState>((set, get) => ({
       const updatedMessages = { ...state.messages };
       const updatedRooms = { ...state.rooms };
 
+      // 1. Build a lookup map of existing messages to handle ID swaps (temp -> permanent)
       const lookupMap = new Map<string, string>();
       Object.values(state.messages).forEach(m => {
         if (m.temp_id) lookupMap.set(m.temp_id, m.id);
         if (m.idempotency_key) lookupMap.set(m.idempotency_key, m.id);
+        lookupMap.set(m.id, m.id);
       });
 
       messages.forEach((message) => {
         const roomId = message.room_id;
         const room = updatedRooms[roomId] || createEmptyRoom(roomId);
 
+        // 2. Identify if this message already exists (by ID, TempID, or IdempotencyKey)
         const existingId = lookupMap.get(message.id) ||
           (message.temp_id ? lookupMap.get(message.temp_id) : null) ||
           (message.idempotency_key ? lookupMap.get(message.idempotency_key) : null);
 
-        const existingMsg = existingId ? updatedMessages[existingId] : updatedMessages[message.id];
+        const existingMsg = existingId ? updatedMessages[existingId] : null;
 
+        // 3. Merge data
         const mergedMessage: Message = existingMsg ? {
           ...existingMsg,
           ...message,
-          id: message.id,
+          id: message.id, // Always prefer permanent ID
           status: (message.status === "read" || existingMsg.status === "read") ? "read" :
             (message.status === "delivered" || existingMsg.status === "delivered") ? "delivered" :
               message.status,
         } : message;
 
-        updatedMessages[message.id] = mergedMessage;
+        // 4. Update the main message store
+        updatedMessages[mergedMessage.id] = mergedMessage;
 
-        if (message.temp_id && message.temp_id !== message.id) {
-          delete updatedMessages[message.temp_id];
-          lookupMap.delete(message.temp_id);
-        }
-        if (existingId && existingId !== message.id) {
+        // 5. Cleanup: If we upgraded from a temp_id, remove the old key
+        if (existingId && existingId !== mergedMessage.id) {
           delete updatedMessages[existingId];
+          const idx = room.messageIds.indexOf(existingId);
+          if (idx !== -1) room.messageIds[idx] = mergedMessage.id;
+        } else if (!room.messageIds.includes(mergedMessage.id)) {
+          room.messageIds.push(mergedMessage.id);
         }
 
+        // 6. Sort and cap messages for this room (Memory Management)
         const compareMessages = (idA: string, idB: string) => {
           const mA = updatedMessages[idA];
           const mB = updatedMessages[idB];
           if (!mA || !mB) return 0;
-
-          if (mA.sequence_id && mB.sequence_id) {
-            try {
-              const sA = BigInt(mA.sequence_id);
-              const sB = BigInt(mB.sequence_id);
-              if (sA < sB) return -1;
-              if (sA > sB) return 1;
-            } catch (e) {}
-          }
-
-          const tA = mA.sent_at ? new Date(mA.sent_at).getTime() : 0;
-          const tB = mB.sent_at ? new Date(mB.sent_at).getTime() : 0;
-          if (tA !== tB) return tA - tB;
-
-          if (mA.sequence_id && !mB.sequence_id) return -1;
-          if (!mA.sequence_id && mB.sequence_id) return 1;
-
-          return (mA.id || "").localeCompare(mB.id || "");
+          if (mA.sequence_id && mB.sequence_id) return mA.sequence_id - mB.sequence_id;
+          return (mA.sent_at || 0) - (mB.sent_at || 0);
         };
 
-        let nextMessageIds = Array.from(new Set([...room.messageIds, message.id]))
-          .filter(id => (id === message.id) || (id !== message.temp_id && id !== existingId));
-        
-        nextMessageIds.sort(compareMessages);
+        const sortedIds = Array.from(new Set(room.messageIds)).sort(compareMessages);
+        const finalIds = sortedIds.slice(-500); // Maintain only last 500 in memory
 
-        if (nextMessageIds.length > 500) {
-          const removed = nextMessageIds.splice(0, nextMessageIds.length - 500);
-          removed.forEach(id => {
-            if (id !== message.id) delete updatedMessages[id];
-          });
-        }
-
-        const isNewToRoom = !room.messageIds.includes(message.id);
+        // 7. Update Room Metadata (Unread count, Last Message)
+        const isNewToRoom = !room.messageIds.includes(mergedMessage.id);
         const shouldIncrementUnread = state.activeRoomId !== roomId && mergedMessage.sender_id !== currentUserId && isNewToRoom;
-
-        // Only update last_message if this message is newer than current one
-        const currentLastAt = room.last_message ? new Date(room.last_message.created_at).getTime() : 0;
-        const isLatest = mergedMessage.sent_at >= currentLastAt;
-
+        
         updatedRooms[roomId] = {
-          ...updatedRooms[roomId],
-          messageIds: nextMessageIds,
+          ...room,
+          messageIds: finalIds,
           unread_count: state.activeRoomId === roomId ? 0 :
-            shouldIncrementUnread ? (updatedRooms[roomId].unread_count || 0) + 1 : updatedRooms[roomId].unread_count,
-          last_message: isLatest ? {
+            shouldIncrementUnread ? (room.unread_count || 0) + 1 : room.unread_count,
+          last_message: {
             content: mergedMessage.content,
             created_at: new Date(mergedMessage.sent_at).toISOString(),
             sender_id: mergedMessage.sender_id,
             sender_name: mergedMessage.sender_id === currentUserId ? "You" : room.display_name || "User",
-          } : updatedRooms[roomId].last_message,
-          lastSyncedSeq: Math.max(updatedRooms[roomId].lastSyncedSeq || 0, mergedMessage.sequence_id || 0),
+            status: mergedMessage.status,
+          },
+          lastSyncedSeq: Math.max(room.lastSyncedSeq || 0, mergedMessage.sequence_id || 0),
         };
       });
 
@@ -399,38 +383,17 @@ export const useChatStore = create<ChatState>((set, get) => ({
   sendMessage: async (roomId, content) => {
     const state = get();
     const user = useAuthStore.getState().user;
+    if (!user || (!roomId && !state.pendingUser)) return;
+
     const trimmedContent = content.trim();
-    if (!trimmedContent || !user?.id) return;
+    if (!trimmedContent) return;
 
     let targetRoomId = roomId;
+    let targetUserId = null;
 
     if (!targetRoomId && state.pendingUser) {
-      try {
-        const res = await httpClient.post(`/chat/v1/rooms/dm/${state.pendingUser.id}/`);
-        const newRoom = res.data;
-        targetRoomId = newRoom.id;
-
-        set((state) => ({
-          rooms: {
-            ...state.rooms,
-            [targetRoomId!]: {
-              ...newRoom,
-              messageIds: [],
-              typingUsers: new Set(),
-              lastReadSeq: 0,
-              lastSyncedSeq: 0,
-            }
-          },
-          activeRoomId: targetRoomId,
-          pendingUser: null
-        }));
-      } catch (error) {
-        console.error("❌ Failed to create room lazily:", error);
-        return;
-      }
+      targetUserId = state.pendingUser.id;
     }
-
-    if (!targetRoomId) return;
 
     const tempId = `tmp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const message: Message = {
@@ -438,7 +401,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       temp_id: tempId,
       idempotency_key: tempId,
       sender_id: user.id,
-      room_id: targetRoomId,
+      room_id: targetRoomId || "",
       content: trimmedContent,
       sent_at: Date.now(),
       status: "sending",
@@ -451,7 +414,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       return;
     }
 
-    sendOutboxEntry(message);
+    sendOutboxEntry(message, targetUserId);
   },
 
   markAsRead: (roomId, sequenceId) => {
@@ -495,11 +458,13 @@ socket.on("message_ack", (data) => {
     
     if (tempMsg) {
       const finalId = message_id || temp_id;
+      const finalRoomId = data.room_id || tempMsg.room_id;
       
       // Update message content
       const updatedMsg = {
         ...tempMsg,
         id: finalId,
+        room_id: finalRoomId,
         sequence_id: sequence_id || tempMsg.sequence_id,
         status: success ? (status || "acknowledged") : "failed"
       };
@@ -512,11 +477,28 @@ socket.on("message_ack", (data) => {
 
       // Also update the room's messageIds list to use the new ID
       const updatedRooms = { ...state.rooms };
-      const roomId = tempMsg.room_id;
-      if (roomId && updatedRooms[roomId]) {
+      const roomId = finalRoomId;
+      
+      // If this was a lazy creation, we might need to create the room object in store
+      if (roomId && !updatedRooms[roomId] && state.pendingUser) {
+        // This is the first message ack for a lazy room
         updatedRooms[roomId] = {
-          ...updatedRooms[roomId],
-          messageIds: updatedRooms[roomId].messageIds.map(id => id === temp_id ? finalId : id)
+          id: roomId,
+          display_name: state.pendingUser.full_name,
+          display_avatar: state.pendingUser.profile_picture,
+          type: "DIRECT",
+          messageIds: [finalId],
+          unread_count: 0,
+          typingUsers: new Set(),
+          lastReadSeq: 0,
+          lastSyncedSeq: sequence_id || 0,
+        } as any;
+        
+        return { 
+          messages: updatedMessages, 
+          rooms: updatedRooms,
+          activeRoomId: roomId, // Auto-switch to the new room
+          pendingUser: null 
         };
       }
 
@@ -615,12 +597,25 @@ socket.on("chat_status", (data) => {
       if (messageKey && status) {
         // Map "sent" from backend to "delivered" in our UI context
         const mappedStatus = status.toLowerCase() === "sent" ? "delivered" : status.toLowerCase();
-        
+        const msg = updatedMessages[messageKey];
+        const finalRoomId = room_id || msg.room_id;
+
         // IMMUTABLE UPDATE: Clone the message object
         updatedMessages[messageKey] = {
-          ...updatedMessages[messageKey],
-          status: mappedStatus as any
+          ...msg,
+          status: mappedStatus as any,
+          room_id: finalRoomId,
+          id: message_id || id || msg.id
         };
+
+        // If this is a lazy room confirmation, update state
+        if (finalRoomId && state.pendingUser && !state.activeRoomId) {
+          return {
+            messages: updatedMessages,
+            activeRoomId: finalRoomId,
+            pendingUser: null
+          };
+        }
       }
     }
 

@@ -36,6 +36,7 @@ class Room(SoftDeleteModel):
     type = models.CharField(
         max_length=10, choices=RoomType.choices, default=RoomType.DIRECT
     )
+    slug = models.CharField(max_length=255, unique=True, null=True, blank=True)
 
     last_message = models.ForeignKey(
         "Message",
@@ -118,7 +119,7 @@ class Message(SoftDeleteModel):
     content = models.TextField()
     metadata = models.JSONField(default=dict, blank=True)
     idempotency_key = models.CharField(
-        max_length=100, null=True, blank=True, db_index=True
+        max_length=100, null=True, blank=True, db_index=True, unique=True
     )
     sent_at = models.BigIntegerField(null=True, blank=True, db_index=True)
 
@@ -130,6 +131,7 @@ class Message(SoftDeleteModel):
             models.Index(fields=["room", "-sent_at"]),
             models.Index(fields=["sender"]),
         ]
+        unique_together = ("room", "sequence_id")
         ordering = ["sequence_id"]
 
 

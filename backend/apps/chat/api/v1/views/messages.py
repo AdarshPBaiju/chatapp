@@ -58,7 +58,7 @@ class MessageHistoryAPIView(generics.ListAPIView):
 
         unread_receipts = MessageReceipt.objects.filter(
             client=client, message__room_id=room_id
-        ).exclude(status="READ")
+        ).exclude(status="READ").exclude(message__sender_id=client.user_id)
 
         membership.unread_count = 0
         membership.save(update_fields=["unread_count"])

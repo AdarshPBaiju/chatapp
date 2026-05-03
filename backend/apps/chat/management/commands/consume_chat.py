@@ -94,18 +94,25 @@ class Command(BaseCommand):
         temp_id = data.get("temp_id")
         idempotency_key = data.get("idempotency_key")
 
-        if not room_id:
-            logger.error(f"Missing room_id in message: {data}")
-            return
-
-        room = get_cached_room(room_id)
-        if not room:
-            logger.error(f"❌ Room {room_id} not found")
-            return
-
         client = Client.objects.filter(user_id=user_id).first()
         if not client:
             logger.error(f"❌ Client {user_id} not found")
+            return
+
+        room = None
+        if room_id:
+            room = get_cached_room(room_id)
+        elif data.get("target_user_id"):
+            # Lazy creation: find or create a direct room
+            target_user_id = data.get("target_user_id")
+            from chat.services import ChatService
+            target_client = Client.objects.filter(user_id=target_user_id).first()
+            if target_client:
+                room = ChatService.get_or_create_direct_room(client, target_client)
+                room_id = str(room.id)
+
+        if not room:
+            logger.error(f"❌ Room {room_id} not found and no target_user_id provided")
             return
 
         # 🚀 SECURITY: Ensure sender is an active member
@@ -125,12 +132,14 @@ class Command(BaseCommand):
         try:
             # 1. Save the Message
             message = Message.objects.create(
+                id=data.get("id"),
                 room=room,
                 sender=client,
                 content=content,
                 sequence_id=sequence_id,
                 idempotency_key=idempotency_key,
                 type="TEXT",
+                metadata={"temp_id": data.get("temp_id")},
                 sent_at=data.get("sent_at") or int(time.time() * 1000),
             )
 
@@ -172,6 +181,7 @@ class Command(BaseCommand):
                             "sequence_id": sequence_id,
                             "sender_id": str(user_id),
                             "content": content,
+                            "temp_id": temp_id,
                             "created_at": message.created_at.isoformat(),
                             "status": "sent",
                         },
@@ -186,22 +196,7 @@ class Command(BaseCommand):
             MessageReceipt.objects.bulk_create(receipts)
             KafkaProducer.flush()
 
-            # 🚀 Delivery Optimization: Notify sender of "Delivered" status (Double Tick)
-            delivery_status = {
-                "type": "CHAT_STATUS",
-                "payload": {
-                    "room_id": str(room_id),
-                    "message_id": str(message.id),
-                    "temp_id": temp_id,
-                    "status": "sent",
-                },
-            }
-            KafkaProducer.produce(
-                "chat.delivery",
-                key=str(user_id),
-                value=json.dumps(delivery_status).encode("utf-8"),
-            )
-            KafkaProducer.flush()
+            logger.info(f"✅ Message {message.id} persisted and broadcasted")
 
             logger.info(f"✅ Message {message.id} persisted and broadcasted")
 

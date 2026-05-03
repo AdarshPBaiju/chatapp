@@ -92,8 +92,13 @@ export function ChatPage() {
     return timeB - timeA;
   });
 
+  const maxSeqRef = useRef<number>(0);
+  const batchTimerRef = useRef<number | null>(null);
+
   // Setup Viewport Observer for Read Receipts
   useEffect(() => {
+    maxSeqRef.current = 0; // Reset on room change
+
     readObserver.current = new IntersectionObserver(
       (entries) => {
         entries.forEach((entry) => {
@@ -102,8 +107,21 @@ export function ChatPage() {
             const isMine = entry.target.getAttribute("data-mine") === "true";
             const status = entry.target.getAttribute("data-status");
             
-            if (seqId && !isMine && status !== "read" && activeRoomId) {
-              markAsRead(activeRoomId, parseInt(seqId));
+            if (seqId && !isMine && status !== "read") {
+              const seq = parseInt(seqId);
+              if (seq > maxSeqRef.current) {
+                maxSeqRef.current = seq;
+                
+                // Start a timer to batch the read receipt
+                if (!batchTimerRef.current && activeRoomId) {
+                  batchTimerRef.current = setTimeout(() => {
+                    if (activeRoomId && maxSeqRef.current > 0) {
+                      markAsRead(activeRoomId, maxSeqRef.current);
+                    }
+                    batchTimerRef.current = null;
+                  }, 1000); // Send at most once per second
+                }
+              }
             }
           }
         });
@@ -111,7 +129,10 @@ export function ChatPage() {
       { threshold: 0.5 }
     );
 
-    return () => readObserver.current?.disconnect();
+    return () => {
+      readObserver.current?.disconnect();
+      if (batchTimerRef.current) clearTimeout(batchTimerRef.current);
+    };
   }, [activeRoomId, markAsRead]);
 
   // Infinite Scroll Observer (Top Sentinel)
@@ -172,7 +193,7 @@ export function ChatPage() {
 
   const handleSend = useCallback(() => {
     const content = input.trim();
-    if (!content || !activeRoomId) return;
+    if (!content || (!activeRoomId && !pendingUser)) return;
 
     sendMessage(activeRoomId, content);
 
