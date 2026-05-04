@@ -66,11 +66,11 @@ jobs:
       url: ${{ (inputs.environment == 'production') && 'https://chatapp.example.com' || 'https://staging.chatapp.example.com' }}
     
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - uses: imranismail/setup-kustomize@v2
+      - uses: imranismail/setup-kustomize@v3
 
       - name: manifest-patch
         run: |
@@ -79,7 +79,7 @@ jobs:
             your-registry/chatapp-backend=${{ needs.resolve-tag.outputs.image }}:${{ needs.resolve-tag.outputs.tag }}
 
       - id: commit
-        uses: stefanzweifel/git-auto-commit-action@v5
+        uses: stefanzweifel/git-auto-commit-action@v7
         with:
           commit_message: "deploy(${{ inputs.environment || 'staging' }}): ${{ needs.resolve-tag.outputs.tag }}"
           file_pattern: "k8s/kustomization.yaml"
