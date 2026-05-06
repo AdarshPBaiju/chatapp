@@ -31,9 +31,37 @@ class ChatMemberSerializer(serializers.ModelSerializer):
         return request.build_absolute_uri(url) if request else url
 
 
+class MessageAttachmentSerializer(serializers.ModelSerializer):
+    class Meta:
+        from chat.models import MessageAttachment
+        model = MessageAttachment
+        fields = [
+            "id",
+            "type",
+            "storage_key",
+            "file_name",
+            "mime_type",
+            "size_bytes",
+            "metadata",
+            "is_processed",
+        ]
+
+
+class SimpleMessageSerializer(serializers.ModelSerializer):
+    """Simplified version for nested replies"""
+    sender_name = serializers.CharField(source="sender.full_name", read_only=True)
+
+    class Meta:
+        model = Message
+        fields = ["id", "content", "type", "sender_name", "sequence_id"]
+
+
 class MessageSerializer(serializers.ModelSerializer):
     sender = ChatMemberSerializer(read_only=True)
     status = serializers.SerializerMethodField()
+
+    attachments = MessageAttachmentSerializer(many=True, read_only=True)
+    reply_to = SimpleMessageSerializer(read_only=True)
 
     class Meta:
         model = Message
@@ -47,6 +75,13 @@ class MessageSerializer(serializers.ModelSerializer):
             "metadata",
             "status",
             "sent_at",
+            "reply_to",
+            "forwarded_from",
+            "is_edited",
+            "edited_at",
+            "delivered_at",
+            "seen_at",
+            "attachments",
         ]
 
     sent_at = serializers.SerializerMethodField()

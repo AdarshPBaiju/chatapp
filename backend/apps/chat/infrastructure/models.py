@@ -8,8 +8,10 @@ class Room(SoftDeleteModel):
     class RoomType(models.TextChoices):
         DIRECT = "DIRECT", "Direct"
         GROUP = "GROUP", "Group"
+        CHANNEL = "CHANNEL", "Channel"
 
     name = models.CharField(max_length=255, null=True, blank=True)
+    slug = models.CharField(max_length=255, unique=True, null=True, blank=True)
     description = models.TextField(blank=True, null=True)
     avatar = models.ImageField(
         upload_to=SmartUploadPath(
@@ -36,7 +38,6 @@ class Room(SoftDeleteModel):
     type = models.CharField(
         max_length=10, choices=RoomType.choices, default=RoomType.DIRECT
     )
-    slug = models.CharField(max_length=255, unique=True, null=True, blank=True)
 
     last_message = models.ForeignKey(
         "Message",
@@ -126,6 +127,27 @@ class Message(SoftDeleteModel):
     )
     sent_at = models.BigIntegerField(null=True, blank=True, db_index=True)
 
+    # PHASE 1: Safe Schema Evolution
+    reply_to = models.ForeignKey(
+        "self",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="replies",
+    )
+    forwarded_from = models.ForeignKey(
+        "self",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="forwarded_messages",
+    )
+    is_edited = models.BooleanField(default=False)
+    edited_at = models.DateTimeField(null=True, blank=True)
+    delivered_at = models.DateTimeField(null=True, blank=True)
+    seen_at = models.DateTimeField(null=True, blank=True)
+    encrypted_payload = models.BinaryField(null=True, blank=True)
+
     class Meta:
         db_table = "chat_messages"
         verbose_name = "Message"
@@ -159,4 +181,36 @@ class MessageReceipt(TimestampedModel):
         indexes = [
             models.Index(fields=["client", "status", "message"]),
             models.Index(fields=["message", "status"]),
+        ]
+
+
+class MessageAttachment(TimestampedModel):
+    class AttachmentType(models.TextChoices):
+        IMAGE = "IMAGE", "Image"
+        VIDEO = "VIDEO", "Video"
+        AUDIO = "AUDIO", "Audio"
+        FILE = "FILE", "File"
+
+    message = models.ForeignKey(
+        Message, related_name="attachments", on_delete=models.CASCADE
+    )
+    type = models.CharField(max_length=20, choices=AttachmentType.choices)
+
+    # MINIO INTEGRATION
+    storage_key = models.CharField(max_length=1024)  # Path in MinIO bucket
+    file_name = models.CharField(max_length=255)
+    mime_type = models.CharField(max_length=255)
+    size_bytes = models.BigIntegerField()
+
+    # ENRICHED METADATA (via Go-Media)
+    metadata = models.JSONField(default=dict, blank=True)
+    is_processed = models.BooleanField(default=False)
+
+    class Meta:
+        db_table = "chat_message_attachments"
+        verbose_name = "Message Attachment"
+        verbose_name_plural = "Message Attachments"
+        indexes = [
+            models.Index(fields=["message", "type"]),
+            models.Index(fields=["storage_key"]),
         ]

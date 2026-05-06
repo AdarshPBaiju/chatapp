@@ -99,3 +99,37 @@ func (s *S3Client) PutObjectStream(ctx context.Context, key string, reader io.Re
 		ContentType: contentType,
 	})
 }
+
+// NewMultipartUpload initiates a new multipart upload and returns the Upload ID.
+func (s *S3Client) NewMultipartUpload(ctx context.Context, key string, contentType string) (string, error) {
+	uploadID, err := s.client.NewMultipartUpload(ctx, s.bucketName, key, minio.PutObjectOptions{
+		ContentType: contentType,
+	})
+	if err != nil {
+		return "", fmt.Errorf("new multipart upload: %w", err)
+	}
+	return uploadID, nil
+}
+
+// PresignPutPartURL generates a presigned URL for uploading a single part of a multipart upload.
+func (s *S3Client) PresignPutPartURL(ctx context.Context, key string, uploadID string, partNumber int, expires time.Duration) (*url.URL, error) {
+	values := make(url.Values)
+	values.Set("uploadId", uploadID)
+	values.Set("partNumber", fmt.Sprintf("%d", partNumber))
+
+	presignedURL, err := s.presigner.Presign(ctx, "PUT", s.bucketName, key, expires, values)
+	if err != nil {
+		return nil, fmt.Errorf("presign put part url: %w", err)
+	}
+	return presignedURL, nil
+}
+
+// CompleteMultipartUpload finalizes a multipart upload.
+func (s *S3Client) CompleteMultipartUpload(ctx context.Context, key string, uploadID string, parts []minio.CompletePart) (minio.UploadInfo, error) {
+	return s.client.CompleteMultipartUpload(ctx, s.bucketName, key, uploadID, parts, minio.PutObjectOptions{})
+}
+
+// AbortMultipartUpload cancels a multipart upload.
+func (s *S3Client) AbortMultipartUpload(ctx context.Context, key string, uploadID string) error {
+	return s.client.AbortMultipartUpload(ctx, s.bucketName, key, uploadID)
+}

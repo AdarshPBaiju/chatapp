@@ -100,14 +100,26 @@ func (p *MediaProcessor) processImage(ctx context.Context, key string, attachmen
 		return fmt.Errorf("encode thumbnail: %w", err)
 	}
 
-	// 4. Upload Thumbnail
+	// 4. Selective Compression: If original > 1MB, compress original too
+	// In a real world, you'd might want to keep the original and serve compressed versions.
+	// Here we replace if it helps save space significantly.
+	if info, err := p.s3Client.StatObject(ctx, key); err == nil && info.Size > 1*1024*1024 {
+		var compressedBuf bytes.Buffer
+		err = imaging.Encode(&compressedBuf, img, imaging.JPEG, imaging.Quality(75))
+		if err == nil && int64(compressedBuf.Len()) < info.Size {
+			p.s3Client.PutObject(ctx, key, compressedBuf.Bytes(), "image/jpeg")
+			debug.Print("GO-MEDIA", fmt.Sprintf("Compressed original %s from %d to %d bytes", key, info.Size, compressedBuf.Len()))
+		}
+	}
+
+	// 5. Upload Thumbnail
 	thumbKey := strings.Replace(key, "originals/", "thumbnails/", 1) + ".thumb.jpg"
 	_, err = p.s3Client.PutObject(ctx, thumbKey, thumbBuf.Bytes(), "image/jpeg")
 	if err != nil {
 		return fmt.Errorf("upload thumbnail: %w", err)
 	}
 
-	// 5. Update Attachment Metadata
+	// 6. Update Attachment Metadata
 	attachment["processed"] = true
 	attachment["thumbnail_key"] = thumbKey
 	attachment["width"] = width

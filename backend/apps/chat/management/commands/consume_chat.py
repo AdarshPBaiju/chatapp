@@ -10,7 +10,7 @@ from django.db import models, transaction
 from django.db.models import Max
 from django_redis import get_redis_connection
 
-from chat.models import Room, Message, MessageReceipt, RoomMembership
+from chat.models import Room, Message, MessageReceipt, RoomMembership, MessageAttachment
 from core.kafka import KafkaProducer
 from users.models import Client
 
@@ -162,6 +162,12 @@ class Command(BaseCommand):
             return
 
         try:
+            # Determine message type
+            msg_metadata = data.get("metadata", {})
+            msg_type = "TEXT"
+            if "attachment" in msg_metadata:
+                msg_type = msg_metadata["attachment"].get("type", "FILE")
+
             # 1. Save the Message
             message = Message.objects.create(
                 id=data.get("id"),
@@ -170,10 +176,26 @@ class Command(BaseCommand):
                 content=content,
                 sequence_id=sequence_id,
                 idempotency_key=idempotency_key,
-                type="TEXT",
-                metadata=data.get("metadata", {}),
+                type=msg_type,
+                metadata=msg_metadata,
                 sent_at=data.get("sent_at") or int(time.time() * 1000),
+                reply_to_id=data.get("reply_to"),
+                forwarded_from_id=data.get("forwarded_from"),
             )
+
+            # 2. Save MessageAttachment if present
+            if "attachment" in msg_metadata:
+                att = msg_metadata["attachment"]
+                MessageAttachment.objects.create(
+                    message=message,
+                    type=att.get("type", "FILE"),
+                    storage_key=att.get("s3_key") or att.get("minio_key", ""),
+                    file_name=att.get("filename", "unknown"),
+                    mime_type=att.get("mime_type", "application/octet-stream"),
+                    size_bytes=att.get("size", 0),
+                    metadata=att.get("metadata", {}),
+                    is_processed=att.get("processed", False)
+                )
 
             room.last_message = message
             room.updated_at = message.created_at

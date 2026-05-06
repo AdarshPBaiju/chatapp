@@ -4,6 +4,7 @@ from ..infrastructure.models import (
     RoomMembership,
     RoomRoleLog,
     MessageReceipt,
+    MessageAttachment,
 )
 
 
@@ -13,4 +14,5 @@ __all__ = [
     "RoomMembership",
     "RoomRoleLog",
     "MessageReceipt",
+    "MessageAttachment",
 ]

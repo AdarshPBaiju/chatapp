@@ -2,17 +2,26 @@ import { create } from "zustand";
 import { chatSocket, presenceSocket } from "@/shared/api/socket";
 import { httpClient } from "@/shared/http/client";
 import { useAuthStore } from "@/modules/auth/state/authState";
-import { requestSignedUrl, uploadFileToS3 } from "@/features/chat/api/media";
+import { 
+  initMultipartUpload, 
+  getPartSignedUrl, 
+  uploadPart, 
+  completeMultipartUpload,
+  requestSignedUrl,
+  uploadFileToS3 
+} from "@/features/chat/api/media";
 import { compressImage } from "@/features/chat/lib/mediaUtils";
 
-interface Room {
+export interface Room {
   id: string;
+  slug?: string; // New field for Ghost Chat
   name: string;
-  type: "DIRECT" | "GROUP";
+  type: "DIRECT" | "GROUP" | "CHANNEL";
   avatar: string | null;
   display_name: string;
   display_avatar: string | null;
   last_message: {
+    id: string;
     content: string;
     created_at: string;
     sender_id: string;
@@ -24,7 +33,22 @@ interface Room {
   isFetchingMore?: boolean;
 }
 
-interface Message {
+export interface Attachment {
+  id?: string;
+  type: "IMAGE" | "VIDEO" | "AUDIO" | "FILE";
+  storage_key: string;
+  file_name: string;
+  mime_type: string;
+  size_bytes: number;
+  metadata?: any;
+  is_processed: boolean;
+  // Local UI states
+  local_url?: string;
+  progress?: number;
+  isSuccess?: boolean;
+}
+
+export interface Message {
   id: string;
   temp_id?: string;
   idempotency_key?: string;
@@ -32,10 +56,23 @@ interface Message {
   sender_name?: string;
   room_id: string;
   content: string;
+  type: "TEXT" | "IMAGE" | "VIDEO" | "AUDIO" | "FILE" | "SYSTEM";
   sequence_id?: number;
   metadata?: any;
   sent_at: number;
   status: "sending" | "acknowledged" | "sent" | "delivered" | "read" | "failed";
+  
+  // Phase 1 Features
+  reply_to?: Message | null;
+  reply_to_id?: string | null;
+  forwarded_from?: any | null;
+  is_edited: boolean;
+  edited_at?: string | null;
+  delivered_at?: string | null;
+  seen_at?: string | null;
+
+  // Phase 2 Features
+  attachments: Attachment[];
 }
 
 type RoomState = Room & {
@@ -66,13 +103,14 @@ interface ChatState {
   loadMoreMessages: (roomId: string) => Promise<void>;
   updateMessageStatus: (tempId: string, status: Message["status"], messageId?: string) => void;
   setTyping: (roomId: string, userId: string, isTyping: boolean) => void;
-  sendMessage: (roomId: string | null, content: string, file?: File, skipCompression?: boolean) => Promise<void>;
+  sendMessage: (roomId: string | null, content: string, file?: File, replyToId?: string, skipCompression?: boolean) => Promise<void>;
   markAsRead: (roomId: string, sequenceId: number) => void;
   setPendingUser: (user: any | null) => void;
   addMessages: (messages: Message[], skipUnread?: boolean) => void;
   addMessage: (message: Message, skipUnread?: boolean) => void;
   cancelUpload: (tempId: string) => void;
   resendMessage: (tempId: string, skipCompression?: boolean) => Promise<void>;
+  updateUploadProgress: (tempId: string, progress: number, isSuccess?: boolean) => void;
 }
 
 const abortControllers = new Map<string, { abort: () => void }>();
@@ -171,10 +209,32 @@ function mapHistoryMessage(roomId: string, msg: any): Message {
     sender_name: msg.sender_name || msg.sender?.full_name || msg.sender?.username,
     room_id: msg.room_id || roomId,
     content: msg.content,
+    type: msg.type || "TEXT",
     sequence_id: msg.sequence_id,
     sent_at: Number.isFinite(sentAt) ? sentAt : Date.now(),
     status: (msg.status || (senderId === currentUserId ? "sent" : "read")).toLowerCase() as any,
     metadata: msg.metadata,
+    
+    // Phase 1
+    reply_to: msg.reply_to ? mapHistoryMessage(roomId, msg.reply_to) : null,
+    reply_to_id: msg.reply_to_id,
+    forwarded_from: msg.forwarded_from,
+    is_edited: msg.is_edited || false,
+    edited_at: msg.edited_at,
+    delivered_at: msg.delivered_at,
+    seen_at: msg.seen_at,
+
+    // Phase 2
+    attachments: (msg.attachments || []).map((att: any) => ({
+      id: att.id,
+      type: att.type,
+      storage_key: att.storage_key,
+      file_name: att.file_name,
+      mime_type: att.mime_type,
+      size_bytes: att.size_bytes,
+      metadata: att.metadata,
+      is_processed: att.is_processed,
+    })),
   };
 }
 
@@ -453,13 +513,14 @@ export const useChatStore = create<ChatState>((set, get) => ({
           messageIds: finalIds,
           unread_count: state.activeRoomId === roomId ? 0 :
             shouldIncrementUnread ? (room.unread_count || 0) + 1 : room.unread_count,
-          last_message: {
-            content: mergedMessage.content,
-            created_at: new Date(mergedMessage.sent_at).toISOString(),
-            sender_id: mergedMessage.sender_id,
-            sender_name: normalizeUserId(mergedMessage.sender_id) === currentUserId ? "You" : room.display_name || "User",
-            status: mergedMessage.status,
-          },
+            last_message: room.last_message ? {
+              id: room.last_message.id,
+              content: room.last_message.content,
+              created_at: room.last_message.created_at,
+              sender_id: room.last_message.sender_id,
+              sender_name: room.last_message.sender_name,
+              status: (room.last_message.status || "sent").toLowerCase() as any,
+            } : null,
           lastSyncedSeq: Math.max(room.lastSyncedSeq || 0, mergedMessage.sequence_id || 0),
         };
       });
@@ -545,7 +606,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       };
     }),
 
-  sendMessage: async (roomId, content, file, skipCompression = false) => {
+  sendMessage: async (roomId, content, file, replyToId, skipCompression = false) => {
     const state = get();
     const user = useAuthStore.getState().user;
     if (!user || (!roomId && !state.pendingUser)) return;
@@ -566,16 +627,21 @@ export const useChatStore = create<ChatState>((set, get) => ({
       routeTarget = room?.type === "DIRECT" && targetUserId ? targetUserId : targetRoomId;
     }
 
+    const currentUserId = normalizeUserId(user.id);
     const tempId = `tmp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const message: Message = {
       id: tempId,
       temp_id: tempId,
       idempotency_key: tempId,
-      sender_id: normalizeUserId(user.id),
+      sender_id: currentUserId,
       room_id: targetRoomId || "",
       content: trimmedContent,
+      type: file ? (file.type.startsWith("image/") ? "IMAGE" : "FILE") : "TEXT",
       sent_at: Date.now(),
       status: "sending",
+      reply_to_id: replyToId,
+      is_edited: false,
+      attachments: [],
     };
 
     // If there is a file, prepare attachment metadata
@@ -607,66 +673,55 @@ export const useChatStore = create<ChatState>((set, get) => ({
         const shouldOptimize = !skipCompression && file.type.startsWith("image/");
         const optimizedFile = shouldOptimize ? await compressImage(file) : file;
 
-        const { signed_url, s3_key } = await requestSignedUrl(optimizedFile.name, optimizedFile.type);
+        const CHUNK_SIZE = 5 * 1024 * 1024; // 5MB MinIO/S3 Minimum
+        let s3Key = "";
 
-        const cancelRef = { abort: () => { } };
-        abortControllers.set(tempId, cancelRef);
+        if (optimizedFile.size <= CHUNK_SIZE) {
+          // 🚀 Single Part Upload for speed
+          const { signed_url, s3_key: key } = await requestSignedUrl(optimizedFile.name, optimizedFile.type);
+          s3Key = key;
+          const cancelRef = { abort: () => { } };
+          abortControllers.set(tempId, cancelRef);
 
-        await uploadFileToS3(optimizedFile, signed_url, (progress) => {
-          set((state) => {
-            const msg = state.messages[tempId];
-            if (!msg || !msg.metadata?.attachment) return state;
-            return {
-              messages: {
-                ...state.messages,
-                [tempId]: {
-                  ...msg,
-                  metadata: {
-                    ...msg.metadata,
-                    attachment: { ...msg.metadata.attachment, progress, size: optimizedFile.size }
-                  }
-                }
-              }
-            };
-          });
-        }, cancelRef);
+          await uploadFileToS3(optimizedFile, signed_url, (progress: number) => {
+            get().updateUploadProgress(tempId, progress);
+          }, cancelRef);
+        } else {
+          // 🚀 Multipart "Byte-by-Byte" Upload
+          const { upload_id, s3_key: key } = await initMultipartUpload(optimizedFile.name, optimizedFile.type);
+          s3Key = key;
+          const totalParts = Math.ceil(optimizedFile.size / CHUNK_SIZE);
+          const uploadedParts: { part_number: number; etag: string }[] = [];
+
+          const cancelRef = { abort: () => { } };
+          abortControllers.set(tempId, cancelRef);
+
+          for (let i = 0; i < totalParts; i++) {
+            const start = i * CHUNK_SIZE;
+            const end = Math.min(start + CHUNK_SIZE, optimizedFile.size);
+            const partBlob = optimizedFile.slice(start, end);
+            const partNumber = i + 1;
+
+            const partSignedUrl = await getPartSignedUrl(s3Key, upload_id, partNumber);
+            const etag = await uploadPart(partBlob, partSignedUrl, (partProgress: number) => {
+              const overallProgress = ((i / totalParts) * 100) + (partProgress / totalParts);
+              get().updateUploadProgress(tempId, overallProgress);
+            }, cancelRef);
+
+            uploadedParts.push({ part_number: partNumber, etag });
+          }
+
+          await completeMultipartUpload(s3Key, upload_id, uploadedParts);
+        }
 
         abortControllers.delete(tempId);
 
         // Mark as success briefly for the UI
-        set((state) => {
-          const msg = state.messages[tempId];
-          if (!msg || !msg.metadata?.attachment) return state;
-          return {
-            messages: {
-              ...state.messages,
-              [tempId]: {
-                ...msg,
-                metadata: { ...msg.metadata, attachment: { ...msg.metadata.attachment, isSuccess: true } }
-              }
-            }
-          };
-        });
-
-        // Clear success state after 2 seconds
-        setTimeout(() => {
-          set((state) => {
-            const msg = state.messages[tempId];
-            if (!msg || !msg.metadata?.attachment) return state;
-            return {
-              messages: {
-                ...state.messages,
-                [tempId]: {
-                  ...msg,
-                  metadata: { ...msg.metadata, attachment: { ...msg.metadata.attachment, isSuccess: false } }
-                }
-              }
-            };
-          });
-        }, 2000);
+        get().updateUploadProgress(tempId, 100, true);
+        setTimeout(() => get().updateUploadProgress(tempId, 100, false), 2000);
 
         // Update message with the s3_key before sending to socket
-        message.metadata.attachment.s3_key = s3_key;
+        message.metadata.attachment.s3_key = s3Key;
         message.metadata.attachment.size = optimizedFile.size;
         message.metadata.attachment.progress = 100;
 
@@ -739,7 +794,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         const cancelRef = { abort: () => { } };
         abortControllers.set(tempId, cancelRef);
 
-        await uploadFileToS3(optimizedFile, signed_url, (progress) => {
+        await uploadFileToS3(optimizedFile, signed_url, (progress: number) => {
           set((state) => {
             const m = state.messages[tempId];
             if (!m || !m.metadata?.attachment) return state;
@@ -804,6 +859,29 @@ export const useChatStore = create<ChatState>((set, get) => ({
     }
 
     sendOutboxEntry(msg, routeTarget, targetUserId);
+  },
+
+  updateUploadProgress: (tempId, progress, isSuccess = false) => {
+    set((state) => {
+      const msg = state.messages[tempId];
+      if (!msg || !msg.metadata?.attachment) return state;
+      return {
+        messages: {
+          ...state.messages,
+          [tempId]: {
+            ...msg,
+            metadata: {
+              ...msg.metadata,
+              attachment: {
+                ...msg.metadata.attachment,
+                progress,
+                isSuccess
+              }
+            }
+          }
+        }
+      };
+    });
   },
 }));
 
@@ -876,8 +954,18 @@ chatSocket.on("chat_delivery", (data) => {
     content,
     sequence_id,
     sent_at: created_at ? new Date(created_at).getTime() : Date.now(),
-    status: status || "sent",
-    metadata: payload.metadata || existing?.metadata
+    status: (status || "sent").toLowerCase() as any,
+    metadata: payload.metadata || existing?.metadata,
+    
+    // New Fields
+    type: payload.type || existing?.type || "TEXT",
+    is_edited: payload.is_edited || false,
+    attachments: payload.attachments || existing?.attachments || [],
+    reply_to: payload.reply_to || null,
+    reply_to_id: payload.reply_to_id,
+    forwarded_from: payload.forwarded_from,
+    delivered_at: payload.delivered_at,
+    seen_at: payload.seen_at,
   }, false);
 
   if (isNewRoom) {
