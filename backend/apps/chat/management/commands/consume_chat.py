@@ -171,7 +171,7 @@ class Command(BaseCommand):
                 sequence_id=sequence_id,
                 idempotency_key=idempotency_key,
                 type="TEXT",
-                metadata={"temp_id": data.get("temp_id")},
+                metadata=data.get("metadata", {}),
                 sent_at=data.get("sent_at") or int(time.time() * 1000),
             )
 
@@ -217,6 +217,7 @@ class Command(BaseCommand):
                                 "temp_id": temp_id,
                                 "created_at": message.created_at.isoformat(),
                                 "status": "sent",
+                                "metadata": message.metadata,
                             },
                         }
                         KafkaProducer.produce(

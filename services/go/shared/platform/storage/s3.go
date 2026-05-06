@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net/http"
 	"net/url"
 	"time"
 
@@ -22,8 +23,9 @@ type S3Config struct {
 }
 
 type S3Client struct {
-	client     *minio.Client
-	bucketName string
+	client      *minio.Client
+	presigner   *minio.Client
+	bucketName  string
 	externalURL string
 }
 
@@ -36,29 +38,40 @@ func NewS3Client(cfg S3Config) (*S3Client, error) {
 		return nil, fmt.Errorf("initialize minio client: %w", err)
 	}
 
+	var presigner *minio.Client = client
+	if cfg.ExternalEndpoint != "" {
+		ext, err := url.Parse(cfg.ExternalEndpoint)
+		if err == nil {
+			p, err := minio.New(ext.Host, &minio.Options{
+				Creds:  credentials.NewStaticV4(cfg.AccessKey, cfg.SecretKey, ""),
+				Secure: ext.Scheme == "https",
+			})
+			if err == nil {
+				presigner = p
+			}
+		}
+	}
+
 	return &S3Client{
-		client:     client,
-		bucketName: cfg.BucketName,
+		client:      client,
+		presigner:   presigner,
+		bucketName:  cfg.BucketName,
 		externalURL: cfg.ExternalEndpoint,
 	}, nil
 }
 
 // GeneratePresignedPutURL generates a temporary URL for uploading a file directly to S3.
 func (s *S3Client) GeneratePresignedPutURL(ctx context.Context, key string, contentType string, expires time.Duration) (*url.URL, error) {
-	// We could add more constraints here if needed
-	
-	presignedURL, err := s.client.PresignedPutObject(ctx, s.bucketName, key, expires)
-	if err != nil {
-		return nil, fmt.Errorf("generate presigned put url: %w", err)
+	// Use PresignHeader to include Content-Type in the signature
+	extraHeaders := make(http.Header)
+	if contentType != "" {
+		extraHeaders.Set("Content-Type", contentType)
 	}
 
-	// If an external URL is provided, swap the host
-	if s.externalURL != "" {
-		ext, err := url.Parse(s.externalURL)
-		if err == nil {
-			presignedURL.Host = ext.Host
-			presignedURL.Scheme = ext.Scheme
-		}
+	// Use the presigner client which has the correct host for the signature
+	presignedURL, err := s.presigner.PresignHeader(ctx, "PUT", s.bucketName, key, expires, nil, extraHeaders)
+	if err != nil {
+		return nil, fmt.Errorf("generate presigned put url: %w", err)
 	}
 
 	return presignedURL, nil

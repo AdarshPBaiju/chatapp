@@ -585,7 +585,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       else if (file.type.startsWith("video/")) mediaType = "VIDEO";
       else if (file.type.startsWith("audio/")) mediaType = "AUDIO";
       else mediaType = "DOCUMENT";
-      
+
       message.metadata = {
         attachment: {
           type: mediaType,
@@ -606,9 +606,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
         // Only compress if it's an image and skipCompression is false
         const shouldOptimize = !skipCompression && file.type.startsWith("image/");
         const optimizedFile = shouldOptimize ? await compressImage(file) : file;
-        
+
         const { signed_url, s3_key } = await requestSignedUrl(optimizedFile.name, optimizedFile.type);
-        
+
         const cancelRef = { abort: () => { } };
         abortControllers.set(tempId, cancelRef);
 
@@ -669,7 +669,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         message.metadata.attachment.s3_key = s3_key;
         message.metadata.attachment.size = optimizedFile.size;
         message.metadata.attachment.progress = 100;
-        
+
         // Final store update for the s3_key
         set((state) => {
           const msg = state.messages[tempId];
@@ -725,7 +725,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
     // Reset status and retry
     get().updateMessageStatus(tempId, "sending");
-    
+
     // Extract room info
     const roomId = msg.room_id;
     const room = state.rooms[roomId];
@@ -790,7 +790,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         msg.metadata!.attachment!.s3_key = s3_key;
         msg.metadata!.attachment!.size = optimizedFile.size;
         msg.metadata!.attachment!.progress = 100;
-        
+
         set((state) => ({
           messages: { ...state.messages, [tempId]: { ...msg, status: "sending" } }
         }));
@@ -877,10 +877,33 @@ chatSocket.on("chat_delivery", (data) => {
     sequence_id,
     sent_at: created_at ? new Date(created_at).getTime() : Date.now(),
     status: status || "sent",
+    metadata: payload.metadata || existing?.metadata
   }, false);
 
   if (isNewRoom) {
     void state.fetchRooms();
+  }
+});
+
+chatSocket.on("chat_update", (data) => {
+  const payload = data.payload || data;
+  const { id, metadata } = payload;
+  const state = useChatStore.getState();
+  const existingMsg = state.messages[id];
+
+  if (existingMsg) {
+    state.addMessage({
+      ...existingMsg,
+      metadata: {
+        ...existingMsg.metadata,
+        ...metadata,
+        attachment: {
+          ...existingMsg.metadata?.attachment,
+          ...metadata?.attachment,
+          processed: true
+        }
+      }
+    }, false);
   }
 });
 

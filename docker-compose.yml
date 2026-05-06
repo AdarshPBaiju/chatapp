@@ -61,6 +61,9 @@ services:
       interval: 30s
       timeout: 20s
       retries: 3
+    ports:
+      - "9000:9000"
+      - "9001:9001"
     networks:
       - chatapp_network
 
@@ -69,15 +72,12 @@ services:
     depends_on:
       minio:
         condition: service_healthy
-    entrypoint: |
-      /bin/sh -c "
-      /usr/bin/mc alias set myminio http://minio:9000 ${MINIO_ACCESS_KEY} ${MINIO_SECRET_KEY};
-      /usr/bin/mc mb myminio/chatapp || true;
-      /usr/bin/mc anonymous set download myminio/chatapp/media/thumbnails;
-      echo '{\"CORSRules\":[{\"AllowedHeaders\":[\"*\"],\"AllowedMethods\":[\"PUT\",\"GET\",\"POST\"],\"AllowedOrigins\":[\"*\"],\"ExposeHeaders\":[\"ETag\"],\"MaxAgeSeconds\":3000}]}' > /tmp/cors.json;
-      /usr/bin/mc cors set myminio/chatapp /tmp/cors.json;
-      exit 0;
-      "
+    environment:
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY}
+    volumes:
+      - ./scripts/minio_init.sh:/minio_init.sh
+    entrypoint: ["/bin/sh", "/minio_init.sh"]
     networks:
       - chatapp_network
 
@@ -104,6 +104,7 @@ services:
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
       KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'true'
+      KAFKA_ZOOKEEPER_SESSION_TIMEOUT_MS: 6000
     healthcheck:
       test: [ "CMD-SHELL", "kafka-broker-api-versions --bootstrap-server localhost:9092" ]
       interval: 30s
