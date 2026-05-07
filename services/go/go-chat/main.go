@@ -404,7 +404,57 @@ func chatHandler(client *socket.Client, payload []byte) {
 			"success":     true,
 		})
 
+		// 🚀 SHORT-CIRCUIT: Direct Broadcast to Room via Redis
+		if roomID != "" {
+			broadcastMsg := map[string]any{
+				"type": "chat_delivery",
+				"payload": map[string]any{
+					"id":          msgID,
+					"room_id":     roomID,
+					"sender_id":   client.UserID,
+					"content":     content,
+					"sequence_id": seqID,
+					"created_at":  time.Now().Format(time.RFC3339),
+					"status":      "sent",
+					"temp_id":     tempID,
+				},
+			}
+			data, _ := json.Marshal(broadcastMsg)
+			rdb.Publish(context.Background(), "room:"+roomID, data)
+		}
+
 		debug.Print("GO-CHAT", "Message seq:"+strconv.FormatInt(seqID, 10)+" persisted and short-circuited for room: "+roomID)
+	} else if msg.Type == "subscribe_room" {
+		body, ok := payloadMap(msg.Payload)
+		if !ok {
+			return
+		}
+		roomID, _ := body["room_id"].(string)
+		if roomID != "" {
+			client.Hub.Subscribe(client, "room:"+roomID)
+			debug.Print("GO-CHAT", fmt.Sprintf("User %s subscribed to room: %s", client.UserID, roomID))
+		}
+	} else if msg.Type == "typing" {
+		body, ok := payloadMap(msg.Payload)
+		if !ok {
+			return
+		}
+		roomID, _ := body["room_id"].(string)
+		isTyping, _ := body["is_typing"].(bool)
+		
+		if roomID != "" {
+			update := map[string]any{
+				"type": "user_typing",
+				"payload": map[string]any{
+					"room_id":   roomID,
+					"user_id":   client.UserID,
+					"is_typing": isTyping,
+				},
+			}
+			data, _ := json.Marshal(update)
+			// Broadcast to the room topic via Redis for cross-node sync
+			rdb.Publish(context.Background(), "room:"+roomID, data)
+		}
 	} else if msg.Type == "read_receipt" {
 		body, ok := payloadMap(msg.Payload)
 		if !ok {
@@ -412,7 +462,7 @@ func chatHandler(client *socket.Client, payload []byte) {
 		}
 
 		// 1. Publish to Kafka for persistence and global sync
-		err := producer.Publish(context.Background(), messaging.Event{
+		event := messaging.Event{
 			Topic: "chat.inbound",
 			Key:   msg.Target, // RoomID
 			Type:  "READ_RECEIPT",
@@ -421,12 +471,26 @@ func chatHandler(client *socket.Client, payload []byte) {
 				"user_id":     client.UserID,
 				"sequence_id": body["sequence_id"],
 			},
-		})
+		}
+		err := producer.Publish(context.Background(), event)
 		if err != nil {
 			debug.Print("GO-CHAT", "Read receipt publish failed: "+err.Error())
-			return
 		}
-		debug.Print("GO-CHAT", "Read receipt received for room: "+msg.Target)
+
+		// 🚀 SHORT-CIRCUIT: Direct Broadcast to Room via Redis
+		broadcastMsg := map[string]any{
+			"type": "chat_read",
+			"payload": map[string]any{
+				"room_id":     msg.Target,
+				"sender_id":   client.UserID,
+				"sequence_id": body["sequence_id"],
+			},
+		}
+		data, _ := json.Marshal(broadcastMsg)
+		rdb.Publish(context.Background(), "room:"+msg.Target, data)
+
+		debug.Print("GO-CHAT", "Read receipt short-circuited for room: "+msg.Target)
+		return
 	} else if msg.Type == "ping" {
 		sendSocketMessage(client, "pong", map[string]any{"ts": time.Now().UnixMilli()})
 	}

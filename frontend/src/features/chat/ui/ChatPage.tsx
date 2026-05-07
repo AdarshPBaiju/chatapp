@@ -101,7 +101,41 @@ export function ChatPage() {
     setInput("");
     setSelectedFile(null);
     setReplyTo(null);
+    // Explicitly stop typing on send
+    if (activeRoomId) useChatStore.getState().sendTypingStatus(activeRoomId, false);
   }, [input, selectedFile, activeRoomId, pendingUser, sendMessage, replyTo]);
+
+  // Typing Indicator Logic
+  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isTypingRef = useRef(false);
+
+  useEffect(() => {
+    if (!activeRoomId || !input.trim()) {
+      if (isTypingRef.current && activeRoomId) {
+        useChatStore.getState().sendTypingStatus(activeRoomId, false);
+        isTypingRef.current = false;
+      }
+      return;
+    }
+
+    if (!isTypingRef.current) {
+      useChatStore.getState().sendTypingStatus(activeRoomId, true);
+      isTypingRef.current = true;
+    }
+
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+
+    typingTimeoutRef.current = setTimeout(() => {
+      if (activeRoomId) {
+        useChatStore.getState().sendTypingStatus(activeRoomId, false);
+        isTypingRef.current = false;
+      }
+    }, 3000);
+
+    return () => {
+      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    };
+  }, [input, activeRoomId]);
 
   const handleContextMenu = (e: React.MouseEvent, msg: Message) => {
     e.preventDefault();

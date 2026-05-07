@@ -100,6 +100,8 @@ interface ChatState {
   syncRoom: (roomId: string) => Promise<void>;
   flushOutbox: () => Promise<void>;
   setActiveRoom: (roomId: string | null) => void;
+  subscribeRoom: (roomId: string) => void;
+  sendTypingStatus: (roomId: string, isTyping: boolean) => void;
   loadMoreMessages: (roomId: string) => Promise<void>;
   updateMessageStatus: (tempId: string, status: Message["status"], messageId?: string) => void;
   setTyping: (roomId: string, userId: string, isTyping: boolean) => void;
@@ -417,6 +419,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     });
 
     if (roomId) {
+      get().subscribeRoom(roomId);
       void get().fetchHistory(roomId);
 
       const newRoom = get().rooms[roomId];
@@ -426,6 +429,21 @@ export const useChatStore = create<ChatState>((set, get) => ({
         get().getPresence(pids);
       }
     }
+  },
+
+  subscribeRoom: (roomId: string) => {
+    if (!roomId) return;
+    chatSocket.send("subscribe_room", { payload: { room_id: roomId } });
+  },
+
+  sendTypingStatus: (roomId: string, isTyping: boolean) => {
+    if (!roomId) return;
+    chatSocket.send("typing", {
+      payload: {
+        room_id: roomId,
+        is_typing: isTyping
+      }
+    });
   },
 
   setPendingUser: (user) => {
@@ -971,6 +989,16 @@ chatSocket.on("chat_delivery", (data) => {
   if (isNewRoom) {
     void state.fetchRooms();
   }
+});
+
+chatSocket.on("user_typing", (data) => {
+  const payload = data.payload || data;
+  const { room_id, user_id, is_typing } = payload;
+  const currentUserId = normalizeUserId(getCurrentUserId());
+
+  if (normalizeUserId(user_id) === currentUserId) return;
+
+  useChatStore.getState().setTyping(room_id, user_id, is_typing);
 });
 
 chatSocket.on("chat_update", (data) => {
