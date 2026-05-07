@@ -46,6 +46,21 @@ def get_cached_membership(room_id, client_id):
     ).first()
 
 
+def invalidate_room_list_cache(room_id):
+    """
+    Invalidate RoomList cache for all participants.
+    """
+    try:
+        redis_client = get_redis_connection("default")
+        memberships = RoomMembership.objects.filter(room_id=room_id, is_active=True).values_list("client_id", flat=True)
+        keys = [f"room_list:client:{cid}" for cid in memberships]
+        if keys:
+            redis_client.delete(*keys)
+            logger.info(f"Invalidated RoomList cache for {len(keys)} users in room {room_id}")
+    except Exception as e:
+        logger.error(f"Cache invalidation failed: {e}")
+
+
 class Command(BaseCommand):
     help = "Consumes chat messages from Kafka and persists them to the database"
 
@@ -200,6 +215,7 @@ class Command(BaseCommand):
             room.last_message = message
             room.updated_at = message.created_at
             room.save(update_fields=["last_message", "updated_at"])
+            invalidate_room_list_cache(room_id)
 
             memberships = RoomMembership.objects.filter(
                 room=room, is_active=True
@@ -303,6 +319,7 @@ class Command(BaseCommand):
                 RoomMembership.objects.filter(room=room, client=client).update(
                     unread_count=0
                 )
+                invalidate_room_list_cache(room_id)
 
                 # 3. Broadcast status update to all members via Singleton
                 status_event = {
