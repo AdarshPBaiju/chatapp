@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { Copy, Reply, Forward, Pencil, Trash2, Info } from "lucide-react";
+import { Copy, Reply, Forward, Pencil, Trash2, Info, ShieldAlert, Loader2 } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
+import { Button } from "@/shared/ui/FormControls";
 
 import { useChatStore, Message } from "../state/chatStore";
 import { useAuthStore } from "@/modules/auth/state/authState";
@@ -33,7 +34,6 @@ export function ChatPage() {
     rooms,
     sendMessage,
     markAsRead,
-    fetchRooms,
     isLoading,
     pendingUser,
     setPendingUser,
@@ -43,7 +43,7 @@ export function ChatPage() {
   } = useChatStore();
 
   const currentUser = useAuthStore(state => state.user);
-  const currentUserId = normalizeUserId(currentUser?.id);
+  const currentUserId = normalizeUserId(currentUser?.id || currentUser?.user_id);
 
   const [input, setInput] = useState("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -55,7 +55,8 @@ export function ChatPage() {
   const topSentinelRef = useRef<HTMLDivElement>(null);
   const readObserver = useRef<IntersectionObserver | null>(null);
 
-  useEffect(() => { void fetchRooms(); }, [fetchRooms]);
+  // Rooms are fetched by the chatStore when the WS connects (status handler).
+  // No HTTP polling needed here — real-time updates come via room_created/room_updated WS events.
 
   useEffect(() => {
     if (!urlRoomId && activeRoomId) {
@@ -154,7 +155,38 @@ export function ChatPage() {
 
   const messages = (activeRoomId ? (rooms[activeRoomId]?.messageIds || []) : []).map(id => allMessages[id]).filter(Boolean);
 
-  if (!isReady || !currentUserId) return <div className="h-full w-full flex items-center justify-center">Loading...</div>;
+  // Only block if we genuinely have no user identity at all
+  // isReady (WebSocket) should NOT block the page — only disable sending
+  const hasIdentity = !!currentUserId;
+  if (!hasIdentity) return (
+    <div className="h-full w-full flex items-center justify-center flex-col gap-3">
+      <Loader2 className="animate-spin text-primary/40" size={32} />
+      <p className="text-sm text-muted-foreground">Loading session...</p>
+    </div>
+  );
+  
+  // Handle case where we have a roomId but haven't fetched the room metadata yet
+  if (activeRoomId && !currentChat && isLoading) {
+    return (
+      <div className="h-full w-full flex flex-col items-center justify-center gap-4 bg-background">
+        <Loader2 className="animate-spin text-primary/40" size={40} />
+        <p className="text-sm font-bold text-muted-foreground animate-pulse">Opening conversation...</p>
+      </div>
+    );
+  }
+
+  if (activeRoomId && !currentChat && !isLoading) {
+    return (
+      <div className="h-full w-full flex flex-col items-center justify-center gap-4 bg-background p-6 text-center">
+        <div className="h-20 w-20 rounded-full bg-destructive/10 flex items-center justify-center mb-2">
+            <ShieldAlert size={40} className="text-destructive" />
+        </div>
+        <h3 className="text-lg font-bold">Conversation Not Found</h3>
+        <p className="text-sm text-muted-foreground max-w-xs">We couldn't retrieve the details for this chat. It might have been deleted or you may not have access.</p>
+        <Button onClick={() => navigate("/chats")} variant="outline" className="mt-4">Back to Messages</Button>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-full w-full bg-background overflow-hidden">
@@ -169,7 +201,7 @@ export function ChatPage() {
         currentUserId={currentUserId}
       />
 
-      <main className={cn("flex-1 flex flex-col bg-background relative", !activeRoomId && !pendingUser && "hidden lg:flex")}>
+      <main className={cn("flex-1 flex flex-col bg-background relative", !activeRoomId && !pendingUser && "hidden md:flex")}>
         {currentChat && (
           <>
             <ChatHeader

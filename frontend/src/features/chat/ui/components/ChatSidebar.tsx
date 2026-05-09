@@ -30,8 +30,8 @@ export function ChatSidebar({
 
   return (
     <aside className={cn(
-      "w-full lg:w-[350px] border-r border-border flex flex-col bg-card/10 backdrop-blur-sm transition-all",
-      (activeRoomId || pendingUser) && "hidden lg:flex"
+      "w-full md:w-[350px] border-r border-border flex flex-col bg-card/10 backdrop-blur-sm transition-all",
+      (activeRoomId || pendingUser) && "hidden md:flex"
     )}>
       <div className="p-6 pb-2">
         <div className="flex items-center justify-between mb-6">

@@ -2,13 +2,13 @@ import { create } from "zustand";
 import { chatSocket, presenceSocket } from "@/shared/api/socket";
 import { httpClient } from "@/shared/http/client";
 import { useAuthStore } from "@/modules/auth/state/authState";
-import { 
-  initMultipartUpload, 
-  getPartSignedUrl, 
-  uploadPart, 
+import {
+  initMultipartUpload,
+  getPartSignedUrl,
+  uploadPart,
   completeMultipartUpload,
   requestSignedUrl,
-  uploadFileToS3 
+  uploadFileToS3
 } from "@/features/chat/api/media";
 import { compressImage } from "@/features/chat/lib/mediaUtils";
 
@@ -61,7 +61,7 @@ export interface Message {
   metadata?: any;
   sent_at: number;
   status: "sending" | "acknowledged" | "sent" | "delivered" | "read" | "failed";
-  
+
   // Phase 1 Features
   reply_to?: Message | null;
   reply_to_id?: string | null;
@@ -93,6 +93,7 @@ interface ChatState {
   isReady: boolean;
   fetchRooms: () => Promise<void>;
   fetchHistory: (roomId: string, beforeSeq?: number) => Promise<void>;
+  fetchRoomDetail: (roomId: string) => Promise<void>;
   fetchPresence: (userIds: string[]) => Promise<void>;
   getPresence: (userIds: string[]) => void;
   subscribePresence: (userIds: string[]) => void;
@@ -216,7 +217,7 @@ function mapHistoryMessage(roomId: string, msg: any): Message {
     sent_at: Number.isFinite(sentAt) ? sentAt : Date.now(),
     status: (msg.status || (senderId === currentUserId ? "sent" : "read")).toLowerCase() as any,
     metadata: msg.metadata,
-    
+
     // Phase 1
     reply_to: msg.reply_to ? mapHistoryMessage(roomId, msg.reply_to) : null,
     reply_to_id: msg.reply_to_id,
@@ -259,6 +260,9 @@ function sendOutboxEntry(message: Message, routeTarget: string, targetUserId?: s
   schedulePendingAck(message.temp_id!);
 }
 
+// WS-driven room list: fetch once per connection, not on every component mount
+let roomsFetchedForSession = false;
+
 export const useChatStore = create<ChatState>((set, get) => ({
   activeRoomId: null,
   rooms: {},
@@ -270,6 +274,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
   isReady: false,
 
   fetchRooms: async () => {
+    // WS-driven: skip if already fetched for this session
+    if (roomsFetchedForSession && Object.keys(get().rooms).length > 0) return;
     set({ isLoading: true });
     try {
       const { data } = await httpClient.get("/chat/v1/rooms/");
@@ -292,7 +298,13 @@ export const useChatStore = create<ChatState>((set, get) => ({
         roomMap[""] = currentState.rooms[""];
       }
 
-      set({ rooms: roomMap });
+      set((state) => ({
+        rooms: {
+          ...state.rooms,
+          ...roomMap
+        }
+      }));
+      roomsFetchedForSession = true; // mark as fetched for this WS session
 
       // Fetch presence for all participants in all rooms
       const allUserIds = new Set<string>();
@@ -305,6 +317,43 @@ export const useChatStore = create<ChatState>((set, get) => ({
       });
       get().getPresence(Array.from(allUserIds));
 
+    } finally {
+      set({ isLoading: false });
+    }
+  },
+
+  fetchRoomDetail: async (roomId: string) => {
+    if (!roomId) return;
+    set({ isLoading: true });
+    try {
+      const { data } = await httpClient.get(`/chat/v1/rooms/${roomId}/`);
+      set((state) => {
+        const existing = state.rooms[roomId];
+        return {
+          rooms: {
+            ...state.rooms,
+            [roomId]: {
+              ...data,
+              messageIds: existing?.messageIds || [],
+              typingUsers: existing?.typingUsers || new Set(),
+              lastReadSeq: existing?.lastReadSeq || 0,
+              lastSyncedSeq: existing?.lastSyncedSeq || 0,
+            }
+          }
+        };
+      });
+
+      // Fetch presence for new room participants
+      const room = get().rooms[roomId];
+      if (room) {
+        const pids = room.participants.map(p => p.user_id);
+        get().subscribePresence(pids);
+        get().getPresence(pids);
+      }
+      // Kick off history fetch now that we have room metadata
+      void get().fetchHistory(roomId);
+    } catch (error) {
+      console.error(`❌ Failed to fetch room detail for ${roomId}:`, error);
     } finally {
       set({ isLoading: false });
     }
@@ -420,13 +469,17 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
     if (roomId) {
       get().subscribeRoom(roomId);
-      void get().fetchHistory(roomId);
 
-      const newRoom = get().rooms[roomId];
-      if (newRoom) {
-        const pids = newRoom.participants.map(p => p.user_id);
+      const room = get().rooms[roomId];
+      if (!room) {
+        // Eagerly set loading BEFORE the async fetch so the UI shows spinner, not "Not Found"
+        set({ isLoading: true });
+        void get().fetchRoomDetail(roomId);
+      } else {
+        const pids = room.participants.map(p => p.user_id);
         get().subscribePresence(pids);
         get().getPresence(pids);
+        void get().fetchHistory(roomId);
       }
     }
   },
@@ -531,14 +584,14 @@ export const useChatStore = create<ChatState>((set, get) => ({
           messageIds: finalIds,
           unread_count: state.activeRoomId === roomId ? 0 :
             shouldIncrementUnread ? (room.unread_count || 0) + 1 : room.unread_count,
-            last_message: room.last_message ? {
-              id: room.last_message.id,
-              content: room.last_message.content,
-              created_at: room.last_message.created_at,
-              sender_id: room.last_message.sender_id,
-              sender_name: room.last_message.sender_name,
-              status: (room.last_message.status || "sent").toLowerCase() as any,
-            } : null,
+          last_message: room.last_message ? {
+            id: room.last_message.id,
+            content: room.last_message.content,
+            created_at: room.last_message.created_at,
+            sender_id: room.last_message.sender_id,
+            sender_name: room.last_message.sender_name,
+            status: (room.last_message.status || "sent").toLowerCase() as any,
+          } : null,
           lastSyncedSeq: Math.max(room.lastSyncedSeq || 0, mergedMessage.sequence_id || 0),
         };
       });
@@ -907,17 +960,20 @@ export const useChatStore = create<ChatState>((set, get) => ({
 chatSocket.on("status", (data) => {
   if (data.connected) {
     useChatStore.setState({ isReady: true });
-    void useChatStore.getState().fetchRooms();
+    // Fetch rooms once per WS session (not on every component mount)
+    if (!roomsFetchedForSession) {
+      void useChatStore.getState().fetchRooms();
+    }
     return;
   }
 
   console.log("🔌 Chat Socket disconnected");
-  // We no longer mark messages as failed immediately. 
-  // BaseSocket will queue them, and our 30s timeout will handle real failures.
+  useChatStore.setState({ isReady: false });
+  roomsFetchedForSession = false; // reset so next reconnect refetches
 });
 
 chatSocket.on("message_ack", (data) => {
-  const { temp_id, message_id, sequence_id, status, success } = data;
+  const { temp_id, message_id, sequence_id, status, success, sender_id, sent_at } = data;
   clearPendingAck(temp_id);
 
   const state = useChatStore.getState();
@@ -932,12 +988,17 @@ chatSocket.on("message_ack", (data) => {
       id: finalId,
       room_id: finalRoomId,
       sequence_id: sequence_id || tempMsg.sequence_id,
-      status: success ? (status || "acknowledged") : "failed"
+      status: success ? (status || "acknowledged") : "failed",
+      // Enrich with Go-provided sender data if available
+      sender_id: sender_id || tempMsg.sender_id,
+      sent_at: sent_at || tempMsg.sent_at,
     };
 
     state.addMessage(updatedMsg);
 
     if (finalRoomId && tempMsg.room_id === "" && finalRoomId !== "") {
+      // New room assigned — force a fresh fetch on next opportunity
+      roomsFetchedForSession = false;
       void state.fetchRooms();
     }
   }
@@ -974,7 +1035,7 @@ chatSocket.on("chat_delivery", (data) => {
     sent_at: created_at ? new Date(created_at).getTime() : Date.now(),
     status: (status || "sent").toLowerCase() as any,
     metadata: payload.metadata || existing?.metadata,
-    
+
     // New Fields
     type: payload.type || existing?.type || "TEXT",
     is_edited: payload.is_edited || false,
@@ -1144,6 +1205,49 @@ presenceSocket.on("presence_update", (data) => {
     });
     return { onlineUsers: nextOnline, lastSeen: nextLastSeen };
   });
+});
+
+/**
+ * room_created — pushed by Django via Redis pub/sub on the presence channel
+ * when the OTHER user creates a DM with you.
+ * This injects the room into the store so it appears in your sidebar in real-time.
+ */
+presenceSocket.on("room_created", (data) => {
+  const room = data.payload || data;
+  if (!room?.id) return;
+
+  useChatStore.setState((state) => {
+    const existing = state.rooms[room.id];
+    if (existing) return state; // already have it
+    return {
+      rooms: {
+        ...state.rooms,
+        [room.id]: {
+          ...room,
+          messageIds: [],
+          typingUsers: new Set<string>(),
+          lastReadSeq: 0,
+          lastSyncedSeq: 0,
+        }
+      }
+    };
+  });
+
+  // Auto-subscribe to the new room's WS channel so messages arrive immediately
+  const store = useChatStore.getState();
+  store.subscribeRoom(room.id);
+
+  // Subscribe to presence of the other participant
+  if (Array.isArray(room.participants)) {
+    const myId = normalizeUserId(getCurrentUserId());
+    const peerIds = room.participants
+      .map((p: any) => p.user_id as string)
+      .filter((id: string) => normalizeUserId(id) !== myId);
+    if (peerIds.length > 0) {
+      store.subscribePresence(peerIds);
+      store.getPresence(peerIds);
+    }
+  }
 });
 
 export const initializeSockets = () => {

@@ -46,8 +46,8 @@ export function SettingsLayout() {
       {/* Sidebar - Desktop (Integrated) & Mobile (List) */}
       <aside
         className={cn(
-          "absolute inset-y-0 left-0 z-40 w-full border-r border-border bg-background/50 backdrop-blur-xl transition-all duration-500 lg:static lg:h-full lg:w-[280px] lg:translate-x-0 lg:bg-background",
-          !isMobileMenu && "-translate-x-full lg:translate-x-0"
+          "absolute inset-y-0 left-0 z-40 w-full border-r border-border bg-background/50 backdrop-blur-xl transition-all duration-500 md:static md:h-full md:w-[280px] md:translate-x-0 md:bg-background",
+          !isMobileMenu && "-translate-x-full md:translate-x-0"
         )}
       >
         <div className="flex h-full flex-col overflow-hidden">
@@ -127,12 +127,12 @@ export function SettingsLayout() {
       {/* Main Content Area */}
       <main
         className={cn(
-          "absolute inset-0 z-50 flex h-full w-full flex-col bg-background transition-all duration-500 lg:static lg:z-auto lg:h-full lg:flex-1 lg:translate-x-0",
-          isMobileMenu && "translate-x-full lg:translate-x-0"
+          "absolute inset-0 z-50 flex h-full w-full flex-col bg-background transition-all duration-500 md:static md:z-auto md:h-full md:flex-1 md:translate-x-0",
+          isMobileMenu && "translate-x-full md:translate-x-0"
         )}
       >
         {/* Sub-page Header (Mobile only) */}
-        <div className="flex items-center gap-3 border-b border-border bg-background p-4 lg:hidden">
+        <div className="flex items-center gap-3 border-b border-border bg-background p-4 md:hidden">
           <button
             onClick={() => navigate("/settings")}
             className="flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-primary hover:text-primary-foreground transition-colors cursor-pointer"
@@ -154,7 +154,7 @@ export function SettingsLayout() {
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.98 }}
                 transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
-                className="flex-1 border border-border bg-background p-6 shadow-sm lg:p-10"
+                className="flex-1 border border-border bg-background p-6 shadow-sm md:p-10"
               >
                 <Outlet />
               </motion.div>

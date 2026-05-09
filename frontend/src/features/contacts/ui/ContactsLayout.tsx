@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/shared/lib/utils";
 
 const tabs = [
-  { id: "contacts", label: "My Contacts", icon: Users, path: "/contacts", exact: true, desc: "Your verified social network" },
+  { id: "contacts", label: "My Contacts", icon: Users, path: "/contacts/all", exact: true, desc: "Your verified social network" },
   { id: "requests", label: "Requests", icon: Clock, path: "/contacts/requests", exact: false, desc: "Incoming friend requests" },
   { id: "discovery", label: "Discovery", icon: Search, path: "/contacts/discovery", exact: false, desc: "Find new people to connect" },
 ] as const;
@@ -19,7 +19,12 @@ export function ContactsLayout() {
   useEffect(() => {
     const isRootContacts = location.pathname === "/contacts" || location.pathname === "/contacts/";
     setIsMobileMenu(isRootContacts);
-  }, [location.pathname]);
+
+    // On Desktop, automatically show the first tab if at root
+    if (isRootContacts && window.innerWidth >= 768) {
+      navigate("/contacts/all", { replace: true });
+    }
+  }, [location.pathname, navigate]);
 
   // @ts-ignore
   const activeTab = tabs.find(t => t.exact ? location.pathname === t.path : location.pathname.startsWith(t.path)) || tabs[0];
@@ -29,8 +34,8 @@ export function ContactsLayout() {
       {/* Feature Sidebar - Desktop & Mobile */}
       <aside
         className={cn(
-          "absolute inset-y-0 left-0 z-40 w-full border-r border-border bg-background/50 backdrop-blur-xl transition-all duration-500 lg:static lg:h-full lg:w-[280px] lg:translate-x-0 lg:bg-background",
-          !isMobileMenu && "-translate-x-full lg:translate-x-0"
+          "absolute inset-y-0 left-0 z-40 w-full border-r border-border bg-background/50 backdrop-blur-xl transition-all duration-500 md:static md:h-full md:w-[280px] md:translate-x-0 md:bg-background",
+          !isMobileMenu && "-translate-x-full md:translate-x-0"
         )}
       >
         <div className="flex h-full flex-col overflow-hidden">
@@ -87,12 +92,12 @@ export function ContactsLayout() {
       {/* Main Content Area */}
       <main
         className={cn(
-          "absolute inset-0 z-50 flex h-full w-full flex-col bg-background transition-all duration-500 lg:static lg:z-auto lg:h-full lg:flex-1 lg:translate-x-0",
-          isMobileMenu && "translate-x-full lg:translate-x-0"
+          "absolute inset-0 z-50 flex h-full w-full flex-col bg-background transition-all duration-500 md:static md:z-auto md:h-full md:flex-1 md:translate-x-0",
+          isMobileMenu && "translate-x-full md:translate-x-0"
         )}
       >
         {/* Sub-page Header (Mobile only) */}
-        <div className="flex items-center gap-3 border-b border-border bg-background p-4 lg:hidden">
+        <div className="flex items-center gap-3 border-b border-border bg-background p-4 md:hidden">
           <button
             onClick={() => navigate("/contacts")}
             className="flex h-9 w-9 items-center justify-center rounded-xl bg-muted text-muted-foreground hover:bg-primary hover:text-primary-foreground transition-all cursor-pointer"
@@ -114,7 +119,7 @@ export function ContactsLayout() {
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.98 }}
                 transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
-                className="flex-1 lg:p-10 p-4"
+                className="flex-1 md:p-10 p-4"
               >
                 <Outlet />
               </motion.div>

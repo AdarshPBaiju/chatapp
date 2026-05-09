@@ -9,6 +9,7 @@ import { useState, useEffect } from "react";
 import { fetchProfile } from "@/features/settings/api";
 import { UserProfile } from "@/features/settings/types";
 import { chatSocket, presenceSocket, initializeSockets } from "@/shared/api/socket";
+import { useAuthStore } from "@/modules/auth/state/authState";
 import { ThemeSwitcher } from "@/shared/ui/ThemeSwitcher";
 
 const NAV_ITEMS = [
@@ -28,7 +29,16 @@ export function MainAppLayout() {
   const currentAppSection = location.pathname.split('/')[1] || "home";
 
   useEffect(() => {
-    fetchProfile().then(d => { if (d.success && d.data) setProfile(d.data); });
+    // Step 1: Immediately seed identity from storage (sync) so ChatPage never blocks
+    useAuthStore.getState().hydrateUser();
+
+    // Step 2: Fetch fresh profile from server and update the store
+    fetchProfile().then(d => { 
+      if (d.success && d.data) {
+        setProfile(d.data);
+        useAuthStore.getState().setUser(d.data);
+      }
+    });
 
     // Connect sockets
     initializeSockets();

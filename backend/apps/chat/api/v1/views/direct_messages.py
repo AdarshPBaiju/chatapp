@@ -2,6 +2,8 @@ from rest_framework import views, response, status, permissions
 from users.models import Client
 from ..serializers.rooms import RoomSerializer
 from chat.services import ChatService
+from django_redis import get_redis_connection
+
 
 class GetOrCreateDMRoomView(views.APIView):
     permission_classes = [permissions.IsAuthenticated]
@@ -15,6 +17,17 @@ class GetOrCreateDMRoomView(views.APIView):
 
         try:
             room = ChatService.get_or_create_dm_room(client_a, client_b)
+
+            # Bust room list cache for both participants so next fetchRooms is fresh
+            try:
+\                r = get_redis_connection("default")
+                r.delete(f"room_list:client:{client_a.id}")
+                r.delete(f"room_list:client:{client_b.id}")
+                # Also bust any cached room detail
+                r.delete(f"room_detail:{room.id}")
+            except Exception as e:
+                print(f"Cache bust error: {e}")
+
             serializer = RoomSerializer(room, context={"request": request})
             return response.Response(serializer.data, status=status.HTTP_201_CREATED)
         except ValueError as e:

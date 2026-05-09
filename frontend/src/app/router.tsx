@@ -55,7 +55,7 @@ export const appRouter = createBrowserRouter([
         path: "contacts",
         element: <ContactsLayout />,
         children: [
-          { index: true, element: <ContactsPage /> },
+          { path: "all", element: <ContactsPage /> },
           { path: "requests", element: <RequestsPage /> },
           { path: "discovery", element: <DiscoverySearch /> },
           { path: "profile/:userId", element: <UserProfilePage /> },

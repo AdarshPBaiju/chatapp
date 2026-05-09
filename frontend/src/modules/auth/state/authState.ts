@@ -22,6 +22,17 @@ type SetRestrictedParams = {
   user?: UserInfo;
 };
 
+/** Normalize any user object shape into a consistent UserInfo */
+function normalizeUser(user: any): UserInfo | null {
+  if (!user) return null;
+  return {
+    ...user,
+    id: user.id || user.user_id || user.sub || "",
+    email: user.email || "",
+    full_name: user.full_name || user.name || "",
+  };
+}
+
 type AuthState = {
   status: AuthStatus;
   user: UserInfo | null;
@@ -31,6 +42,7 @@ type AuthState = {
   setPendingVerification: (payload: PendingVerification) => void;
   setRestricted: (params: SetRestrictedParams) => void;
   setFull: (params: SetFullParams) => void;
+  setUser: (user: any) => void;
   setOffline: () => void;
   hydrateUser: () => void;
 };
@@ -70,13 +82,14 @@ export const useAuthStore = create<AuthState>((set) => ({
     sessionEngine.startRestrictedSession({ access, refresh, access_exp, refresh_exp });
     authStorage.setRestrictedAccess(access);
     authStorage.setRestrictedAccessExp(access_exp);
-    authStorage.setRestrictedSessions(sessions);
+    authStorage.setRestrictedSessions(sessions ?? []);
     authStorage.setIsRestricted(true);
-    const resolvedUser = user ?? authStorage.getUser() ?? null;
-    if (resolvedUser) authStorage.setUser(resolvedUser);
+    const resolved = user ?? authStorage.getUser() ?? null;
+    const normalized = normalizeUser(resolved);
+    if (normalized) authStorage.setUser(normalized);
     set({
       status: "restricted",
-      user: resolvedUser,
+      user: normalized,
       pendingVerification: null,
       restrictedSessions: sessions ?? [],
     });
@@ -88,21 +101,29 @@ export const useAuthStore = create<AuthState>((set) => ({
     authStorage.clearRestrictedAccessExp();
     authStorage.clearRestrictedSessions();
     authStorage.setIsRestricted(false);
-    const resolvedUser = user ?? authStorage.getUser() ?? null;
-    if (resolvedUser) authStorage.setUser(resolvedUser);
+    const resolved = user ?? authStorage.getUser() ?? null;
+    const normalized = normalizeUser(resolved);
+    if (normalized) authStorage.setUser(normalized);
     set({
       status: "full",
-      user: resolvedUser,
+      user: normalized,
       pendingVerification: null,
       restrictedSessions: [],
     });
+  },
+
+  setUser: (user) => {
+    const normalized = normalizeUser(user);
+    if (!normalized) return;
+    authStorage.setUser(normalized);
+    set({ user: normalized });
   },
 
   setOffline: () => {
     const user = authStorage.getUser();
     set({
       status: "offline",
-      user: user ?? null,
+      user: user ? normalizeUser(user) : null,
     });
   },
 
@@ -114,7 +135,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       : tokenManager.getAccess();
 
     if (user) {
-      set({ user });
+      set({ user: normalizeUser(user) });
     }
 
     if (access && isRestricted) {

@@ -1,8 +1,9 @@
-from rest_framework import generics, permissions
+from rest_framework import generics, permissions, response
 from django.db.models import OuterRef, Subquery, IntegerField
 from chat.models import Room, RoomMembership
 from ..serializers.rooms import RoomSerializer
 import json
+from django.core.serializers.json import DjangoJSONEncoder
 from django_redis import get_redis_connection
 
 
@@ -22,7 +23,7 @@ class RoomListAPIView(generics.ListAPIView):
                 data = json.loads(cached_data)
 
                 presence_map = self._get_presence_map(data)
-                return generics.Response(
+                return response.Response(
                     {"results": data, "presence_map": presence_map, "from_cache": True}
                 )
         except Exception as e:
@@ -39,11 +40,11 @@ class RoomListAPIView(generics.ListAPIView):
         # Cache the results for 1 hour
         try:
             r = get_redis_connection("default")
-            r.set(cache_key, json.dumps(data), ex=3600)
+            r.set(cache_key, json.dumps(data, cls=DjangoJSONEncoder), ex=3600)
         except Exception as e:
             print(f"Cache Store Error: {e}")
 
-        return generics.Response(
+        return response.Response(
             {"results": data, "presence_map": presence_map, "from_cache": False}
         )
 
@@ -94,3 +95,44 @@ class RoomListAPIView(generics.ListAPIView):
             )
             .order_by("-updated_at")
         )
+
+
+class RoomDetailAPIView(generics.RetrieveAPIView):
+    serializer_class = RoomSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    lookup_field = "id"
+    lookup_url_kwarg = "room_id"
+
+    def get_queryset(self):
+        client = self.request.user.client
+        return Room.objects.filter(
+            memberships__client=client,
+            memberships__is_active=True,
+            is_deleted=False,
+        ).distinct()
+
+    def retrieve(self, request, *args, **kwargs):
+        room_id = str(kwargs.get("room_id"))
+        cache_key = f"room_detail:{room_id}"
+
+        try:
+            r = get_redis_connection("default")
+            cached_data = r.get(cache_key)
+            if cached_data:
+                data = json.loads(cached_data)
+                return response.Response(data)
+        except Exception as e:
+            print(f"Cache Fetch Error (Detail): {e}")
+
+        instance = self.get_object()
+        serializer = self.get_serializer(instance)
+        data = serializer.data
+
+        # Cache for 1 hour
+        try:
+            r = get_redis_connection("default")
+            r.set(cache_key, json.dumps(data, cls=DjangoJSONEncoder), ex=3600)
+        except Exception as e:
+            print(f"Cache Store Error (Detail): {e}")
+
+        return response.Response(data)

@@ -7,15 +7,27 @@ import (
 	"image"
 	"image/jpeg"
 	"image/png"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"chatapp/services/go/shared/platform/debug"
 	"chatapp/services/go/shared/platform/messaging"
 	"chatapp/services/go/shared/platform/storage"
 	"github.com/disintegration/imaging"
+	"github.com/google/uuid"
+)
+
+var (
+	// 🚀 ULTRA-OPTIMIZED: Pool for buffers to reduce GC pressure
+	bufferPool = sync.Pool{
+		New: func() any {
+			return new(bytes.Buffer)
+		},
+	}
 )
 
 type MediaProcessor struct {
@@ -94,18 +106,23 @@ func (p *MediaProcessor) processImage(ctx context.Context, key string, attachmen
 	// 3. Generate Thumbnail (max 300px)
 	thumb := imaging.Fit(img, 300, 300, imaging.Lanczos)
 	
-	var thumbBuf bytes.Buffer
-	err = imaging.Encode(&thumbBuf, thumb, imaging.JPEG) // Use WebP in production if possible
+	// Use Buffer Pool
+	thumbBuf := bufferPool.Get().(*bytes.Buffer)
+	thumbBuf.Reset()
+	defer bufferPool.Put(thumbBuf)
+
+	err = imaging.Encode(thumbBuf, thumb, imaging.JPEG, imaging.JPEGQuality(80))
 	if err != nil {
 		return fmt.Errorf("encode thumbnail: %w", err)
 	}
 
-	// 4. Selective Compression: If original > 1MB, compress original too
-	// In a real world, you'd might want to keep the original and serve compressed versions.
-	// Here we replace if it helps save space significantly.
-	if info, err := p.s3Client.StatObject(ctx, key); err == nil && info.Size > 1*1024*1024 {
-		var compressedBuf bytes.Buffer
-		err = imaging.Encode(&compressedBuf, img, imaging.JPEG, imaging.Quality(75))
+	// 4. Selective Compression: If original > 1.5MB, compress original too
+	if info, err := p.s3Client.StatObject(ctx, key); err == nil && info.Size > 1536*1024 {
+		compressedBuf := bufferPool.Get().(*bytes.Buffer)
+		compressedBuf.Reset()
+		defer bufferPool.Put(compressedBuf)
+
+		err = imaging.Encode(compressedBuf, img, imaging.JPEG, imaging.JPEGQuality(75))
 		if err == nil && int64(compressedBuf.Len()) < info.Size {
 			p.s3Client.PutObject(ctx, key, compressedBuf.Bytes(), "image/jpeg")
 			debug.Print("GO-MEDIA", fmt.Sprintf("Compressed original %s from %d to %d bytes", key, info.Size, compressedBuf.Len()))
@@ -125,34 +142,30 @@ func (p *MediaProcessor) processImage(ctx context.Context, key string, attachmen
 	attachment["width"] = width
 	attachment["height"] = height
 	attachment["format"] = format
-	
-	// Generate public-facing thumbnail URL (assuming bucket policy set in docker-compose)
 	attachment["thumbnail_url"] = fmt.Sprintf("/%s", thumbKey)
 
 	debug.Print("GO-MEDIA", "Successfully processed image: "+key)
 
-	// 6. Re-publish the updated event back to chat.delivery
-	// This ensures connected clients receive the updated metadata
-	event.Type = "CHAT_UPDATE" // Use a specific type for updates if needed
+	event.Type = "CHAT_UPDATE"
 	return p.producer.Publish(ctx, event)
 }
 
 func (p *MediaProcessor) processHEIC(ctx context.Context, key string, attachment map[string]any, event messaging.Event) error {
 	debug.Print("GO-MEDIA", "Converting HEIC to JPEG: "+key)
 	
-	// Download original
 	obj, err := p.s3Client.GetObject(ctx, key)
 	if err != nil {
 		return err
 	}
 	defer obj.Close()
 
-	// Use ImageMagick for conversion
-	tmpIn := filepath.Join(os.TempDir(), "in.heic")
-	tmpOut := filepath.Join(os.TempDir(), "out.jpg")
+	tmpIn := filepath.Join(os.TempDir(), fmt.Sprintf("in-%s.heic", uuid.NewString()))
+	tmpOut := filepath.Join(os.TempDir(), fmt.Sprintf("out-%s.jpg", uuid.NewString()))
+	defer os.Remove(tmpIn)
+	defer os.Remove(tmpOut)
 	
 	f, _ := os.Create(tmpIn)
-	_, _ = bytes.NewBuffer(nil).ReadFrom(obj) // Simplify for brevity
+	io.Copy(f, obj)
 	f.Close()
 
 	cmd := exec.Command("magick", tmpIn, tmpOut)
@@ -172,18 +185,18 @@ func (p *MediaProcessor) processHEIC(ctx context.Context, key string, attachment
 func (p *MediaProcessor) processVideo(ctx context.Context, key string, attachment map[string]any, event messaging.Event) error {
 	debug.Print("GO-MEDIA", "Processing video: "+key)
 
-	// 1. Setup temp files
-	tmpIn := filepath.Join(os.TempDir(), "input_video")
-	thumbOut := filepath.Join(os.TempDir(), "thumb.jpg")
+	id := uuid.NewString()
+	tmpIn := filepath.Join(os.TempDir(), "input_video_"+id)
+	thumbOut := filepath.Join(os.TempDir(), "thumb_"+id+".jpg")
+	defer os.Remove(tmpIn)
+	defer os.Remove(thumbOut)
 	
 	obj, _ := p.s3Client.GetObject(ctx, key)
 	f, _ := os.Create(tmpIn)
-	f.ReadFrom(obj)
+	io.Copy(f, obj)
 	f.Close()
 	obj.Close()
 
-	// 2. Extract Thumbnail using FFmpeg
-	// -ss 1: get frame at 1 second
 	cmd := exec.Command("ffmpeg", "-y", "-i", tmpIn, "-ss", "00:00:01.000", "-vframes", "1", thumbOut)
 	if err := cmd.Run(); err != nil {
 		debug.Print("GO-MEDIA", "Failed to extract thumbnail: "+err.Error())

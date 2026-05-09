@@ -24,18 +24,25 @@ type S3Config struct {
 
 type S3Client struct {
 	client      *minio.Client
+	core        *minio.Core
 	presigner   *minio.Client
 	bucketName  string
 	externalURL string
 }
 
 func NewS3Client(cfg S3Config) (*S3Client, error) {
-	client, err := minio.New(cfg.Endpoint, &minio.Options{
+	opts := &minio.Options{
 		Creds:  credentials.NewStaticV4(cfg.AccessKey, cfg.SecretKey, ""),
 		Secure: cfg.UseSSL,
-	})
+	}
+	client, err := minio.New(cfg.Endpoint, opts)
 	if err != nil {
 		return nil, fmt.Errorf("initialize minio client: %w", err)
+	}
+
+	core, err := minio.NewCore(cfg.Endpoint, opts)
+	if err != nil {
+		return nil, fmt.Errorf("initialize minio core client: %w", err)
 	}
 
 	var presigner *minio.Client = client
@@ -54,6 +61,7 @@ func NewS3Client(cfg S3Config) (*S3Client, error) {
 
 	return &S3Client{
 		client:      client,
+		core:        core,
 		presigner:   presigner,
 		bucketName:  cfg.BucketName,
 		externalURL: cfg.ExternalEndpoint,
@@ -102,7 +110,7 @@ func (s *S3Client) PutObjectStream(ctx context.Context, key string, reader io.Re
 
 // NewMultipartUpload initiates a new multipart upload and returns the Upload ID.
 func (s *S3Client) NewMultipartUpload(ctx context.Context, key string, contentType string) (string, error) {
-	uploadID, err := s.client.NewMultipartUpload(ctx, s.bucketName, key, minio.PutObjectOptions{
+	uploadID, err := s.core.NewMultipartUpload(ctx, s.bucketName, key, minio.PutObjectOptions{
 		ContentType: contentType,
 	})
 	if err != nil {
@@ -126,10 +134,10 @@ func (s *S3Client) PresignPutPartURL(ctx context.Context, key string, uploadID s
 
 // CompleteMultipartUpload finalizes a multipart upload.
 func (s *S3Client) CompleteMultipartUpload(ctx context.Context, key string, uploadID string, parts []minio.CompletePart) (minio.UploadInfo, error) {
-	return s.client.CompleteMultipartUpload(ctx, s.bucketName, key, uploadID, parts, minio.PutObjectOptions{})
+	return s.core.CompleteMultipartUpload(ctx, s.bucketName, key, uploadID, parts, minio.PutObjectOptions{})
 }
 
 // AbortMultipartUpload cancels a multipart upload.
 func (s *S3Client) AbortMultipartUpload(ctx context.Context, key string, uploadID string) error {
-	return s.client.AbortMultipartUpload(ctx, s.bucketName, key, uploadID)
+	return s.core.AbortMultipartUpload(ctx, s.bucketName, key, uploadID)
 }

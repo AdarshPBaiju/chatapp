@@ -82,14 +82,36 @@ func main() {
 	bgCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	// 3. Background Processing
+	// 3. High-Concurrency Background Processing
 	consumer := messaging.NewConsumer(strings.Split(kafkaBrokers, ","), "go-media-group", "chat.delivery")
 	defer consumer.Close()
 
+	// 🚀 ADVANCED: Worker Pool for Parallel Media Processing
+	workerCount := 8 // Scalable based on CPU cores
+	workChan := make(chan messaging.Event, 100)
+
+	for i := 0; i < workerCount; i++ {
+		go func(workerID int) {
+			debug.Print("GO-MEDIA", fmt.Sprintf("Worker %d started", workerID))
+			for {
+				select {
+				case event := <-workChan:
+					if err := proc.ProcessEvent(bgCtx, event); err != nil {
+						log.Printf("Worker %d: error processing event: %v", workerID, err)
+					}
+				case <-bgCtx.Done():
+					return
+				}
+			}
+		}(i)
+	}
+
 	go func() {
-		debug.Print("GO-MEDIA", "Starting background processor...")
+		debug.Print("GO-MEDIA", "Starting background dispatcher...")
 		err := consumer.Consume(bgCtx, func(event messaging.Event) error {
-			return proc.ProcessEvent(bgCtx, event)
+			// Dispatch work to the pool
+			workChan <- event
+			return nil
 		})
 		if err != nil {
 			log.Printf("consumer error: %v", err)
